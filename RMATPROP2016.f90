@@ -784,18 +784,7 @@
   20 FORMAT(1P,100e14.8)
 END SUBROUTINE RMATPROP
   !****************************************************************************************************
-  SUBROUTINE printmatrix(M,nr,nc,file)
-    IMPLICIT NONE
-    INTEGER nr,nc,file,j,k
-    DOUBLE PRECISION M(nr,nc)
 
-    DO j = 1,nr
-       WRITE(file,20) (M(j,k), k = 1,nc)
-    ENDDO
-
-  20 FORMAT(1P,100D20.12)
-  30 FORMAT(100F12.6)
-  END SUBROUTINE printmatrix
   !****************************************************************************************************
   SUBROUTINE GridMakerLinear(xNumPoints,x1,x2,xPoints)
     IMPLICIT NONE

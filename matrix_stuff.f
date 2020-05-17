@@ -1,4 +1,40 @@
-! Computes the inverse of a square matrix
+      subroutine MyDSYEV(A,N,EVAL,EVEC)
+      implicit none
+      double precision, intent(in) :: A(N,N)
+      double precision EVAL(N), EVEC(N,N)
+      character*1 JOBZ, UPLO
+      integer N, LDA, LWORK, INFO
+      double precision, allocatable :: WORK(:)
+
+      EVEC = A
+      UPLO = 'U'                ! indicates that the upper triangle of of the matrix A is stored.
+      JOBZ = 'V'                ! indicates that we want both eigenvalues and eigenvectors
+      allocate(WORK(2))
+      LDA = N                   ! for a symmetric matrix
+      LWORK = -1                ! perform a querry to determine the optimal size of WORK
+
+      call DSYEV(JOBZ, UPLO, N, EVEC, LDA, EVAL, WORK, LWORK, INFO)
+      LWORK = WORK(1)
+      deallocate(WORK)
+      allocate(WORK(LWORK))
+      call DSYEV(JOBZ, UPLO, N, EVEC, LDA, EVAL, WORK, LWORK, INFO)
+
+      end subroutine MyDSYEV
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      SUBROUTINE printmatrix(M,nr,nc,file)
+      IMPLICIT NONE
+      INTEGER nr,nc,file,j,k
+      DOUBLE PRECISION M(nr,nc)
+      
+      DO j = 1,nr
+         WRITE(file,30) (M(j,k), k = 1,nc)
+      ENDDO
+
+ 20   FORMAT(1P,100D16.8)
+ 30   FORMAT(100F12.6)
+      END SUBROUTINE printmatrix
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!      
+!     Computes the inverse of a square matrix
       subroutine SqrMatInv(A, N)
       implicit none
       integer N,info,lwk
@@ -60,28 +96,34 @@
       
       end subroutine Mydggev
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      ! Computes the eigenvalues and eigenvectors of a square matrix A of dimension N.
-      subroutine MyDSYEV(A,N,EVAL,EVEC)
-      implicit none
-      double precision A(N,N), EVAL(N), EVEC(N,N), Atemp(N,N)
-      character*1 JOBZ, UPLO
-      integer  N, LDA, LWORK, INFO
-      double precision, allocatable :: WORK(:)
-      Atemp=A ! store the matrix A for safe keeping
-      JOBZ = 'V' ! compute both eigenvals and eigenvectors
-      UPLO = 'U' ! indicates that the upper triangle of of the matrix A is stored.
-      allocate(WORK(2))
-      LDA = N ! for a symmetric matrix
-      LWORK = -1 ! perform a querry to determine the optimal size of WORK
-      call DSYEV(JOBZ, UPLO, N, A, LDA, EVAL, WORK, LWORK, INFO)
-      LWORK = WORK(1)
-      deallocate(WORK)
-      allocate(WORK(LWORK))
-      call DSYEV(JOBZ, UPLO, N, A, LDA, EVAL, WORK, LWORK, INFO)
-      EVEC = A ! store the eigenvectors in EVEC
-      A=Atemp ! restore the original matrix in A
 
-      end
+      SUBROUTINE eigsrt(d,v,n,np)
+      INTEGER n,np
+      DOUBLE PRECISION d(np),v(np,np)
+      INTEGER i,j,k
+      DOUBLE PRECISION p
+      do i=1,n-1
+         k=i
+         p=d(i)
+      do j=i+1,n
+         if(d(j).ge.p)then
+            k=j
+            p=d(j)
+         endif
+      enddo
+      if(k.ne.i)then
+         d(k)=d(i)
+         d(i)=p
+         do j=1,n
+            p=v(j,i)
+            v(j,i)=v(j,k)
+            v(j,k)=p
+         enddo
+      endif
+      enddo
+      return
+      END SUBROUTINE eigsrt
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
       subroutine CalcEigenErrors(info,iparam,MatrixDim,H,LeadDim,S,HalfBandWidth,NumStates,Psi,Energies,MaxNumStates)
 
@@ -1378,4 +1420,3 @@ c
       end
 
 
-      

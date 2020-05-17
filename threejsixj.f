@@ -17,23 +17,23 @@ C**********************************************************C
 C
 
       function coeff(l1,l2,l1p,l2p,l,k)
-	    implicit real*8(a-h,o-z)
-			front=(2*l1+1)*(2*l2+1)*(2*l1p+1)*(2*l2p+1)
-			front=dsqrt(front)*(-1)**(l1+l1p+l)
-			l1d=2*l1
-			l2d=2*l2
-			l1pd=2*l1p
-			l2pd=2*l2p
-			ld=2*l
-			kd=2*k
-			iz=0
-			t1=thrj(l1d,kd,l1pd,iz,iz,iz)
-			t2=thrj(l2d,kd,l2pd,iz,iz,iz)
-			s1=sixj(l1d,l2d,ld,l2pd,l1pd,kd)
-			coeff=front*t1*t2*s1
-			return
-   		end
-c
+      implicit real*8(a-h,o-z)
+      front=(2*l1+1)*(2*l2+1)*(2*l1p+1)*(2*l2p+1)
+      front=dsqrt(front)*(-1)**(l1+l1p+l)
+      l1d=2*l1
+      l2d=2*l2
+      l1pd=2*l1p
+      l2pd=2*l2p
+      ld=2*l
+      kd=2*k
+      iz=0
+      t1=thrj(l1d,kd,l1pd,iz,iz,iz)
+      t2=thrj(l2d,kd,l2pd,iz,iz,iz)
+      s1=sixj(l1d,l2d,ld,l2pd,l1pd,kd)
+      coeff=front*t1*t2*s1
+      return
+      end
+c     
       FUNCTION XNINEJ(J11,J12,J13,J21,J22,J23,J31,J32,J33)
       IMPLICIT REAL*8(A-H,O-Z)
       KMIN1 = IABS(J11-J33)
@@ -44,7 +44,7 @@ c
       KMAX3 = J23+J12
 C
       IF(KMIN2.GT.KMIN1) KMIN1=KMIN2
-       IF(KMIN3.GT.KMIN1) KMIN1=KMIN3
+      IF(KMIN3.GT.KMIN1) KMIN1=KMIN3
       IF(KMAX2.LT.KMAX1) KMAX1=KMAX2
       IF(KMAX3.LT.KMAX1) KMAX1=KMAX3
 C
