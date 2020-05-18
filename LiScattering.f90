@@ -73,31 +73,28 @@ contains
      write(6,*) "fmin, fmax = ", fmin, fmax
      ! Calcualte the Hyperfine/Zeeman matrix in units of MHz with B measured in Gauss
 
-     do f = iabs(i-s), i+s, 2
+     do f = fmin, fmax, 2
         do m = -f, f, 2
            bra = bra+1
            ket = 0
-           do fp = iabs(i-s), i+s, 2
+           do fp = fmin, fmax, 2
               c1 = gsLi7*muB*B*dsqrt((dble(fp)+1d0)*(dble(f)+1d0))
               c2 = giLi7*muN*B*dsqrt((dble(fp)+1d0)*(dble(f)+1d0))
-!              write(6,*) "c1,c2 = ",c1,c2
               do mp = -fp, fp, 2
                  Zsum1 = 0d0
                  Zsum2 = 0d0
                  ket = ket+1
-                 HHZ(bra,ket)=0d0
                  if((f.eq.fp).and.(m.eq.mp)) then
                     HHZ(bra, ket) = HHZ(bra,ket) + &
                          0.5d0*ALi7*( 0.5d0*f*(0.5d0*f + 1d0) - 0.5d0*i*(0.5d0*i + 1d0) - 0.5d0*s*(0.5d0*s + 1d0) )
-                    write(6,*) "f = ", f, "m = ", m, "HHZ = ", HHZ(bra,ket)
                  endif
                  if(m.eq.mp) then
                     do ms = -s, s, 2
                        do mi = -i, i, 2
                           tj1 = THRJ(s,i,fp,ms,mi,-mp)
                           tj2 = THRJ(s,i,f,ms,mi,-m)
-                          Zsum1 = Zsum1 + ms*tj1*tj2
-                          Zsum2 = Zsum2 + mi*tj1*tj2
+                          Zsum1 = Zsum1 + 0.5d0*ms*tj1*tj2
+                          Zsum2 = Zsum2 + 0.5d0*mi*tj1*tj2
                        enddo
                     enddo
                     HHZ(bra,ket) = HHZ(bra, ket) + c1*Zsum1 + c2*Zsum2
@@ -217,10 +214,10 @@ program main
   allocate(HHZ(size1,size1),EVAL(size1),EVEC(size1,size1))
 
   ! construct the HZ Hamiltonian
-  NBgrid = 20
+  NBgrid = 40
   allocate(Bgrid(NBgrid))
 
-  call makeEgrid(Bgrid,NBgrid,0.0d0,200d0)
+  call makeEgrid(Bgrid,NBgrid,0.0d0,1000d0)
   do iB = 1, NBgrid
      EVEC=0d0
      EVAL=0d0
@@ -228,7 +225,7 @@ program main
      call makeLi7HHZ(HHZ,Bgrid(iB),size1)
      call printmatrix(HHZ,size1,size1,6)
      call MyDSYEV(HHZ,size1,EVAL,EVEC)
-     write(6,*) Bgrid(iB), EVAL
+     write(20,*) Bgrid(iB), EVAL
   enddo
   !call makeHFBasisLi7
 10 format(100F10.4)
