@@ -9,14 +9,16 @@ module units
   real*8, parameter :: mKPerInvcm = 1.4387862961655296d3
   real*8, parameter :: InvcmPerHartree = 4.556335252912088d-6
   real*8, parameter :: HartreePerInvcm = 219474.6313632043
-  real*8, parameter :: eVPerInvcm = 0.00012398425731484318d0
+  real*8, parameter :: InvcmPereV = 0.00012398425731484318d0
   real*8, parameter :: BohrPerAngstrom = 0.529177210903d0
   real*8, parameter :: AngstromPerBohr = 1d0/BohrPerAngstrom
   real*8, parameter :: THzPerJ = 6.626070150d-22
-  real*8, parameter :: THzPerAU = 1.5198298460570d-4
+  real*8, parameter :: THzPerHartree = 1.5198298460570d-4
   real*8, parameter :: GaussPerTesla = 1d-4
   real*8, parameter :: hSI = 6.62607015d-34
   real*8, parameter :: HartreePerJoule = 4.3597447222071d-18
+  real*8, parameter :: HartreePerMHz = 6.579683920502d9
+  real*8, parameter :: HartreePerTHz = 6.579683920502d3
   
 
 !!$  real*8, parameter ::  AnstperBohr,HartreeperJoule,JouleperHartree,hSI,hHartreesec,hbarcMeVfm,hbarceVnm

@@ -5,12 +5,15 @@ module hyperfine
   double precision, parameter :: muN = 7.62259328547d-4    !Nuclear Magneton in units (MHz/Gauss)
   integer, parameter :: sLi7 = 1 ! twice the electronic spin of Li-7
   integer, parameter :: iLi7 = 3 ! twice the nuclear spin of Li-7
-  double precision, parameter :: gsLi7 = 2.00231930436256d0 ! electron g factor
+  integer, parameter :: sLi6 = 1 ! twice the electronic spin of Li-6
+  integer, parameter :: iLi6 = 2 ! twice the nuclear spin of Li-6
+  double precision, parameter :: gs = 2.00231930436256d0 ! electron g factor
   double precision, parameter :: giLi7 = 2.170903 ! Nuclear g factor for LI-7
+  double precision, parameter :: giLi6 = 0.822019 ! Nuclear g factor for LI-7
+  
   !  Hyperfine from Arimondo et al Rev. Mod. Phys. 49, 31 (1977).  See table on pg. 67 
   double precision, parameter :: ALi7 = 401.7520435 ! MHz  
   double precision, parameter :: ALi6 = 152.136840720 ! MHz
-
   
   type hf1atom
      integer f, m
@@ -21,9 +24,9 @@ module hyperfine
   type symhf2atom
      type(hf2atom) state1, state2
   end type symhf2atom
-  
-  type(hf2atom), allocatable :: hfstates(:)
-  type(symhf2atom), allocatable :: symhfbasis(:)
+
+  type(hf2atom), allocatable :: hf2TempGlobal(:)
+  type(symhf2atom), allocatable :: hf2symTempGlobal(:)
 
   
 contains
@@ -31,20 +34,34 @@ contains
   ! All angular momentum quantum numbers are TWICE their actual
   ! values so that all arithemetic can be done with integers
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  subroutine HHZSize1(i,s,size)
+  subroutine MakeHF1Basis(i,s,size,hf1)
+    implicit none
     ! Gives the size of the (unsymmetrized) hyperfine basis (dimension of the 1-atom hyperfine + zeeman Hamiltonian) for one atom
-    integer i, s, size
-    integer f, m
-    size = 0
-    do f = iabs(i-s), i+s, 2
-       do m = -f, f, 2
-          size = size + 1
+    integer i, s, size ! size is (in/out) if size = 0 on input -- determine the size.  Else, use it to calculate the basis stored in hf1
+    integer f, m, count
+    type(hf1atom) hf1(:)
+
+    if(size.eq.0) then
+       do f = iabs(i-s), i+s, 2
+          do m = -f, f, 2
+             size = size + 1
+          enddo
        enddo
-    enddo
-!    write(6,*) "size = ", size
-  end subroutine HHZSize1
+    else
+       count = 0
+       do f = iabs(i-s), i+s, 2
+          do m = -f, f, 2
+             count = count+1
+             hf1(count)%f = f
+             hf1(count)%m = m
+          enddo
+       enddo
+    endif
+    !    write(6,*) "size = ", size
+  end subroutine MakeHF1Basis
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   function hf2eq(state1,state2)
+    !determines if two-atom hyperfine states are equal
     implicit none
     logical hf2eq
     type(hf2atom) state1, state2
@@ -72,9 +89,12 @@ contains
     state%a2%m=0
   end subroutine setzero2atom
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  subroutine HHZSize2(i1, s1, i2, s2, mtot, size)
+
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  subroutine MakeHF2Basis(i1, s1, i2, s2, sym, lwave, mtot, size)
     ! Gives the size of the (unsymmetrized) hyperfine basis for 2 atoms with total M_F = mtot
-    integer i1, s1, i2, s2, size, count, keepflag
+    ! lwave denotes the partial wave and sym < 0 for fermions, sym>0 for bosons and sym=0 for distinguishable.
+    integer i1, s1, i2, s2, size, count, keepflag, lwave, sym
     integer f1, m1, f2, m2, mtot, symsize, n1, n2
     type(hf2atom) zerostate
     type(hf2atom), allocatable :: tempstates(:)
@@ -96,9 +116,9 @@ contains
        enddo
     enddo
     
-    allocate(hfstates(size))
+    allocate(hf2TempGlobal(size))
     do n1=1,size
-       call setzero2atom(hfstates(n1))
+       call setzero2atom(hf2TempGlobal(n1))
     enddo
     
     write(6,'(A,I3)') "Generating the unsymmetrized basis with total MF = ",mtot
@@ -112,11 +132,11 @@ contains
              do m2 = -f2, f2, 2
                 if((m1+m2).eq.mtot) then
                    count = count + 1
-                   hfstates(count)%a1%f=f1
-                   hfstates(count)%a1%m=m1
-                   hfstates(count)%a2%f=f2
-                   hfstates(count)%a2%m=m2
-                   write(6,'(5I5)') count, hfstates(count)
+                   hf2TempGlobal(count)%a1%f=f1
+                   hf2TempGlobal(count)%a1%m=m1
+                   hf2TempGlobal(count)%a2%f=f2
+                   hf2TempGlobal(count)%a2%m=m2
+                   write(6,'(5I5)') count, hf2TempGlobal(count)
                 endif
              enddo
           enddo
@@ -124,125 +144,84 @@ contains
     enddo
 
     allocate(tempstates(size),symstates(size))
-!    tempstates = 0
-!    symstates = 0
     count = 0
     do n1 = 1, size
        !construct a temporary state with the q-#s of atom 1 and 2 interchanged
-       tempstates(n1)%a1 = hfstates(n1)%a2
-       tempstates(n1)%a2 = hfstates(n1)%a1
-       !write(6,'(4I3,A,4I3)') hfstates(n1),"  ||", tempstates(n1)
+       tempstates(n1)%a1 = hf2TempGlobal(n1)%a2
+       tempstates(n1)%a2 = hf2TempGlobal(n1)%a1
+       !write(6,'(4I3,A,4I3)') hf2TempGlobal(n1),"  ||", tempstates(n1)
        ! keep a tally of unique states
        !consider below the case of bosonic atoms with l=0 only.  Check if sum of two states is unique
        keepflag = 1
+       if((sym.lt.0).and.hf2eq(tempstates(n1),hf2TempGlobal(n1))) keepflag = 0
        do n2 = 1, n1-1
-          if(hf2eq(tempstates(n1),hfstates(n2))) keepflag = 0
+          if(hf2eq(tempstates(n1),hf2TempGlobal(n2))) keepflag = 0
        enddo
        if(keepflag.eq.1) then
           count=count+1
-          symstates(n1)%state1 = hfstates(n1)
-          symstates(n1)%state2 = tempstates(n1)
+          symstates(count)%state1 = hf2TempGlobal(n1)
+          symstates(count)%state2 = tempstates(n1)
        endif
-
     enddo
     symsize = count
-    count = 0
-    allocate(symhfbasis(symsize))
-    do n1 = 1, size
-       if(hf2eq(symstates(n1)%state1,zerostate).eqv..false.) then
-          count = count+1
-          symhfbasis(count)=symstates(n1)
-          write(6,'(I4,A,A,4I1,A,4I1,A)') count,"  symmetrized basis", &
-               "  |", symhfbasis(count)%state1,"> +/- (-1)^l |", symhfbasis(count)%state2,">"
-       endif
-
+!    count = 0
+    allocate(hf2symTempGlobal(symsize))
+    write(6,'(A,I2)') "(+1/0/-1) = (boson/dist/fermion) Symmetry case: ", sym
+    write(6,'(A,I2)') "partial wave = ", lwave
+    do n1 = 1, symsize
+       hf2symTempGlobal(n1)=symstates(n1)
+       write(6,'(I4,A,A,4I2,A,4I2,A)') n1,"  symmetrized basis", &
+            "  |", hf2symTempGlobal(n1)%state1,"> +/- (-1)^l |", hf2symTempGlobal(n1)%state2,">"
     enddo
-
-       
-
+    size=symsize
     deallocate(symstates,tempstates)
-  end subroutine HHZSize2
+    
+  end subroutine MakeHF2Basis
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  subroutine makeHFBasisLi7(mstate,fullsize)
-    implicit none
-    integer i1,i2,s1,s2,f1,f2,m1,m2,count,fullsize
-    type(hf2atom) mstate(fullsize)
+  subroutine MakeHHZ1(HHZ,B,size,hf1,gs,gi,Ahf,s,i)
     
-    s1=sLi7
-    s2=sLi7
-    i1=iLi7
-    i2=iLi7
-    
-    count = 0
-    write(6,*) iabs(s1-i1)
-    write(6,*) s1+i1
-
-    do f1 = iabs(s1-i1),s1+i1,2
-       do m1 = -f1, f1, 2
-           do f2 = iabs(s2-i2),s2+i2,2
-              do m2 = -f2, f2, 2
-                 
-                 if((m1+m2).eq.8) then
-                    count = count+1
-                    write(6,10) count,"f1=",f1,"m1=",m1,"f2=",f2,"m2=",m2
-                 endif
-              enddo
-           enddo
-        enddo
-     enddo
- 10 format(I10,A5,I4,A5,I4,A5,I4,A5,I4)    
-   end subroutine makeHFBasisLi7
-   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-   subroutine makeLi7HHZ(HHZ,B,size)
      implicit none
-     integer f, m, fp, mp, i, s, bra, ket, ms, mi, size, fmin, fmax
+     integer f, m, fp, mp, i, s, bra, ket, ms, mi, size
      double precision, external :: THRJ
      double precision, intent(in) :: B
      double precision HHZ(size,size)
-     double precision Zsum1, Zsum2, c1, c2, tj1, tj2
+     double precision Zsum1, Zsum2, c1, c2, tj1, tj2, gs, gi, Ahf
+     type(hf1atom) hf1(size)
 
-     i = iLi7
-     s = sLi7
-     bra = 0
-     ket = 0
-     fmin = iabs(i-s)
-     fmax = i+s
-     write(6,*) "fmin, fmax = ", fmin, fmax
+
      ! Calcualte the Hyperfine/Zeeman matrix in units of MHz with B measured in Gauss
-
-     do f = fmin, fmax, 2
-        do m = -f, f, 2
-           bra = bra+1
-           ket = 0
-           do fp = fmin, fmax, 2
-              c1 = gsLi7*muB*B*dsqrt((dble(fp)+1d0)*(dble(f)+1d0))
-              c2 = giLi7*muN*B*dsqrt((dble(fp)+1d0)*(dble(f)+1d0))
-              do mp = -fp, fp, 2
-                 Zsum1 = 0d0
-                 Zsum2 = 0d0
-                 ket = ket+1
-                 if((f.eq.fp).and.(m.eq.mp)) then
-                    HHZ(bra, ket) = HHZ(bra,ket) + &
-                         0.5d0*ALi7*( 0.5d0*f*(0.5d0*f + 1d0) - 0.5d0*i*(0.5d0*i + 1d0) - 0.5d0*s*(0.5d0*s + 1d0) )
-                 endif
-                 if(m.eq.mp) then
-                    do ms = -s, s, 2
-                       do mi = -i, i, 2
-                          tj1 = THRJ(s,i,fp,ms,mi,-mp)
-                          tj2 = THRJ(s,i,f,ms,mi,-m)
-                          Zsum1 = Zsum1 + 0.5d0*ms*tj1*tj2
-                          Zsum2 = Zsum2 + 0.5d0*mi*tj1*tj2
-                       enddo
-                    enddo
-                    HHZ(bra,ket) = HHZ(bra, ket) + c1*Zsum1 + c2*Zsum2
-                 endif
+     do bra = 1, size
+        do ket = 1, size
+           f = hf1(ket)%f
+           m = hf1(ket)%m
+           fp = hf1(bra)%f
+           mp = hf1(bra)%m
+           c1 = gs*muB*B*dsqrt((dble(fp)+1d0)*(dble(f)+1d0))
+           c2 = gi*muN*B*dsqrt((dble(fp)+1d0)*(dble(f)+1d0))
+           
+           Zsum1 = 0d0
+           Zsum2 = 0d0
+           
+           if((f.eq.fp).and.(m.eq.mp)) then
+              HHZ(bra, ket) = HHZ(bra,ket) + &
+                   0.5d0*Ahf*( 0.5d0*f*(0.5d0*f + 1d0) - 0.5d0*i*(0.5d0*i + 1d0) - 0.5d0*s*(0.5d0*s + 1d0) )
+           endif
+           if(m.eq.mp) then
+              do ms = -s, s, 2
+                 do mi = -i, i, 2
+                    tj1 = THRJ(s,i,fp,ms,mi,-mp)
+                    tj2 = THRJ(s,i,f,ms,mi,-m)
+                    Zsum1 = Zsum1 + 0.5d0*ms*tj1*tj2
+                    Zsum2 = Zsum2 + 0.5d0*mi*tj1*tj2
+                 enddo
               enddo
-           enddo
+              HHZ(bra,ket) = HHZ(bra, ket) + c1*Zsum1 + c2*Zsum2
+           endif
         enddo
      enddo
      
-   end subroutine makeLi7HHZ
-   
+   end subroutine MakeHHZ1
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
    subroutine OverlapSpinHF(i1,i2,s1,s2,S,mS,I,mI,f1,m1,f2,m2,me1)
      implicit none
      integer S,mS,I,mI,f1,m1,f2,m2,i1,i2,s1,s2
@@ -365,7 +344,7 @@ program main
   use hyperfine
   implicit none
   integer ISTATE, IMN1, IMN2, NPP, iR, iB, ihf
-  integer i1,i2,s1,s2,S,sym,size1,size2,NBgrid,mtot
+  integer i1,i2,s1,s2,S,sym,size1,size2,NBgrid,mtot, lwave
   double precision, allocatable :: XO(:), VSinglet(:), VTriplet(:), RM2(:)
   double precision, allocatable :: HHZ(:,:), Bgrid(:), EVAL(:), EVEC(:,:)
   double precision, allocatable :: SPmat(:,:), TPmat(:,:), VHZ(:,:,:)
@@ -373,39 +352,68 @@ program main
   double precision B
   type(hf1atom) a1, a2
   type(hf2atom) mstate1, mstate2
-  
+  type(hf1atom), allocatable :: Li6hf(:), Li7hf(:)  
   ! initialize the angular momentum routines
   call setupam
   ! determine the size of the one-atom hyperfine/zeeman hamiltonian
-  call HHZSize1(iLi7,sLi7,size1)
-  write(6,*) "size1 = ",size1
-  allocate(HHZ(size1,size1),EVAL(size1),EVEC(size1,size1))
+
+  NBgrid = 40
+  !make the magnetic field grid
+  allocate(Bgrid(NBgrid))
+  call makeEgrid(Bgrid,NBgrid,0.0d0,1000d0)
+  !------------------------------------------------------------------
+  ! solve the Li-7 1-atom Zeeman problem
+  !call once with size1 = 0 to determine the size of the basis.
+  size1 = 0
+  call MakeHF1Basis(iLi7,sLi7,size1,Li7hf)
+  write(6,*) "size of the Li-7 1-atom hyperfine basis = ",size1
+  !allocate memory for the basis
+  allocate(Li7hf(size1),EVEC(size1,size1),EVAL(size1),HHZ(size1,size1))
+  call MakeHF1Basis(iLi7,sLi7,size1,Li7hf)
+
 
   ! construct the HZ Hamiltonian
-  NBgrid = 40
-  allocate(Bgrid(NBgrid))
-
-  call makeEgrid(Bgrid,NBgrid,0.0d0,1000d0)
   do iB = 1, NBgrid
      EVEC=0d0
      EVAL=0d0
      HHZ=0d0
-     call makeLi7HHZ(HHZ,Bgrid(iB),size1)
-     call printmatrix(HHZ,size1,size1,6)
+     call MakeHHZ1(HHZ,Bgrid(iB),size1,Li7hf,gs,giLi7,ALi7,sLi7,iLi7)
+!     call printmatrix(HHZ,size1,size1,6)
      call MyDSYEV(HHZ,size1,EVAL,EVEC)
-     write(20,*) Bgrid(iB), EVAL
+     write(90,*) Bgrid(iB), EVAL
   enddo
-  !call makeHFBasisLi7
-10 format(100F10.4)
-
-  NPP = 100
-  VLIM = 0d0
+  deallocate(EVEC,EVAL,HHZ)
+  !____________________________________________________________________
+  !------------------------------------------------------------------
+  ! solve the Li-6 1-atom Zeeman problem
+  size1=0
+  call MakeHF1Basis(iLi6,sLi6,size1,Li6hf)
+  write(6,*) "size of the Li-6 1-atom hyperfine basis = ",size1
+  allocate(Li6hf(size1))
+  call MakeHF1Basis(iLi6,sLi6,size1,Li6hf)
+  allocate(EVEC(size1,size1),EVAL(size1),HHZ(size1,size1))
+  ! construct the HZ Hamiltonian
+  do iB = 1, NBgrid
+     EVEC=0d0
+     EVAL=0d0
+     HHZ=0d0
+     call MakeHHZ1(HHZ,Bgrid(iB),size1,Li6hf,gs,giLi6,ALi6,sLi6,iLi6)
+!     call printmatrix(HHZ,size1,size1,6)
+     call MyDSYEV(HHZ,size1,EVAL,EVEC)
+     write(91,*) Bgrid(iB), EVAL
+  enddo
+  deallocate(EVAL,EVEC,HHZ)
+  !____________________________________________________________________
   
+  NPP = 1000
+  VLIM = 0d0
+
   allocate(XO(NPP),VSinglet(NPP),VTriplet(NPP),RM2(NPP))
 
   IMN1 = 7
   IMN2 = 7
   sym = 1 ! set to +1 for bosonic Li-7, -1 for fermionic Li-6, and 0 for mixture Li-6 - Li-7.
+  lwave = 0 ! s wave collisions
   xmin = 1.0d0
   xmax = 30.0d0
   dx = (xmax-xmin)/(dble(NPP-1))
@@ -418,29 +426,30 @@ program main
 
   ! print singlet potential to fort.10
   do iR=1, NPP
-     write(10,*) XO(iR)*AngstromPerBohr, VSinglet(iR)*HartreePerinvcm
+     write(10,*) XO(iR)*AngstromPerBohr, VSinglet(iR)*InvcmPerHartree*HartreePerTHz
   enddo
 
   ISTATE = 2                !Find the triplet potential
   ! Call the Le Roy routine to generate the MLR potential
   call POTGENLI2(ISTATE,IMN1,IMN2,NPP,VLIM,XO,RM2,VTriplet)
   do iR=1, NPP
-     write(30,*) XO(iR)*AngstromPerBohr, VTriplet(iR)*HartreePerinvcm
+     write(30,*) XO(iR)*AngstromPerBohr, VTriplet(iR)*InvcmPerHartree*HartreePerTHz
   enddo
   mtot = 4
-  call HHZSize2(iLi7, sLi7, iLi7, sLi7, mtot, size2)
-!  write(6,*) "size2 = ", size2
-!  size2=5
-!  allocate(SPmat(size2,size2), TPmat(size2,size2))
+  call MakeHF2Basis(iLi7, sLi7, iLi7, sLi7, sym, lwave, mtot, size2)
+  write(6,*) "size of the symmetrized 2-atom hyperfine basis = ", size2
+  
+  
+  !  allocate(SPmat(size2,size2), TPmat(size2,size2))
 
   !  call makeProjMatricesLi7(SPmat,TPmat,mtot,size2)
   
-!  allocate(VHZ(NPP,size2,size2))
+  !  allocate(VHZ(NPP,size2,size2))
 
   
 !  deallocate(SPmat,TPmat,VHZ)
   deallocate(Bgrid,XO,VSinglet,VTriplet,RM2)
-  deallocate(HHZ,EVAL,EVEC)
 
+10 format(100F10.4)
 end program 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
