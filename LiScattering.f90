@@ -23,6 +23,7 @@ module hyperfine
   end type hf2atom
   type symhf2atom
      type(hf2atom) state1, state2
+     double precision norm, phase
   end type symhf2atom
 
   type(hf2atom), allocatable :: hf2TempGlobal(:)
@@ -92,6 +93,7 @@ contains
 
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   subroutine MakeHF2Basis(i1, s1, i2, s2, sym, lwave, mtot, size)
+    implicit none
     ! Gives the size of the (unsymmetrized) hyperfine basis for 2 atoms with total M_F = mtot
     ! lwave denotes the partial wave and sym < 0 for fermions, sym>0 for bosons and sym=0 for distinguishable.
     integer i1, s1, i2, s2, size, count, keepflag, lwave, sym
@@ -99,6 +101,8 @@ contains
     type(hf2atom) zerostate
     type(hf2atom), allocatable :: tempstates(:)
     type(symhf2atom), allocatable :: symstates(:)
+    double precision kd1, kd2
+    double precision, external :: dkdelta
     !    zerostate=0
     call setzero2atom(zerostate)
     write(6,*) "zerostate = ",zerostate
@@ -170,8 +174,17 @@ contains
     write(6,'(A,I2)') "partial wave = ", lwave
     do n1 = 1, symsize
        hf2symTempGlobal(n1)=symstates(n1)
-       write(6,'(I4,A,A,4I2,A,4I2,A)') n1,"  symmetrized basis", &
-            "  |", hf2symTempGlobal(n1)%state1,"> +/- (-1)^l |", hf2symTempGlobal(n1)%state2,">"
+       ! record the normalization and relative phase into the state
+       kd1 = dkdelta(hf2symTempGlobal(n1)%state1%a1%f,hf2symTempGlobal(n1)%state1%a2%f)
+       kd2 = dkdelta(hf2symTempGlobal(n1)%state1%a1%m,hf2symTempGlobal(n1)%state1%a2%m)
+       
+       hf2symTempGlobal(n1)%norm = 1d0/dsqrt(2d0*(1d0+kd1*kd2))
+       hf2symTempGlobal(n1)%phase = 1d0
+       if(sym.lt.0) hf2symTempGlobal(n1)%phase = -1d0
+       hf2symTempGlobal(n1)%phase = hf2symTempGlobal(n1)%phase*(-1)**lwave
+       
+       write(6,'(I4,A,f5.2,A,4I2,A,f5.2,A,4I2,A)') n1,"  symmetrized basis:", hf2symTempGlobal(n1)%norm, &
+            " ( |", hf2symTempGlobal(n1)%state1,"> +", hf2symTempGlobal(n1)%phase,"|", hf2symTempGlobal(n1)%state2,"> )"
     enddo
     size=symsize
     deallocate(symstates,tempstates)
@@ -224,6 +237,10 @@ contains
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
    subroutine OverlapSpinHF(i1,i2,s1,s2,S,mS,I,mI,f1,m1,f2,m2,me1)
      implicit none
+     ! This subroutine calcualtes the overlap between the hyperfine state |f1 m1 f2 m2> and the
+     ! spin state |(s1 s2) S mS (i1 i2) I mI >
+     ! it returns in me1 = <(s1 s2) S mS (i1 i2) I mI | (i1 s1) f1 m1 (i2 s2) f2 m2 >
+     ! I haven't checked this, but it should be equal to the 9-J coefficient corresponding to the above overal.
      integer S,mS,I,mI,f1,m1,f2,m2,i1,i2,s1,s2
      integer mi1,mi2,ms1,ms2
      double precision phase,prefact,tj1,tj2,tj3,tj4,me1
@@ -250,9 +267,11 @@ contains
      
      me1 = me1*phase*prefact
   end subroutine OverlapSpinHF
-  
-  subroutine STproj(S,i1,i2,s1,s2,f1p,m1p,f2p,m2p,f1,m1,f2,m2,res)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  subroutine STproj(S,i1,i2,s1,s2,hf2bra,hf2ket,res)
     implicit none
+    ! This subroutine calculates the unsymmetrized matrix element for the singlet/triplet projection operator
+    ! in the hyperfine basis |f1 m1 f2 m2>
     ! i1 = nuclear spin of atom 1, mi1 = z-projection of i1
     ! i2 = nuclear spin of atom 2, mi2 = z-projection of i2
     ! I = total nuclear spin
@@ -260,11 +279,13 @@ contains
     ! s2 = electronic spin of atom 2
     ! S = total electronic spin
     ! mS, mI = z-projections of total nuclear and electronic spins
+    ! hf2bra and hf2ket contain f1p m1p f2p m2p and f1 m1 f2 m2m respectively. 
     ! f = S+I = total spin of atom
     ! S = 0 for singlet, 2 for triplet (since this is really 2S)
     integer S,I,mS,mI,mi1,ms1,mi2,ms2
-    integer i1,i2,s1,s2,f1p,m1p,f2p,m2p,f1,m1,f2,m2
+    integer i1,i2,s1,s2!,f1p,m1p,f2p,m2p,f1,m1,f2,m2
     double precision res,me1,me2
+    type(hf2atom) hf2bra, hf2ket
 
 !    write(6,*) "For i1,i2,s1,s2 = ",i1,i2,s1,s2
     res=0d0
@@ -273,8 +294,8 @@ contains
           do I = iabs(i1-i2), i1+i2, 2
              do mS = -S, S, 2
                 do mI = -I, I, 2
-                   call OverlapSpinHF(i1,i2,s1,s2,S,mS,I,mI,f1,m1,f2,m2,me1)
-                   call OverlapSpinHF(i1,i2,s1,s2,S,mS,I,mI,f1p,m1p,f2p,m2p,me2)
+                   call OverlapSpinHF(i1,i2,s1,s2,S,mS,I,mI,hf2ket%a1%f,hf2ket%a1%m,hf2ket%a2%f,hf2ket%a2%m,me1)
+                   call OverlapSpinHF(i1,i2,s1,s2,S,mS,I,mI,hf2bra%a1%f,hf2bra%a1%m,hf2bra%a2%f,hf2bra%a2%m,me2)
                    res = res + me1*me2
                    !write(6,*) I,mI,S,mS, res
                 enddo
@@ -282,60 +303,34 @@ contains
           enddo
        endif
     endif
-
   end subroutine STproj
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  subroutine makeProjMatricesLi7(SPmat,TPmat,mtot,size1)
+  subroutine MakeSTHFProj(S, i1, i2, s1, s2, hfsym, size, PST)
     implicit none
-    double precision SPmat(:,:), TPmat(:,:)
-    integer size1, s1, i1, s2, i2, Stot, bra, ket,mtot
-    integer f1, f2, m1, m2, f1p, f2p, m1p, m2p
-    integer fmin, fmax
-    double precision SME1, SME2, TME1, TME2
-    
-    s1 = sLi7
-    i1 = iLi7
-    s2 = sLi7
-    i2 = iLi7
-    fmin = iabs(s1-i1)
-    fmax = s1+i1
-   
-    do bra = 1, 5
-       do ket = 1, 5
-          Stot = 0
-          call STproj(Stot,i1,i2,s1,s2,f1p,m1p,f2p,m2p,f1,m1,f2,m2,SME1)
-          Stot = 1
-          call STproj(Stot,i1,i2,s1,s2,f1p,m1p,f2p,m2p,f1,m1,f2,m2,TME1)
-          SPmat(bra, ket) = SME1
-          TPmat(bra, ket) = TME1
+    integer S, i1, i2, s1, s2
+    integer bra, ket, size
+    type(symhf2atom), intent(in) :: hfsym(size)
+    double precision, intent(out) :: PST(size,size)
+    double precision me1, me2, me3, me4
+
+    PST = 0d0
+    do bra = 1, size
+       do ket = 1, size
+          call STproj(S,i1,i2,s1,s2,hfsym(bra)%state1,hfsym(ket)%state1,me1)
+          me1 = me1*hfsym(bra)%norm*hfsym(ket)%norm
+          call STproj(S,i1,i2,s1,s2,hfsym(bra)%state1,hfsym(ket)%state2,me2)
+          me2 = me2*hfsym(bra)%norm*hfsym(ket)%norm
+          me2 = me2*hfsym(ket)%phase
+          call STproj(S,i1,i2,s1,s2,hfsym(bra)%state2,hfsym(ket)%state1,me3)
+          me3 = me3*hfsym(bra)%norm*hfsym(ket)%norm
+          me3 = me3*hfsym(bra)%phase
+          call STproj(S,i1,i2,s1,s2,hfsym(bra)%state2,hfsym(ket)%state2,me4)
+          me4 = me4*hfsym(bra)%norm*hfsym(ket)%norm
+          PST(bra, ket) = me1 + me2 + me3 + me4
        enddo
     enddo
     
-  end subroutine makeProjMatricesLi7
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-  subroutine SymSTproj(sym,l,S,i1,i2,s1,s2,f1p,m1p,f2p,m2p,f1,m1,f2,m2,res)
-    integer i1,i2,s1,s2,f1p,m1p,f2p,m2p,f1,m1,f2,m2,S
-    integer l,sym
-    double precision res,res1,res2,denom
-
-    ! sym > 0 for bosons
-    ! sym < 0 for fermions
-    ! sym = 0 for distinguishible atoms
-
-    call STproj(S,i1,i2,s1,s2,f1p,m1p,f2p,m2p,f1,m1,f2,m2,res1)
-    if (sym.eq.0) then
-       res = res1
-    else if (sym.lt.0) then
-       denom = 2d0
-       call STproj(S,i1,i2,s1,s2,f2p,m2p,f1p,m1p,f2,m2,f1,m1,res2)
-       res = (res1 - (-1)**l * res2)/denom    !Note 'l' is NOT really 2*l here -- it's the real 'l'
-    else 
-       denom = 2d0
-       call STproj(S,i1,i2,s1,s2,f2p,m2p,f1p,m1p,f2,m2,f1,m1,res2)
-       res = (res1 + (-1)**l * res2)/denom    !Note 'l' is NOT really 2*l here -- it's the real 'l'
-    endif
-  end subroutine SymSTproj
-
+  end subroutine MakeSTHFProj
 end module hyperfine
 
 !****************************************************************************************************
@@ -438,12 +433,22 @@ program main
   mtot = 4
   call MakeHF2Basis(iLi7, sLi7, iLi7, sLi7, sym, lwave, mtot, size2)
   write(6,*) "size of the symmetrized 2-atom hyperfine basis = ", size2
-  
-  
-  !  allocate(SPmat(size2,size2), TPmat(size2,size2))
+  allocate(SPmat(size2,size2), TPmat(size2,size2))
 
-  !  call makeProjMatricesLi7(SPmat,TPmat,mtot,size2)
+  S = 0
+  call MakeSTHFProj(S, iLi7, iLi7, sLi7, sLi7, hf2symTempGlobal, size2, SPmat)
+  write(6,*) "The singlet projection matrix:"
+  write(6,*) "-------------------------------"
+  call printmatrix(SPmat,size2,size2,6)
+
+  S = 2
+  call MakeSTHFProj(S, iLi7, iLi7, sLi7, sLi7, hf2symTempGlobal, size2, TPmat)
+  write(6,*) "The triplet projection matrix:"
+  write(6,*) "-------------------------------"
+  call printmatrix(TPmat,size2,size2,6)
+
   
+
   !  allocate(VHZ(NPP,size2,size2))
 
   
@@ -453,3 +458,13 @@ program main
 10 format(100F10.4)
 end program 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+function dkdelta(a,b)
+  integer a, b
+  double precision dkdelta
+  if(a.eq.b) then
+     dkdelta = 1d0
+  else
+     dkdelta = 0d0
+  endif
+  return
+end function dkdelta
