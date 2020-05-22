@@ -90,8 +90,6 @@ contains
     state%a2%m=0
   end subroutine setzero2atom
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   subroutine MakeHF2Basis(i1, s1, i2, s2, sym, lwave, mtot, size)
     implicit none
     ! Gives the size of the (unsymmetrized) hyperfine basis for 2 atoms with total M_F = mtot
@@ -447,9 +445,7 @@ program main
   write(6,*) "-------------------------------"
   call printmatrix(TPmat,size2,size2,6)
 
-  
-
-  !  allocate(VHZ(NPP,size2,size2))
+  !allocate(VHZ(NPP,size2,size2))
 
   
 !  deallocate(SPmat,TPmat,VHZ)
