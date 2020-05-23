@@ -23,7 +23,8 @@ module hyperfine
   end type hf2atom
   type symhf2atom
      type(hf2atom) state1, state2
-     double precision norm, phase
+     double precision norm
+     integer phase
   end type symhf2atom
 
   type(hf2atom), allocatable :: hf2TempGlobal(:)
@@ -177,8 +178,8 @@ contains
        kd2 = dkdelta(hf2symTempGlobal(n1)%state1%a1%m,hf2symTempGlobal(n1)%state1%a2%m)
        
        hf2symTempGlobal(n1)%norm = 1d0/dsqrt(2d0*(1d0+kd1*kd2))
-       hf2symTempGlobal(n1)%phase = 1d0
-       if(sym.lt.0) hf2symTempGlobal(n1)%phase = -1d0
+       hf2symTempGlobal(n1)%phase = 1
+       if(sym.lt.0) hf2symTempGlobal(n1)%phase = -1
        hf2symTempGlobal(n1)%phase = hf2symTempGlobal(n1)%phase*(-1)**lwave
        
        write(6,'(I4,A,f5.2,A,4I2,A,f5.2,A,4I2,A)') n1,"  symmetrized basis:", hf2symTempGlobal(n1)%norm, &
@@ -188,6 +189,10 @@ contains
     deallocate(symstates,tempstates)
     
   end subroutine MakeHF2Basis
+  subroutine HHZ1ME(B,hf1bra,hf1ket,gs,gi,Ahf,s,i)
+    implicit none
+    
+  end subroutine HHZ1ME
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   subroutine MakeHHZ1(HHZ,B,size,hf1,gs,gi,Ahf,s,i)
     
@@ -233,18 +238,44 @@ contains
      
    end subroutine MakeHHZ1
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+   subroutine MakeHHZ2(B,Ahf1,Ahf2,gs,gi1,gi2,i1,s1,i2,s2,hf2sym,size)
+     implicit none
+     double precision B, Ahf1, Ahf2, gs, gi1, gi2, me11, me12, me21, me22
+     double precision kd1, kd2, kd3, kd4, prefact
+     integer i1, s1, i2, s2, size, bra, ket, p1, p2
+     type(hf2atom) hfsym(size)
+     
+     do bra = 1, size
+        do ket = 1, size
+           prefact = hfsym(bra)%norm*hfsym(ket)%norm
+           p1 = hfsym(bra)%phase
+           p2 = hfsym(ket)%phase
+           
+           
+        enddo
+     enddo
+
+   end subroutine MakeHHZ2
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
    subroutine OverlapSpinHF(i1,i2,s1,s2,S,mS,I,mI,f1,m1,f2,m2,me1)
      implicit none
      ! This subroutine calcualtes the overlap between the hyperfine state |f1 m1 f2 m2> and the
      ! spin state |(s1 s2) S mS (i1 i2) I mI >
      ! it returns in me1 = <(s1 s2) S mS (i1 i2) I mI | (i1 s1) f1 m1 (i2 s2) f2 m2 >
      ! I haven't checked this, but it should be equal to the 9-J coefficient corresponding to the above overal.
-     integer S,mS,I,mI,f1,m1,f2,m2,i1,i2,s1,s2
-     integer mi1,mi2,ms1,ms2
-     double precision phase,prefact,tj1,tj2,tj3,tj4,me1
+     integer S,mS,I,mI,f1,m1,f2,m2,i1,i2,s1,s2,phaseexp
+     integer mi1,mi2,ms1,ms2,phase
+     double precision prefact,tj1,tj2,tj3,tj4,me1
      double precision, external :: THRJ
-     
-     phase = (-1)**(2d0*i2-2d0*s1-m1-m2-mS-mI)/2d0
+
+     phaseexp = 2*i2-2*s1-m1-m2-mS-mI
+     phase = 1
+     if(mod(phaseexp,2).eq.0) then
+        phaseexp = phaseexp/2
+        phase = (-1)**phaseexp
+     else
+        write(6,*) "Warning: phase factor will be complex, but you're using only real variables.  Phase is not set."
+     endif
      prefact = dble((f1+1)*(f2+1)*(S+1)*(I+1))
      prefact = dsqrt(prefact)
      
@@ -398,7 +429,7 @@ program main
   deallocate(EVAL,EVEC,HHZ)
   !____________________________________________________________________
   
-  NPP = 1000
+  NPP = 2000
   VLIM = 0d0
 
   allocate(XO(NPP),VSinglet(NPP),VTriplet(NPP),RM2(NPP))
@@ -407,11 +438,12 @@ program main
   IMN2 = 7
   sym = 1 ! set to +1 for bosonic Li-7, -1 for fermionic Li-6, and 0 for mixture Li-6 - Li-7.
   lwave = 0 ! s wave collisions
-  xmin = 1.0d0
-  xmax = 30.0d0
+  xmin = 1.5d0
+  xmax = 100.0d0
   dx = (xmax-xmin)/(dble(NPP-1))
   do iR=1, NPP
      XO(iR) = xmin + (iR-1)*dx
+     write(6,*) xO(iR)
   enddo
   ISTATE = 1                ! Find the "singlet" X(^1\Sigma_g^+) curve
   ! Call the Le Roy routine to generate the MLR potential
@@ -419,16 +451,19 @@ program main
 
   ! print singlet potential to fort.10
   do iR=1, NPP
-     write(10,*) XO(iR)*AngstromPerBohr, VSinglet(iR)*InvcmPerHartree*HartreePerTHz
+     write(10,*) XO(iR)*AngstromPerBohr, VSinglet(iR)*InvcmPerHartree!*HartreePerTHz
   enddo
 
   ISTATE = 2                !Find the triplet potential
   ! Call the Le Roy routine to generate the MLR potential
   call POTGENLI2(ISTATE,IMN1,IMN2,NPP,VLIM,XO,RM2,VTriplet)
   do iR=1, NPP
-     write(30,*) XO(iR)*AngstromPerBohr, VTriplet(iR)*InvcmPerHartree*HartreePerTHz
+     write(30,*) XO(iR)*AngstromPerBohr, VTriplet(iR)*InvcmPerHartree!*HartreePerTHz
   enddo
   mtot = 4
+
+  
+  
   call MakeHF2Basis(iLi7, sLi7, iLi7, sLi7, sym, lwave, mtot, size2)
   write(6,*) "size of the symmetrized 2-atom hyperfine basis = ", size2
   allocate(SPmat(size2,size2), TPmat(size2,size2))
@@ -464,3 +499,8 @@ function dkdelta(a,b)
   endif
   return
 end function dkdelta
+
+subroutine testoverlap
+  integer f1,m1,f2,m2,i1,s1,i2,s2,stot,mtot,itot
+  
+end subroutine testoverlap
