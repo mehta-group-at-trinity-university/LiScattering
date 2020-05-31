@@ -583,7 +583,7 @@
         TYPE(BPData) BPD
         TYPE(Morse), INTENT(in) :: M
         INTEGER kx,lx,mch,nch,NChan
-        DOUBLE PRECISION ax,bx,xScaledZero,pot(3,3)
+        DOUBLE PRECISION ax,bx,xScaledZero
         DOUBLE PRECISION xScale(BPD%xNumPoints)
         Nchan=3
         BPD%Pot(:,:,:,:) = 0d0
@@ -731,7 +731,7 @@
     !Copy over the primitive set to the workhose set
     BPD=BPD0
     ! Initialize the potential data
-    CALL InitMorse(M)
+    CALL InitMorse(M) !for the Morse potential
 
     ! make the energy grid
     NumE=500

@@ -18,7 +18,11 @@ module units
   real*8, parameter :: hSI = 6.62607015d-34
   real*8, parameter :: HartreePerJoule = 4.3597447222071d-18
   real*8, parameter :: HartreePerMHz = 6.579683920502d9
+  real*8, parameter :: MHzPerHartree = 1d0/HartreePerMHz
   real*8, parameter :: HartreePerTHz = 6.579683920502d3
+  real*8, parameter :: amuKg = 1.66053906660d-27
+  real*8, parameter :: ElectronMassKg = 9.109383701528d-31
+  real*8, parameter :: amuAU = amuKg/ElectronMassKg
   
 
 !!$  real*8, parameter ::  AnstperBohr,HartreeperJoule,JouleperHartree,hSI,hHartreesec,hbarcMeVfm,hbarceVnm
