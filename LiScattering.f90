@@ -550,12 +550,16 @@ program main
   implicit none
   integer ISTATE, IMN1, IMN2, NPP, iR, iB, ihf, n, i, j
   integer i1,i2,s1,s2,S,sym,size1,size2,NBgrid,NEgrid,mtot, lwave,NumOpen
-  double precision, allocatable :: XO(:), VSinglet(:), VTriplet(:), RM2(:)
+  double precision, allocatable :: XO(:), VSinglet(:), VTriplet(:), RM2(:), R(:)
   double precision, allocatable :: weights(:),ystart(:,:),yi(:,:),yf(:,:),Kmat(:,:),identity(:,:)
   double precision, allocatable :: HHZ(:,:), Bgrid(:),Egrid(:), EVAL(:), EVEC(:,:),RotatedVHZ(:,:,:),TEMP(:,:)
   double precision, allocatable :: SPmat(:,:), TPmat(:,:), VHZ(:,:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:)
   double precision VLIM,xmin,xmax,dx,mured
-  double precision Bmin, Bmax, CGhf,Energy
+  double precision Bmin, Bmax, CGhf,Energy,h
+  integer NA
+  double precision RX, RF
+  double precision, allocatable :: alpha(:,:)
+  double precision, external :: VLRLi, rint
   type(hf1atom) a1, a2
   type(hf2atom) mstate1, mstate2
   type(hf1atom), allocatable :: Li6hf(:), Li7hf(:)  
@@ -565,12 +569,12 @@ program main
 
   ! initialize the angular momentum routines
   call setupam
-  
+
   ! determine the size of the one-atom hyperfine/zeeman hamiltonian
-  NBgrid = 500
+  NBgrid = 100
   NEgrid = 500
-  Bmin = 0d0
-  Bmax = 1000d0
+  Bmin = 400d0
+  Bmax = 800d0
   !make the magnetic field grid and energy grid
   allocate(Bgrid(NBgrid),Egrid(NEgrid))
   call GridMaker(Bgrid,NBgrid,Bmin,Bmax,'linear')
@@ -625,23 +629,46 @@ program main
      write(91,*) Bgrid(iB), EVAL
   enddo
   deallocate(EVAL,EVEC,HHZ)
+!!$  !****************************************************************************************************
+!!$  ! This section does the MQDT calculation
+!!$
+!!$  NA=1000
+!!$  RX=40d0
+!!$  RF=100d0
+!!$  
+!!$  allocate(R(NA),alpha(NA,2))
+!!$  call GridMaker(R,NA,RX,RF,'linear')
+!!$  h = R(2)-R(1)
+!!$  energy = 0d0
+!!$  lwave = 0
+!!$  call CalcMilne(R,alpha,NA,energy,lwave,mured)
+!!$  do iR = 20, NA
+!!$     
+!!$     write(100,*) R(iR), VLRLi(mured,lwave,R(iR)),alpha(iR,1), alpha(iR,2),rint(alpha(1:iR,1),1,NA,10,h)
+!!$  enddo
+!!$  deallocate(R,alpha)
+!!$  stop
+  !****************************************************************************************************
+
+
   !____________________________________________________________________
   
-  NPP = 100000
+  NPP = 50000
   VLIM = 0d0
 
-  allocate(XO(NPP),weights(NPP),VSinglet(NPP),VTriplet(NPP),RM2(NPP))
+  allocate(XO(NPP),R(NPP),weights(NPP),VSinglet(NPP),VTriplet(NPP),RM2(NPP))
 
   IMN1 = 7
   IMN2 = 7
   sym = 1 ! set to +1 for bosonic Li-7, -1 for fermionic Li-6, and 0 for mixture Li-6 - Li-7.
   lwave = 0 ! s wave collisions
-  xmin = 0.05d0
-  xmax = 400.0d0
+  xmin = 0.03d0 ! use atomic units here (bohr)
+  xmax = 300.0d0 ! use atomic units here (bohr)
   dx = (xmax-xmin)/(dble(NPP-1))
   do iR=1, NPP
-     XO(iR) = xmin + (iR-1)*dx
+     R(iR) = xmin + (iR-1)*dx
   enddo
+  XO(:) = R(:)*BohrPerAngstrom
   ISTATE = 1                ! Find the "singlet" X(^1\Sigma_g^+) curve
   ! Call the Le Roy routine to generate the MLR potential
   call POTGENLI2(ISTATE,IMN1,IMN2,NPP,VLIM,XO,RM2,VSinglet)
@@ -649,7 +676,7 @@ program main
   ! print singlet potential to fort.10
   do iR=1, NPP
      VSinglet(iR) = VSinglet(iR)*InvcmPerHartree
-     write(10,*) XO(iR)*AngstromPerBohr, VSinglet(iR)
+     write(10,*) R(iR), VSinglet(iR)
   enddo
 
   ISTATE = 2                !Find the triplet potential
@@ -657,9 +684,9 @@ program main
   call POTGENLI2(ISTATE,IMN1,IMN2,NPP,VLIM,XO,RM2,VTriplet)
   do iR=1, NPP
      VTriplet(iR) = VTriplet(iR)*InvcmPerHartree
-     write(30,*) XO(iR)*AngstromPerBohr, VTriplet(iR)
+     write(30,*) R(iR), VTriplet(iR)
   enddo
-  XO(:) = XO(:)*AngstromPerBohr
+
   mtot = 4
   
   call MakeHF2Basis(iLi7, sLi7, iLi7, sLi7, sym, lwave, mtot, size2)
@@ -697,7 +724,7 @@ program main
      identity(i,i)=1d0
      ystart(i,i)=1d20
   enddo
-
+  open(unit = 50, file = "Li7FR.dat")
 
   do iB = 1, NBgrid ! consider only B=0 for now
      yi(:,:)=ystart(:,:)
@@ -709,7 +736,7 @@ program main
      Eth(:)=EVAL(:)
      
      NumOpen=0
-     Energy = Eth(1)+1d-15
+     Energy = Eth(1) + 1d-15
      do j = 1, size2
         if(energy.gt.Eth(j)) NumOpen = NumOpen+1
      enddo
@@ -719,21 +746,22 @@ program main
         call MyDSYEV(VHZ(:,:,iR),size2,EVAL,EVEC)
         call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,VHZ(:,:,iR),size2,0d0,TEMP,size2)
         call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,RotatedVHZ(:,:,iR),size2)
-        !write(1000+iB,*) XO(iR), (RotatedVHZ(n,n,iR), n=1,NumOpen+1)!EVAL(:)!VHZ(:,:,iR)
+        !write(1000+iB,*) R(iR), (RotatedVHZ(n,n,iR), n=1,NumOpen+1)!EVAL(:)!VHZ(:,:,iR)
      enddo
 !     write(6,*) "yi = "
 !     call printmatrix(yi,size2,size2,6)
-     call logderprop(mured,Energy,identity,weights,NPP,yi,yf,XO,RotatedVHZ,size2)
+     call logderprop(mured,Energy,identity,weights,NPP,yi,yf,R,RotatedVHZ,size2)
 !     write(6,*) "yf = "
 !     call printmatrix(yf,size2,size2,6)
-     call CalcK(yf,XO(NPP),SD,mured,3d0,1d0,Energy,Eth,size2,NumOpen)
+     call CalcK(yf,R(NPP),SD,mured,3d0,1d0,Energy,Eth,size2,NumOpen)
 !     write(2000+iB,*) Bgrid(iB), (SD%K(j,j), j=1,size2)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-     write(2000,'(100f20.6)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+     write(50,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
      write(6,'(100d16.6)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
      
   enddo
+  close(50)
 !  deallocate(SPmat,TPmat,VHZ)
-  deallocate(Bgrid,XO,VSinglet,VTriplet,RM2)
+  deallocate(Bgrid,XO,R,VSinglet,VTriplet,RM2)
 
 10 format(100F10.4)
 end program 
@@ -845,3 +873,78 @@ SUBROUTINE GridMaker(grid,numpts,E1,E2,scale)
      ENDDO
   ENDIF
 END SUBROUTINE GridMaker
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine RK4StepMilne(y,mu,lwave,energy,h,R)
+  implicit none
+  double precision h,y(2),mu,energy,f(2),k1(2),k2(2),k3(2),k4(2),R
+  integer lwave
+
+  call dydR_Milne(R,y,mu,lwave,energy,f)
+  k1 = h * f
+  call dydR_Milne(R + 0.5d0*h,y,mu,lwave,energy,f)
+  k2 = h * f
+  call dydR_Milne(R + 0.5d0*h,y,mu,lwave,energy,f)
+  k3 = h * f
+  call dydR_Milne(R + h,y,mu,lwave,energy,f)
+  k4 = h * f
+
+  y = y + k1/6.0d0 + k2/3.0d0 + k3/3.0d0 + k4/6.0d0
+
+end subroutine RK4StepMilne
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+double precision function VLRLi(mu,lwave,R)
+  implicit none
+  integer lwave
+  double precision R, mu
+  ! in atomic units
+  double precision, parameter :: C6=1393.39D0, C8=83425.5D0, C10=7.37211D6
+  ! in van der Waals units
+  !double precision, parameter :: C6=0.985829, C8=0.0138825, C10=0.000288538516
+  
+  VLRLi = -C6/R**6 - C8/R**8 - C10/R**10 + lwave*(lwave+1)/(2*mu*R*R)
+  ! van der Waals units (mu->1/2)
+  !VLRLi = -C6/R**6 - C8/R**8 - C10/R**10 + lwave*(lwave+1)/(R*R)
+  
+end function VLRLi
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+double precision function ksqrLRLi(energy,mu,lwave,R)
+  implicit none
+  double precision mu, R, energy
+  double precision, external :: VLRLi
+  integer lwave
+  ksqrLRLi = 2d0*mu*(energy - VLRLi(mu,lwave,R))
+end function ksqrLRLi
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine dydR_Milne(R,y,mu,lwave,energy,f)
+  implicit none
+  integer lwave
+  double precision R,y(2),mu,energy,f(2)
+  double precision, external :: ksqrLRLi
+  
+  f(1) = y(2)
+  f(2) = y(1)**(-3) - ksqrLRLi(energy,mu,lwave,R)*y(1)
+  
+end subroutine dydR_Milne
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine CalcMilne(R,alpha,NA,energy,lwave,mu)
+  implicit none
+  double precision RX, RF, h, energy, y(2), mu
+  integer NA, iR, lwave
+  double precision alpha(NA,2), R(NA)
+  double precision, external :: ksqrLRLi
+  ! make a radial grid
+
+  h = R(2)-R(1)
+  RX=R(1)
+  RF=R(NA)
+  ! set the initial conditions (WKB-like boundary conditions at RX)
+  alpha(1,1) = ksqrLRLi(energy,mu,lwave,RX)**(-0.25d0)
+  alpha(1,2) = -0.5d0*ksqrLRLi(energy,mu,lwave,RX)**(-0.75d0)
+  y = alpha(1,:)
+  do iR = 1, NA
+     alpha(iR,:) = y
+     call RK4StepMilne(y,mu,lwave,energy,h,R(iR))
+  enddo
+  alpha(NA,:)=y
+  
+end subroutine CalcMilne
