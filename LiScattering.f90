@@ -571,10 +571,10 @@ program main
   call setupam
 
   ! determine the size of the one-atom hyperfine/zeeman hamiltonian
-  NBgrid = 100
+  NBgrid = 200
   NEgrid = 500
-  Bmin = 400d0
-  Bmax = 800d0
+  Bmin = 0d0
+  Bmax = 1000d0
   !make the magnetic field grid and energy grid
   allocate(Bgrid(NBgrid),Egrid(NEgrid))
   call GridMaker(Bgrid,NBgrid,Bmin,Bmax,'linear')
@@ -629,22 +629,21 @@ program main
      write(91,*) Bgrid(iB), EVAL
   enddo
   deallocate(EVAL,EVEC,HHZ)
-!!$  !****************************************************************************************************
+  !****************************************************************************************************
 !!$  ! This section does the MQDT calculation
 !!$
-!!$  NA=1000
-!!$  RX=40d0
-!!$  RF=100d0
+!!$  NA=100000
+!!$  RX=0.1d0
+!!$  RF=3.0d0
 !!$  
 !!$  allocate(R(NA),alpha(NA,2))
 !!$  call GridMaker(R,NA,RX,RF,'linear')
 !!$  h = R(2)-R(1)
 !!$  energy = 0d0
 !!$  lwave = 0
-!!$  call CalcMilne(R,alpha,NA,energy,lwave,mured)
-!!$  do iR = 20, NA
-!!$     
-!!$     write(100,*) R(iR), VLRLi(mured,lwave,R(iR)),alpha(iR,1), alpha(iR,2),rint(alpha(1:iR,1),1,NA,10,h)
+!!$  call CalcMilne(R,alpha,NA,energy,lwave,0.5d0)
+!!$  do iR = 21, NA
+!!$     write(100,*) R(iR), VLRLi(0.5d0,lwave,R(iR)),alpha(iR,1), alpha(iR,2),sum(alpha(1:iR,1)**(-2))*h!rint(alpha(1:iR,1),1,NA,10,h)
 !!$  enddo
 !!$  deallocate(R,alpha)
 !!$  stop
@@ -736,7 +735,8 @@ program main
      Eth(:)=EVAL(:)
      
      NumOpen=0
-     Energy = Eth(1) + 1d-15
+     Energy = Eth(1) + 50d0*nKPerHartree
+     write(6,*) "energy = ", energy
      do j = 1, size2
         if(energy.gt.Eth(j)) NumOpen = NumOpen+1
      enddo
@@ -897,15 +897,32 @@ double precision function VLRLi(mu,lwave,R)
   integer lwave
   double precision R, mu
   ! in atomic units
-  double precision, parameter :: C6=1393.39D0, C8=83425.5D0, C10=7.37211D6
+!  double precision, parameter :: C6=1393.39D0, C8=83425.5D0, C10=7.37211D6
   ! in van der Waals units
   !double precision, parameter :: C6=0.985829, C8=0.0138825, C10=0.000288538516
+  double precision, parameter :: C6=1d0, C8=0d0, C10=0d0
   
   VLRLi = -C6/R**6 - C8/R**8 - C10/R**10 + lwave*(lwave+1)/(2*mu*R*R)
   ! van der Waals units (mu->1/2)
   !VLRLi = -C6/R**6 - C8/R**8 - C10/R**10 + lwave*(lwave+1)/(R*R)
   
 end function VLRLi
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+double precision function VLRLiPrime(mu,lwave,R)
+  implicit none
+  integer lwave
+  double precision R, mu
+  ! in atomic units
+!  double precision, parameter :: C6=1393.39D0, C8=83425.5D0, C10=7.37211D6
+  ! in van der Waals units
+  !double precision, parameter :: C6=0.985829, C8=0.0138825, C10=0.000288538516
+  double precision, parameter :: C6=1d0, C8=0d0, C10=0d0
+  
+  VLRLiPrime = +6*C6/R**7 + 8*C8/R**9 + 10*C10/R**11 - 2*lwave*(lwave+1)/(2*mu*R*R*R)
+  ! van der Waals units (mu->1/2)
+  !VLRLi = -C6/R**6 - C8/R**8 - C10/R**10 + lwave*(lwave+1)/(R*R)
+  
+end function VLRLiPrime
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 double precision function ksqrLRLi(energy,mu,lwave,R)
   implicit none
@@ -931,15 +948,20 @@ subroutine CalcMilne(R,alpha,NA,energy,lwave,mu)
   double precision RX, RF, h, energy, y(2), mu
   integer NA, iR, lwave
   double precision alpha(NA,2), R(NA)
-  double precision, external :: ksqrLRLi
+  double precision, external :: ksqrLRLi, VLRLi, VLRLiPrime
   ! make a radial grid
 
   h = R(2)-R(1)
   RX=R(1)
   RF=R(NA)
   ! set the initial conditions (WKB-like boundary conditions at RX)
-  alpha(1,1) = ksqrLRLi(energy,mu,lwave,RX)**(-0.25d0)
-  alpha(1,2) = -0.5d0*ksqrLRLi(energy,mu,lwave,RX)**(-0.75d0)
+  alpha(1,1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLRLi(mu,lwave,RX))/RX**2))**(-0.25d0)
+  
+  !ksqrLRLi(energy,mu,lwave,RX)**(-0.25d0)
+  alpha(1,2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRLiPrime(mu, lwave, RX))) &
+       /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLRLi(mu,lwave,RX))**1.25d0)
+     
+     !-0.5d0*ksqrLRLi(energy,mu,lwave,RX)**(-0.75d0)
   y = alpha(1,:)
   do iR = 1, NA
      alpha(iR,:) = y
