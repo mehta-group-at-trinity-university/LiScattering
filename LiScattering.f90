@@ -556,7 +556,7 @@ program main
   double precision, allocatable :: SPmat(:,:), TPmat(:,:), VHZ(:,:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:)
   double precision VLIM,xmin,xmax,dx,mured
   double precision Bmin, Bmax, CGhf,Energy,h
-  integer NA
+  integer NA,iE
   double precision RX, RF
   double precision, allocatable :: alpha(:,:)
   double precision, external :: VLRLi, rint
@@ -572,13 +572,13 @@ program main
 
   ! determine the size of the one-atom hyperfine/zeeman hamiltonian
   NBgrid = 200
-  NEgrid = 500
+  NEgrid = 20
   Bmin = 0d0
   Bmax = 1000d0
   !make the magnetic field grid and energy grid
   allocate(Bgrid(NBgrid),Egrid(NEgrid))
   call GridMaker(Bgrid,NBgrid,Bmin,Bmax,'linear')
-  call GridMaker(Egrid,NEgrid,0.0d0,0.001d0,'linear')
+  call GridMaker(Egrid,NEgrid,1d-15,1d-10,'linear') ! measure the collision energy in Hartree
   !------------------------------------------------------------------
   ! solve the Li-7 1-atom Zeeman problem
   !call once with size1 = 0 to determine the size of the basis.
@@ -725,7 +725,7 @@ program main
   enddo
   open(unit = 50, file = "Li7FR.dat")
 
-  do iB = 1, NBgrid ! consider only B=0 for now
+  do iB = 1, NBgrid 
      yi(:,:)=ystart(:,:)
      call MakeHHZ2(Bgrid(iB),ALi7,ALi7,gs,giLi7,giLi7,iLi7,sLi7,iLi7,sLi7,hf2symTempGlobal,size2,HHZ2)
      HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
@@ -734,30 +734,34 @@ program main
      call MyDSYEV(VHZ(:,:,NPP),size2,EVAL,AsymChannels)
      Eth(:)=EVAL(:)
      
-     NumOpen=0
-     Energy = Eth(1) + 50d0*nKPerHartree
-     write(6,*) "energy = ", energy
-     do j = 1, size2
-        if(energy.gt.Eth(j)) NumOpen = NumOpen+1
-     enddo
 
-     do iR = 1, NPP
-        VHZ(:,:,iR) = VSinglet(iR)*SPmat(:,:) + VTriplet(iR)*TPmat(:,:) + HHZ2(:,:)
-        call MyDSYEV(VHZ(:,:,iR),size2,EVAL,EVEC)
-        call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,VHZ(:,:,iR),size2,0d0,TEMP,size2)
-        call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,RotatedVHZ(:,:,iR),size2)
-        !write(1000+iB,*) R(iR), (RotatedVHZ(n,n,iR), n=1,NumOpen+1)!EVAL(:)!VHZ(:,:,iR)
+     do iE = 1, 1
+        NumOpen=0        
+        Energy = Eth(1) + Egrid(iE)!*nKPerHartree
+        !write(6,*) "energy = ", energy
+        do j = 1, size2
+           if(energy.gt.Eth(j)) NumOpen = NumOpen+1
+        enddo
+
+        do iR = 1, NPP
+           VHZ(:,:,iR) = VSinglet(iR)*SPmat(:,:) + VTriplet(iR)*TPmat(:,:) + HHZ2(:,:)
+           call MyDSYEV(VHZ(:,:,iR),size2,EVAL,EVEC)
+           call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,VHZ(:,:,iR),size2,0d0,TEMP,size2)
+           call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,RotatedVHZ(:,:,iR),size2)
+           !write(1000+iB,*) R(iR), (RotatedVHZ(n,n,iR), n=1,NumOpen+1)!EVAL(:)!VHZ(:,:,iR)
+        enddo
+        !     write(6,*) "yi = "
+        !     call printmatrix(yi,size2,size2,6)
+        call logderprop(mured,Energy,identity,weights,NPP,yi,yf,R,RotatedVHZ,size2)
+        !     write(6,*) "yf = "
+        !     call printmatrix(yf,size2,size2,6)
+        call CalcK(yf,R(NPP),SD,mured,3d0,1d0,Energy,Eth,size2,NumOpen)
+        !     write(2000+iB,*) Bgrid(iB), (SD%K(j,j), j=1,size2)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        write(50,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        !        write(50,'(100d20.10)') Egrid(iE), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        !        write(6,'(100d20.10)') Egrid(iE), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        write(6,'(100d16.6)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
      enddo
-!     write(6,*) "yi = "
-!     call printmatrix(yi,size2,size2,6)
-     call logderprop(mured,Energy,identity,weights,NPP,yi,yf,R,RotatedVHZ,size2)
-!     write(6,*) "yf = "
-!     call printmatrix(yf,size2,size2,6)
-     call CalcK(yf,R(NPP),SD,mured,3d0,1d0,Energy,Eth,size2,NumOpen)
-!     write(2000+iB,*) Bgrid(iB), (SD%K(j,j), j=1,size2)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-     write(50,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-     write(6,'(100d16.6)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-     
   enddo
   close(50)
 !  deallocate(SPmat,TPmat,VHZ)
