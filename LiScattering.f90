@@ -564,17 +564,17 @@ program main
   type(hf2atom) mstate1, mstate2
   type(hf1atom), allocatable :: Li6hf(:), Li7hf(:)  
   TYPE(ScatData) :: SD
-  ! set the reduced mass (for Li-7 collisions)
-  mured = 0.5d0*mLi7
+  ! set the reduced mass (for Li-6 collisions)
+  mured = 0.5d0*mLi6
 
   ! initialize the angular momentum routines
   call setupam
 
   ! determine the size of the one-atom hyperfine/zeeman hamiltonian
-  NBgrid = 200
+  NBgrid = 400
   NEgrid = 20
-  Bmin = 0d0
-  Bmax = 1000d0
+  Bmin = 545d0
+  Bmax = 555d0
   !make the magnetic field grid and energy grid
   allocate(Bgrid(NBgrid),Egrid(NEgrid))
   call GridMaker(Bgrid,NBgrid,Bmin,Bmax,'linear')
@@ -629,6 +629,7 @@ program main
      write(91,*) Bgrid(iB), EVAL
   enddo
   deallocate(EVAL,EVEC,HHZ)
+
   !****************************************************************************************************
 !!$  ! This section does the MQDT calculation
 !!$
@@ -652,14 +653,14 @@ program main
 
   !____________________________________________________________________
   
-  NPP = 50000
+  NPP = 100000
   VLIM = 0d0
 
   allocate(XO(NPP),R(NPP),weights(NPP),VSinglet(NPP),VTriplet(NPP),RM2(NPP))
 
-  IMN1 = 7
-  IMN2 = 7
-  sym = 1 ! set to +1 for bosonic Li-7, -1 for fermionic Li-6, and 0 for mixture Li-6 - Li-7.
+  IMN1 = 6
+  IMN2 = 6
+  sym = -1 ! set to +1 for bosonic Li-7, -1 for fermionic Li-6, and 0 for mixture Li-6 - Li-7.
   lwave = 0 ! s wave collisions
   xmin = 0.03d0 ! use atomic units here (bohr)
   xmax = 300.0d0 ! use atomic units here (bohr)
@@ -675,7 +676,9 @@ program main
   ! print singlet potential to fort.10
   do iR=1, NPP
      VSinglet(iR) = VSinglet(iR)*InvcmPerHartree
+
      write(10,*) R(iR), VSinglet(iR)
+     
   enddo
 
   ISTATE = 2                !Find the triplet potential
@@ -683,23 +686,26 @@ program main
   call POTGENLI2(ISTATE,IMN1,IMN2,NPP,VLIM,XO,RM2,VTriplet)
   do iR=1, NPP
      VTriplet(iR) = VTriplet(iR)*InvcmPerHartree
+     if(R(iR).lt.7.88025d0) then
+        VTriplet(iR) = VTriplet(iR) + (1.545d-6)*(R(iR)-7.88025d0)**2
+     endif
      write(30,*) R(iR), VTriplet(iR)
   enddo
 
-  mtot = 4
+  mtot = 0
   
-  call MakeHF2Basis(iLi7, sLi7, iLi7, sLi7, sym, lwave, mtot, size2)
+  call MakeHF2Basis(iLi6, sLi6, iLi6, sLi6, sym, lwave, mtot, size2)
   write(6,*) "size of the symmetrized 2-atom hyperfine basis = ", size2
   allocate(SPmat(size2,size2), TPmat(size2,size2))
 
   S = 0
-  call MakeSTHFProj(S, iLi7, iLi7, sLi7, sLi7, hf2symTempGlobal, size2, SPmat)
+  call MakeSTHFProj(S, iLi6, iLi6, sLi6, sLi6, hf2symTempGlobal, size2, SPmat)
   write(6,*) "The singlet projection matrix:"
   write(6,*) "-------------------------------"
   call printmatrix(SPmat,size2,size2,6)
 
   S = 2
-  call MakeSTHFProj(S, iLi7, iLi7, sLi7, sLi7, hf2symTempGlobal, size2, TPmat)
+  call MakeSTHFProj(S, iLi6, iLi6, sLi6, sLi6, hf2symTempGlobal, size2, TPmat)
   write(6,*) "The triplet projection matrix:"
   write(6,*) "-------------------------------"
   call printmatrix(TPmat,size2,size2,6)
@@ -723,11 +729,11 @@ program main
      identity(i,i)=1d0
      ystart(i,i)=1d20
   enddo
-  open(unit = 50, file = "Li7FR.dat")
+  open(unit = 50, file = "Li6FR.dat")
 
   do iB = 1, NBgrid 
      yi(:,:)=ystart(:,:)
-     call MakeHHZ2(Bgrid(iB),ALi7,ALi7,gs,giLi7,giLi7,iLi7,sLi7,iLi7,sLi7,hf2symTempGlobal,size2,HHZ2)
+     call MakeHHZ2(Bgrid(iB),ALi6,ALi6,gs,giLi6,giLi6,iLi6,sLi6,iLi6,sLi6,hf2symTempGlobal,size2,HHZ2)
      HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
      !Find the asymptotic channel states
      VHZ(:,:,NPP) = VSinglet(NPP)*SPmat(:,:) + VTriplet(NPP)*TPmat(:,:) + HHZ2(:,:)
@@ -745,9 +751,12 @@ program main
 
         do iR = 1, NPP
            VHZ(:,:,iR) = VSinglet(iR)*SPmat(:,:) + VTriplet(iR)*TPmat(:,:) + HHZ2(:,:)
-           call MyDSYEV(VHZ(:,:,iR),size2,EVAL,EVEC)
+           !call MyDSYEV(VHZ(:,:,iR),size2,EVAL,EVEC)  ! Calculate the adiabatic curves
+
+           !----- Rotate into the asymptotic eigenstates -------!
            call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,VHZ(:,:,iR),size2,0d0,TEMP,size2)
            call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,RotatedVHZ(:,:,iR),size2)
+           !-----------------------------------------------------!
            !write(1000+iB,*) R(iR), (RotatedVHZ(n,n,iR), n=1,NumOpen+1)!EVAL(:)!VHZ(:,:,iR)
         enddo
         !     write(6,*) "yi = "
