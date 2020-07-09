@@ -573,8 +573,8 @@ program main
   ! determine the size of the one-atom hyperfine/zeeman hamiltonian
   NBgrid = 400
   NEgrid = 20
-  Bmin = 545d0
-  Bmax = 555d0
+  Bmin = 0d0
+  Bmax = 1200d0
   !make the magnetic field grid and energy grid
   allocate(Bgrid(NBgrid),Egrid(NEgrid))
   call GridMaker(Bgrid,NBgrid,Bmin,Bmax,'linear')
@@ -588,6 +588,11 @@ program main
   !allocate memory for the basis
   allocate(Li7hf(size1),EVEC(size1,size1),EVAL(size1),HHZ(size1,size1))
   call MakeHF1Basis(iLi7,sLi7,size1,Li7hf)
+  
+  write(6,*) "1-atom Li-7 states:"
+  do i = 1, size1
+     write(6,'(I4,I4)') Li7hf(i)
+  enddo
 
 
   ! construct the HZ Hamiltonian
@@ -597,6 +602,7 @@ program main
   call MakeHHZ1(HHZ,0d0,size1,Li7hf,gs,giLi7,ALi7,sLi7,iLi7)
   call MyDSYEV(HHZ,size1,EVAL,EVEC)
   CGhf = SUM(EVAL)!/dble(size1)
+
   write(6,*) "CGhf = ", CGhf
   do iB = 1, NBgrid
      EVEC=0d0
@@ -617,8 +623,15 @@ program main
   write(6,*) "size of the Li-6 1-atom hyperfine basis = ",size1
   allocate(Li6hf(size1))
   call MakeHF1Basis(iLi6,sLi6,size1,Li6hf)
+  write(6,*) "1-atom Li-6 states:"
+  do i = 1, size1
+     write(6,'(I4,I4,16.4f)') Li6hf(i)
+  enddo
+
   allocate(EVEC(size1,size1),EVAL(size1),HHZ(size1,size1))
+
   ! construct the HZ Hamiltonian
+  
   do iB = 1, NBgrid
      EVEC=0d0
      EVAL=0d0
@@ -629,7 +642,7 @@ program main
      write(91,*) Bgrid(iB), EVAL
   enddo
   deallocate(EVAL,EVEC,HHZ)
-
+  stop
   !****************************************************************************************************
 !!$  ! This section does the MQDT calculation
 !!$

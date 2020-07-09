@@ -4,7 +4,7 @@ OPTFLAG = -O3
 FREEFORM = -ffree-form
 STND = #-std=gnu
 DEBUG   = -fcheck=all
-FORCEDP = #-fdefault-real-8 -fdefault-double-8
+FORCEDP = #-fdefault-real-8 -fdefault-double-
 LAPACK =   -framework accelerate
 ARPACK =  -L/usr/local/lib/ -larpack
 INCLUDE =  -I/usr/local/include
