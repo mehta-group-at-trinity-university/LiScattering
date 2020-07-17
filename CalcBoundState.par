@@ -1,0 +1,21 @@
+Legendre File
+Legendre.dat
+
+Legendre Points
+10
+
+Order    Left Right 
+5         0    0
+
+alpha          mass      DD                        x0
+ 1.0000d0     1.0d0     1000d0	   1.0d0
+
+xNumPoints    xMin       xMax
+  100         0.0d0      10.0d0
+
+lwave    
+0.d0
+
+
+!c  he4 mass  = 7296.29935
+!c  he3 mass  =  5497.8851d0

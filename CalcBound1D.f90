@@ -2,8 +2,8 @@
 program BoundStateDriver
   implicit none
     character*64 LegendreFile
-    integer LegPoints, Order, Left, Right, xNumPoints, xMin, xMax, NR, Ubcoef, kR, NumStates,iLam, PsiFlag
-    double precision kleft, kright, alpha, mu, lwave
+    integer LegPoints, Order, Left, Right, xNumPoints,  NR, Ubcoef, kR, NumStates,iLam, PsiFlag
+    double precision kleft, kright, alpha, mu, lwave, xMin, xMax,
     double precision, allocatable :: Rknot(:), Energies(:)
 
     LegendreFile = 'Legendre.dat                          '
@@ -14,8 +14,12 @@ program BoundStateDriver
     Right = 0
     alpha = 1.d0
 
+    !---------------------------------------------------------------------------------------
+    ! Only need this bit if you're interpolating the potential:
     kR = 3  ! this is the order of the spline interpolation of the potential energy function
     NR = 100  ! Number of interpolated points for the potential energy function
+    allocate(Rknot(kR+NR))
+    !---------------------------------------------------------------------------------------
     
     mu = 0.5d0
     NumStates = 20
@@ -23,18 +27,18 @@ program BoundStateDriver
     xMin = 0.d0
     xMax = 20.d0
     
-    allocate(Energies(NumStates),Rknot(kR+NR))
+    allocate(Energies(NumStates))
 
     PsiFlag = 0
     iLam = 0
+
     
     call Calc2BodyBoundState(LegendreFile, LegPoints, Order, Left, Right, kLeft, kRight, alpha, mu, xNumPoints, &
          xMin, xMax, lwave, NR, Ubcoef, kR, Rknot, NumStates, Energies, iLam, PsiFlag)
 
     
 end program BoundStateDriver
-
-
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine Calc2BodyBoundState(LegendreFile,LegPoints,Order,Left,Right,kLeft,kRight,alpha,&
      mu,xNumPoints,xMin,xMax,lwave,NR,Ubcoef,kR,Rknot,NumStates,Energies,iLam,PsiFlag)
   use bspline
@@ -42,7 +46,7 @@ subroutine Calc2BodyBoundState(LegendreFile,LegPoints,Order,Left,Right,kLeft,kRi
   integer MatrixDim,LegPoints,xDim,xNumPoints,Order,Left,Right,NumStates
   double precision, allocatable :: xLeg(:),wLeg(:)
   double precision mu,xMin,xMax,lam,r2b,DD,x0,alpha
-  double precision, allocatable :: u(:,:,:),ux(:,:,:),uxx(:,:,:),xPoints(:)
+  double precision, allocatable :: u(:,:,:),ux(:,:,:),uxx(:,:,:),xPoints(:), xIntPoints(:)
   double precision, allocatable :: S(:,:),L(:,:),H0(:,:),G0(:,:),V0(:,:),delta(:) 
   integer, allocatable :: xBounds(:)   
   character(LEN=30) :: Format1
@@ -94,7 +98,26 @@ subroutine Calc2BodyBoundState(LegendreFile,LegPoints,Order,Left,Right,kLeft,kRi
 !  call GridMakerLinear(xNumPoints,xMin,xMax,xPoints)
   call GridMakerQuadratic(xNumPoints,xMin,xMax,xPoints)
 !  write(6,*) 'Calculating the basis functions.'
-!  write(6,*) left,right,aleft,aright
+  !  write(6,*) left,right,aleft,aright
+
+  
+  allocate(xIntPoints(LegPoints,xNumPoints))
+  
+  do kx = 1, xNumPoints-1
+     ax = xPoints(kx)
+     bx = xPoints(kx+1)
+     !         write(6,*) '(ax,bx) = ',ax, bx
+     xIntScale = 0.5d0*(bx-ax)
+     xScaledZero = 0.5d0*(bx+ax)
+     do lx = 1, LegPoints
+        iRall = (kx-1)*LegPoints+lx
+        xIntPoints(lx,kx) = xIntScale*xLeg(lx) + xScaledZero
+        AllRPoints(iRall) = xIntPoints(lx,kx)
+        !            write(150,*) iRall, kx, lx, AllRPoints(iRall)
+     enddo
+  enddo
+
+
   call CalcBasisFuncs(Left,Right,kLeft,kRight,Order,xPoints,LegPoints,xLeg,&
        xDim,xBounds,xNumPoints,0,u)
 
@@ -141,7 +164,7 @@ subroutine Calc2BodyBoundState(LegendreFile,LegPoints,Order,Left,Right,kLeft,kRi
   enddo
 
   deallocate(H0,S)
-  deallocate(xBounds,xPoints)
+  deallocate(xBounds,xPoints, xIntPoints)
   deallocate(u,ux,uxx,xLeg,wLeg)
 
 10 format(1P,100e25.15)
