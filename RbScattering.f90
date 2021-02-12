@@ -571,36 +571,36 @@ program main
   double precision, external :: VLRLi, rint
   type(hf1atom) a1, a2
   type(hf2atom) mstate1, mstate2
-  type(hf1atom), allocatable :: K39hf(:), K40hf(:)  
+  type(hf1atom), allocatable :: K39hf(:), K40hf(:), Rb87hf(:)
   TYPE(ScatData) :: SD
   ! set the reduced mass 
-  mured = 0.5d0*mK39
+  mured = 0.5d0*mRb87
 
   ! initialize the angular momentum routines
   call setupam
 
   ! determine the size of the one-atom hyperfine/zeeman hamiltonian
-  NBgrid = 500
+  NBgrid = 5000
   NEgrid = 20
   Bmin = 100d0
-  Bmax = 300d0
+  Bmax = 1000d0
   !make the magnetic field grid and energy grid
   allocate(Bgrid(NBgrid),Egrid(NEgrid))
   call GridMaker(Bgrid,NBgrid,Bmin,Bmax,'linear')
   call GridMaker(Egrid,NEgrid,1d-15,1d-10,'linear') ! measure the collision energy in Hartree
   !------------------------------------------------------------------
-  ! solve the K-39 1-atom Zeeman problem
+  ! solve the Rb-87 1-atom Zeeman problem
   !call once with size1 = 0 to determine the size of the basis.
   size1 = 0
-  call MakeHF1Basis(iK39,sK39,size1,K39hf)
-  write(6,*) "size of the Li-7 1-atom hyperfine basis = ",size1
+  call MakeHF1Basis(iRb87,sRb87,size1,Rb87hf)
+  write(6,*) "size of the Rb-87 1-atom hyperfine basis = ",size1
   !allocate memory for the basis
-  allocate(K39hf(size1),EVEC(size1,size1),EVAL(size1),HHZ(size1,size1))
-  call MakeHF1Basis(iK39,sK39,size1,K39hf)
+  allocate(Rb87hf(size1),EVEC(size1,size1),EVAL(size1),HHZ(size1,size1))
+  call MakeHF1Basis(iRb87,sRb87,size1,Rb87hf)
   
-  write(6,*) "1-atom K-39 states:"
+  write(6,*) "1-atom Rb-87 states:"
   do i = 1, size1
-     write(6,'(I4,I4)') K39hf(i)
+     write(6,'(I4,I4)') Rb87hf(i)
   enddo
 
 
@@ -608,7 +608,7 @@ program main
   EVEC=0d0
   EVAL=0d0
   HHZ=0d0
-  call MakeHHZ1(HHZ,0d0,size1,K39hf,gs,giK39,AK39,sK39,iK39)
+  call MakeHHZ1(HHZ,0d0,size1,Rb87hf,gs,giRb87,ARb87,sRb87,iRb87)
   call MyDSYEV(HHZ,size1,EVAL,EVEC)
   CGhf = SUM(EVAL)!/dble(size1)
 
@@ -617,7 +617,7 @@ program main
      EVEC=0d0
      EVAL=0d0
      HHZ=0d0
-     call MakeHHZ1(HHZ,Bgrid(iB),size1,K39hf,gs,giK39,AK39,sK39,iK39)
+     call MakeHHZ1(HHZ,Bgrid(iB),size1,Rb87hf,gs,giRb87,ARb87,sRb87,iRb87)
      !     call printmatrix(HHZ,size1,size1,6)
      call MyDSYEV(HHZ,size1,EVAL,EVEC)
      write(90,*) Bgrid(iB), EVAL - CGhf
@@ -769,7 +769,7 @@ program main
         write(50,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
         !        write(50,'(100d20.10)') Egrid(iE), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
         !        write(6,'(100d20.10)') Egrid(iE), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-        write(6,'(100d16.6)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        write(6,'(100d20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
      enddo
   enddo
   close(50)
