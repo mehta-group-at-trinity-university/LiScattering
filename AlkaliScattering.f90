@@ -143,31 +143,7 @@ module hyperfine
   use units
   implicit none
   double precision, parameter :: muB = 1.3996244936142    !Bohr magneton in units (MHz/Gauss)
-  integer, parameter :: sRb87 = 1 ! twice the electronic spin of Rb-87
-  integer, parameter :: iRb87 = 3 ! twice the nuclear spin of Rb-87
-  integer, parameter :: sRb85 = 1 ! twice the electronic spin of Rb-85
-  integer, parameter :: iRb85 = 5 ! twice the nuclear spin of Rb-85
-  integer, parameter :: sK39 = 1 ! twice the electronic spin of K-39
-  integer, parameter :: iK39 = 3 ! twice the nuclear spin of K-39
-  integer, parameter :: sK40 = 1 ! twice the electronic spin of K-40
-  integer, parameter :: iK40 = 8 ! twice the nuclear spin of K-40
   double precision, parameter :: gs = 2.00231930436256d0 ! electron g factor
-  double precision, parameter :: giRb87 = -0.000995141410 ! Nuclear g factor for Rb-87
-  double precision, parameter :: giRb85 = -0.00029364006; ! Nuclear g factor for Rb-85
-  double precision, parameter :: giK39 = -0.00014193489 ! Nuclear g factor for K-39
-  double precision, parameter :: giK40 = 0.00017649034; ! Nuclear g factor for K-40
-  ! multiply nuclear g-factors by Bohr magneton 
-  !  Hyperfine from Arimondo et al Rev. Mod. Phys. 49, 31 (1977).  See table on pg. 67 
-  double precision, parameter :: ARb87 = 3417.3413064215 ! MHz  
-  double precision, parameter :: ARb85 = 1011.9108132 ! MHz
-  double precision, parameter :: AK39 = 230.85986013 ! MHz  
-  double precision, parameter :: AK40 = -285.730824 ! MHz
-
-  ! masses
-  double precision, parameter :: mRb87 = 86.909180527*amuAU
-  double precision, parameter :: mRb85 = 84.911789738*amuAU
-  double precision, parameter :: mK39 = 38.963708d0*amuAU
-  double precision, parameter :: mK40 = 39.964008d0*amuAU
 
   
   type hf1atom
@@ -187,9 +163,7 @@ module hyperfine
 
   
 contains
-  !See Appendix B of Ian McAlexander's thesis (Rice University)
-  ! All angular momentum quantum numbers are TWICE their actual
-  ! values so that all arithemetic can be done with integers
+
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   subroutine MakeHF1Basis(i,s,size,hf1)
     implicit none
@@ -266,8 +240,8 @@ contains
        do m1 = -f1, f1, 2
           do f2 = iabs(i2-s2), i2+s2, 2
              do m2 = -f2, f2, 2
-                if((m1+m2).eq.mtot) then
-                   size = size + 1
+                if((m1+m2).eq.mtot) then   
+                   size = size + 1      !Determines the size of the unsym basis
                 endif
              enddo
           enddo
@@ -358,7 +332,7 @@ contains
     fp = hf1bra%f
     mp = hf1bra%m
     c1 = gs*muB*B*dsqrt((dble(fp)+1d0)*(dble(f)+1d0))
-    c2 = (-1)*gi*muB*B*dsqrt((dble(fp)+1d0)*(dble(f)+1d0))
+    c2 = gi*muB*B*dsqrt((dble(fp)+1d0)*(dble(f)+1d0))
     
     Zsum1 = 0d0
     Zsum2 = 0d0
@@ -557,13 +531,15 @@ program main
   use datastructures
   use scattering
   implicit none
-  integer NPP, iR, iB, ihf, n, i, j, A
+  integer NPP, iR, iB, ihf, n, i, j, A, nc, nr, ESTATE, ISTATE
+  integer nspin1, nspin2, espin1, espin2 !nspin is the nuclear spin and espin is the electronic spin
   integer i1,i2,s1,s2,S,sym,size1,size2,NBgrid,NEgrid,mtot, lwave,NumOpen
   double precision, allocatable :: XO(:), VSinglet(:), VTriplet(:), RM2(:), R(:)
   double precision, allocatable :: weights(:),ystart(:,:),yi(:,:),yf(:,:),Kmat(:,:),identity(:,:)
   double precision, allocatable :: HHZ(:,:), Bgrid(:),Egrid(:), EVAL(:), EVEC(:,:),RotatedVHZ(:,:,:),TEMP(:,:)
   double precision, allocatable :: SPmat(:,:), TPmat(:,:), VHZ(:,:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:)
-  double precision VLIM,xmin,xmax,dx,mured
+  double precision VLIM,xmin,xmax,dx
+  double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2
   double precision Bmin, Bmax, CGhf,Energy,h
   integer NA,iE
   double precision RX, RF
@@ -571,10 +547,12 @@ program main
   double precision, external :: VLRLi, rint
   type(hf1atom) a1, a2
   type(hf2atom) mstate1, mstate2
-  type(hf1atom), allocatable :: K39hf(:), K40hf(:)  
+  type(hf1atom), allocatable :: hf1(:) 
   TYPE(ScatData) :: SD
-  ! set the reduced mass 
-  mured = 0.5d0*mK39
+
+  ISTATE = 1  !select atomic species
+
+  call AtomData (ISTATE, AHf1, nspin1, espin1, gi1, MU, MUREF, mass1)  !atom 1 data (and atom 2 for homonuclear molecules)
 
   ! initialize the angular momentum routines
   call setupam
@@ -582,33 +560,27 @@ program main
   ! determine the size of the one-atom hyperfine/zeeman hamiltonian
   NBgrid = 500
   NEgrid = 20
-  Bmin = 100d0
-  Bmax = 300d0
+  Bmin = 0d0
+  Bmax = 1100d0
   !make the magnetic field grid and energy grid
   allocate(Bgrid(NBgrid),Egrid(NEgrid))
   call GridMaker(Bgrid,NBgrid,Bmin,Bmax,'linear')
   call GridMaker(Egrid,NEgrid,1d-15,1d-10,'linear') ! measure the collision energy in Hartree
   !------------------------------------------------------------------
-  ! solve the K-39 1-atom Zeeman problem
   !call once with size1 = 0 to determine the size of the basis.
   size1 = 0
-  call MakeHF1Basis(iK39,sK39,size1,K39hf)
-  write(6,*) "size of the Li-7 1-atom hyperfine basis = ",size1
+  call MakeHF1Basis(nspin1,espin1,size1,hf1)
+  write(6,*) "size of the Rb-87 1-atom hyperfine basis = ",size1
   !allocate memory for the basis
-  allocate(K39hf(size1),EVEC(size1,size1),EVAL(size1),HHZ(size1,size1))
-  call MakeHF1Basis(iK39,sK39,size1,K39hf)
-  
-  write(6,*) "1-atom K-39 states:"
-  do i = 1, size1
-     write(6,'(I4,I4)') K39hf(i)
-  enddo
+  allocate(hf1(size1),EVEC(size1,size1),EVAL(size1),HHZ(size1,size1))
+  call MakeHF1Basis(nspin1,espin1,size1,hf1)
 
 
   ! construct the HZ Hamiltonian
   EVEC=0d0
   EVAL=0d0
   HHZ=0d0
-  call MakeHHZ1(HHZ,0d0,size1,K39hf,gs,giK39,AK39,sK39,iK39)
+  call MakeHHZ1(HHZ,0d0,size1,hf1,gs,gi1,AHf1,espin1,nspin1)
   call MyDSYEV(HHZ,size1,EVAL,EVEC)
   CGhf = SUM(EVAL)!/dble(size1)
 
@@ -617,7 +589,7 @@ program main
      EVEC=0d0
      EVAL=0d0
      HHZ=0d0
-     call MakeHHZ1(HHZ,Bgrid(iB),size1,K39hf,gs,giK39,AK39,sK39,iK39)
+     call MakeHHZ1(HHZ,Bgrid(iB),size1,hf1,gs,gi1,AHf1,espin1,nspin1)
      !     call printmatrix(HHZ,size1,size1,6)
      call MyDSYEV(HHZ,size1,EVAL,EVEC)
      write(90,*) Bgrid(iB), EVAL - CGhf
@@ -625,85 +597,60 @@ program main
   
   deallocate(EVEC,EVAL,HHZ)
   !____________________________________________________________________
-  !------------------------------------------------------------------
-  ! solve the K-40 1-atom Zeeman problem
-  size1=0
-  call MakeHF1Basis(iK40,sK40,size1,K40hf)
-  write(6,*) "size of the K-40 1-atom hyperfine basis = ",size1
-  allocate(K40hf(size1))
-  call MakeHF1Basis(iK40,sK40,size1,K40hf)
-  write(6,*) "1-atom K-40 states:"
-  do i = 1, size1
-     write(6,'(I4,I4)') K40hf(i)
-  enddo
-
-  allocate(EVEC(size1,size1),EVAL(size1),HHZ(size1,size1))
-
-  ! construct the HZ Hamiltonian
-  
-  do iB = 1, NBgrid
-     EVEC=0d0
-     EVAL=0d0
-     HHZ=0d0
-     call MakeHHZ1(HHZ,Bgrid(iB),size1,K40hf,gs,giK40,AK40,sK40,iK40)
-!     call printmatrix(HHZ,size1,size1,6)
-     call MyDSYEV(HHZ,size1,EVAL,EVEC)
-     write(91,*) Bgrid(iB), EVAL
-  enddo
-  deallocate(EVAL,EVEC,HHZ)
- ! stop
- !____________________________________________________________________
   
   NPP = 100000
   VLIM = 0d0
-  A = 40  !A = 39 for K-39, 40 for K-40
   allocate(XO(NPP),R(NPP),weights(NPP),VSinglet(NPP),VTriplet(NPP),RM2(NPP))
 
-  sym = -1 ! set to +1 for bosonic K-39, Rb-85, and Rb-87; -1 for fermionic K-40; 0 for any mixed collision
+  sym = 1 ! set to +1 for bosonic K-39, Rb-85, Rb-87, and Na-23; -1 for fermionic K-40; 0 for any mixed collision
   lwave = 0 ! s wave collisions
   xmin = 0.03d0 ! use atomic units here (bohr)
-  xmax = 300.0d0 ! use atomic units here (bohr)
+  xmax = 300d0 ! use atomic units here (bohr)
   dx = (xmax-xmin)/(dble(NPP-1))
   do iR=1, NPP
      R(iR) = xmin + (iR-1)*dx
   enddo
 
+  
   write(6,*) 'setting up potentials' 
   XO(:) = R(:)*BohrPerAngstrom
-  ! Find the "singlet" X(^1\Sigma_g^+) curve
-   call PotassiumSinglet(A,XO,NPP,VLIM,VSinglet)
-!  call Rubidium87Singlet(XO,NPP,VLIM,VSinglet)
 
-  ! print singlet potential to fort.10
+  ESTATE = 1 
+  ! Find the "singlet" X(^1\Sigma_g^+) curve
+
+  call SetupPotential(ISTATE,ESTATE,muref,muref,NPP,VLIM,XO,VSinglet,RM2)
+
   do iR=1, NPP
      VSinglet(iR) = VSinglet(iR)*InvcmPerHartree
      write(10,*) R(iR), VSinglet(iR)     
   enddo
+
+  ESTATE = 3
+  !Find the triplet potential
+
+  call SetupPotential(ISTATE,ESTATE,muref,muref,NPP,VLIM,XO,VTriplet,RM2)
   
- !Find the triplet potential
-   call PotassiumTriplet(A,XO,NPP,VLIM,VTriplet)
- ! call Rubidium87Triplet(XO,NPP,VLIM,VTriplet)
- 
   do iR=1, NPP
      VTriplet(iR) = VTriplet(iR)*InvcmPerHartree
      write(30,*) R(iR), VTriplet(iR)
   enddo
 
+ ! STOP
   
-  mtot = -16
+  mtot = 4  !multiply mtot by 2
   
-  call MakeHF2Basis(iK40, sK40, iK40, sK40, sym, lwave, mtot, size2)
+  call MakeHF2Basis(nspin1, espin1, nspin1, espin1, sym, lwave, mtot, size2)
   write(6,*) "size of the symmetrized 2-atom hyperfine basis = ", size2
   allocate(SPmat(size2,size2), TPmat(size2,size2))
 
   S = 0
-  call MakeSTHFProj(S, iK40, iK40, sK40, sK40, hf2symTempGlobal, size2, SPmat)
+  call MakeSTHFProj(S, nspin1, nspin1, espin1, espin1, hf2symTempGlobal, size2, SPmat)
   write(6,*) "The singlet projection matrix:"
   write(6,*) "-------------------------------"
   call printmatrix(SPmat,size2,size2,6)
 
   S = 2
-  call MakeSTHFProj(S, iK40, iK40, sK40, sK40, hf2symTempGlobal, size2, TPmat)
+  call MakeSTHFProj(S, nspin1, nspin1, espin1, espin1, hf2symTempGlobal, size2, TPmat)
   write(6,*) "The triplet projection matrix:"
   write(6,*) "-------------------------------"
   call printmatrix(TPmat,size2,size2,6)
@@ -729,17 +676,17 @@ program main
      identity(i,i)=1d0
      ystart(i,i)=1d20
   enddo
-  open(unit = 50, file = "K40FR.dat")
+  open(unit = 50, file = "Rb87FR.dat")
 
   do iB = 1, NBgrid 
      yi(:,:)=ystart(:,:)
-     call MakeHHZ2(Bgrid(iB),AK40,AK40,gs,giK40,giK40,iK40,sK40,iK40,sK40,hf2symTempGlobal,size2,HHZ2)
+     call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
      HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
      !Find the asymptotic channel states
-     VHZ(:,:,NPP) = VSinglet(NPP)*SPmat(:,:) + VTriplet(NPP)*TPmat(:,:) + HHZ2(:,:)
+     VHZ(:,:,NPP) = VSinglet(NPP)*SPmat(:,:) + VTriplet(NPP)*TPmat(:,:) + HHZ2(:,:) 
      call MyDSYEV(VHZ(:,:,NPP),size2,EVAL,AsymChannels)
      Eth(:)=EVAL(:)
-     
+    ! Write(20,*) iB, Eth
 
      do iE = 1, 1
         NumOpen=0        
@@ -753,23 +700,33 @@ program main
            VHZ(:,:,iR) = VSinglet(iR)*SPmat(:,:) + VTriplet(iR)*TPmat(:,:) + HHZ2(:,:)
            !call MyDSYEV(VHZ(:,:,iR),size2,EVAL,EVEC)  ! Calculate the adiabatic curves
 
+
            !----- Rotate into the asymptotic eigenstates -------!
-           call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,VHZ(:,:,iR),size2,0d0,TEMP,size2)
-           call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,RotatedVHZ(:,:,iR),size2)
+           !call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,VHZ(:,:,iR),size2,0d0,TEMP,size2)
+           !call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,RotatedVHZ(:,:,iR),size2)
            !-----------------------------------------------------!
            !write(1000+iB,*) R(iR), (RotatedVHZ(n,n,iR), n=1,NumOpen+1)!EVAL(:)!VHZ(:,:,iR)
+
+           do nr = 1, size2
+              do nc = 1, size2
+                 if(nr.NE.nc) VHZ(nr,nc,iR) = 0d0
+              enddo
+           enddo
+ 
         enddo
+
         !     write(6,*) "yi = "
         !     call printmatrix(yi,size2,size2,6) 
-        call logderprop(mured,Energy,identity,weights,NPP,yi,yf,R,RotatedVHZ,size2)
-        !     write(6,*) "yf = "
-        !     call printmatrix(yf,size2,size2,6)
-        call CalcK(yf,R(NPP),SD,mured,3d0,1d0,Energy,Eth,size2,NumOpen)
+       call logderprop(muref,Energy,identity,weights,NPP,yi,yf,R,VHZ,size2) !call logderprop(muref,Energy,identity,weights,NPP,yi,yf,R,RotatedVHZ,size2)
+            ! write(6,*) "yf = "
+        !call printmatrix(yf,size2,size2,20)
+       ! write(70,*) Bgrid(iB), ((yf(i,j), i = 1,size2), j = 1,size2)
+        call CalcK(yf,R(NPP),SD,muref,3d0,1d0,Energy,Eth,size2,NumOpen)
         !     write(2000+iB,*) Bgrid(iB), (SD%K(j,j), j=1,size2)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-        write(50,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+       write(50,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*muref*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
         !        write(50,'(100d20.10)') Egrid(iE), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
         !        write(6,'(100d20.10)') Egrid(iE), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-        write(6,'(100d16.6)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+       ! write(6,'(100d16.6)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
      enddo
   enddo
   close(50)
@@ -840,11 +797,13 @@ SUBROUTINE printmatrix(M,nr,nc,file)
   DOUBLE PRECISION M(nr,nc)
   
   DO j = 1,nr
-     WRITE(file,30) (M(j,k), k = 1,nc)
+     WRITE(file,40) (M(j,k), k = 1,nc)
   ENDDO
   
 20 FORMAT(1P,100D16.8)
 30 FORMAT(100D14.4)
+40 FORMAT(100F20.10)
+  
 END SUBROUTINE printmatrix
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 SUBROUTINE GridMaker(grid,numpts,E1,E2,scale)
@@ -984,258 +943,364 @@ subroutine CalcMilne(R,alpha,NA,energy,lwave,mu)
   
 end subroutine CalcMilne
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine Rubidium87Singlet(XO,NPP,VLIM,VSinglet)
+!Subroutine to setup the effect adiabatic potential energy function for any
+!one of the electronic states for the alkali homonuclear molecules:
+! for ground state singlet:
+!   87-Rb2 [ISTATE = 1; ESTATE = 1]    
+!   85-Rb2 [ISTATE = 2; ESTATE = 1]
+!   39-K2 [ISTATE = 3; ESTATE = 1]    from [Falke et al., Phys. Rev. a 78, 012503 (2008)]
+!   40-K2 [ISTATE = 4; ESTATE = 1]    from [Falke et al., Phys. Rev. a 78, 012503 (2008)]
+!   23-Na2 [ISTATE = 5; ESTATE = 1]   from [Knoop et al., Phys. Rev. A 83, 042704 (2011)]
+!   6-Li2 [ISTATE = 6; ESTATE = 1]    from LeRoy POTGENLI2.f
+!   7-Li2 [ISTATE = 7; ESTATE = 1]    from LeRoy POTGENLI2.f
+! for ground state triplet:
+!   87-Rb2 [ISTATE = 1; ESTATE = 3]    from [
+!   85-Rb2 [ISTATE = 2; ESTATE = 3]
+!   39-K2 [ISTATE = 3; ESTATE = 3]     from [Falke et al., Phys. Rev. a 78, 012503 (2008)]
+!   40-K2 [ISTATE = 4; ESTATE = 3]     from [Falke et al., Phys. Rev. a 78, 012503 (2008)]
+!   23-Na2 [ISTATE = 5; ESTATE = 3]    from [Knoop et al., Phys. Rev. A 83, 042704 (2011)]
+!   6-Li2 [ISTATE = 6; ESTATE = 3]    from LeRoy POTGENLI2.f
+!   7-Li2 [ISTATE = 7; ESTATE = 3]    from LeRoy POTGENLI2.f
+!
+! ON INPUT:
+!  *integer ISTATE specifies the choice of the atomic species
+!  *integer ESTATE specifies the choice of the electronic state (1 = Singlet, 3 = Triplet)
+!  *MU is the reduced mass
+!  *MUREF is the reduced mass of the reference isotopologue (used for BOB correction terms)
+!     for Rb2, 87 is the reference
+!     for K2, 39 is the reference
+!  *integer NPP is the number of radial points
+!  *X0(i) is an array of dimension NPP with the radial distances (in Angstrom) at which
+!   the potential energy function is to be calculated
+!  *VLIM is the (externally specified) asymptotic value of the potential energy (in cm-1)
+!
+! ON OUTPUT:
+!  *VV(i) is an array of the potential function values (in cm-1)
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, RM2)
   implicit none
-  integer NPP, i, j
-  double precision VLIM, VSinglet(NPP), XO(NPP)
-  double precision Rsr, Rlr, Ns, u1, u2, b, Rm, xi
-  double precision C6, C8, C10, C26, Aex, gamma, beta
-  double precision, DIMENSION(26) :: a
+  integer NPP, ISTATE, ESTATE, i, j, N, IMN1, IMN2
+  double precision XO(NPP), VV(NPP), RM2(NPP)
+  double precision MU, VLIM, RSR, RLR, NS, U1, U2, B, RM, xi, MUREF
+  double precision C6, C8, C10, C26, Aex, gamma, beta, nu0, nu1
+  double precision, allocatable :: A(:)
 
-  Rsr = 3.126d0
-  Ns = 4.53389d0
-  u1 = -0.638904880d4
-  u2 = 0.112005361d7
-  b = -0.13d0
-  Rlr = 11.00d0
-  Rm = 4.209912706d0
-  C6 = 0.2270032d8
-  C8 = 0.7782886d9
-  C10 = 0.2868869d11
-  C26 = 0.2819810d26
-  Aex = 0.1317786d5
-  gamma = 5.317689d0
-  beta = 2.093816d0
-  a = (/-3993.592873d0, 0.0d0, 0.282069372972346137d5, 0.560425000209256905d4, -0.423962138510562945d5, &
-       -0.598558066508841584d5, &
-       -0.162613532034769596d5,-0.405142102246254944d5, 0.195237415352729586d6, 0.413823663033582852d6, &
-       -0.425543284828921501d7, 0.546674790157210198d6, 0.663194778861331940d8,-0.558341849704095051d8, &
-       -0.573987344918535471d9, 0.102010964189156187d10, 0.300040150506311035d10,-0.893187252759830856d10, &
-       -0.736002541483347511d10, 0.423130460980355225d11,-0.786351477693491840d10,-0.102470557344862152d12, &
-       0.895155811349267578d11,0.830355322355692902d11,-0.150102297761234375d12,0.586778574293387070d11 /)
+  if (ESTATE .EQ. 1) then  !Ground state singlet 
+     select case (ISTATE)  
 
-  do i = 1, NPP
-     if (XO(i) .LE. Rsr) then
-        VSinglet(i) = u1 + u2/(XO(i)**Ns)
-     else if ((XO(i) .GE. Rsr) .AND. (XO(i) .LE. Rlr)) then
-        xi = (XO(i) - Rm)/(XO(i) + b*Rm)
-        VSinglet(i) = 0d0
+     case (1:2)  !Rubidium
+        N = 26
+        allocate(A(N))
+         RSR = 3.126d0
+         NS = 4.53389d0
+         U1 = -0.638904880d4
+         U2 = 0.112005361d7
+         B = -0.13d0
+         RLR = 11.00d0
+         RM = 4.209912706d0
+         C6 = 0.2270032d8
+         C8 = 0.7782886d9
+         C10 = 0.2868869d11
+         C26 = 0.2819810d26
+         Aex = 0.1317786d5
+         gamma = 5.317689d0
+         beta = 2.093816d0
+         nu0 = 0d0
+         nu1 = 0d0
+         A = (/-3993.592873d0, 0.0d0, 0.282069372972346137d5, 0.560425000209256905d4, -0.423962138510562945d5, &
+              -0.598558066508841584d5, &
+              -0.162613532034769596d5,-0.405142102246254944d5, 0.195237415352729586d6, 0.413823663033582852d6, &
+              -0.425543284828921501d7, 0.546674790157210198d6, 0.663194778861331940d8,-0.558341849704095051d8, &
+              -0.573987344918535471d9, 0.102010964189156187d10, 0.300040150506311035d10,-0.893187252759830856d10, &
+              -0.736002541483347511d10, 0.423130460980355225d11,-0.786351477693491840d10,-0.102470557344862152d12, &
+              0.895155811349267578d11,0.830355322355692902d11,-0.150102297761234375d12,0.586778574293387070d11 /)
+      case (3:4)  !Potassium
+         N = 32
+         allocate(A(N))
+         RSR = 2.870d0
+         NS = 12d0
+         U1 = -0.263145571d4
+         U2 = 0.813723194d9
+         B = -0.400d0
+         RLR = 12.00d0
+         RM = 3.92436437d0
+         C6 = 0.1892652670d8
+         C8 =  0.5706799527d9
+         C10 = 0.1853042722d11
+         C26 = 0.0d0
+         Aex = 0.90092159d4
+         gamma = 5.19500d0
+         beta = 2.13539d0
+         A = (/-4450.899484d0, 0.30601009538111d-1, 0.13671217000518d5,0.10750910095361d5, &
+              -0.20933401680991d4,-0.19385874804675d5,-0.49208915890513d5,0.11026639220148d6, &
+              0.72867339500920d6,-0.29310679369135d7,-0.12407070106619d8,0.40333947198094d8, &
+              0.13229848871390d9, -0.37617673798775d9,-0.95250413275787d9,0.24655585744641d10, &
+              0.47848257695164d10,-0.11582132109947d11,-0.17022518297651d11,0.39469335034593d11, &
+              0.43141949844339d11,-0.97616955325128d11,-0.77417530685917d11,0.17314133615879d12, &
+              0.96118849114926d11,-0.21425463041449d12,-0.78513081754125d11, 0.17539493131251d12, &
+              0.37939637008662d11,-0.85271868691526d11,-0.82123523240949d10,0.18626451751424d11/)
+         nu0 = 0.13148609d0
+         nu1 = 2.08523853d0
+      case (5)   !Sodium
+         N = 27
+         allocate(A(N))
+         RSR = 2.181d0
+         U1 = -0.78531844d4
+         U2 = 0.84258655d6
+         RM = 3.0788576d0
+         NS = 6
+         RLR = 11.00d0
+         B = -0.140d0
+         nu0 = 0d0
+         nu1 = 0d0
+         C6 = 0.75186131d7
+         C8 = 0.1686430d9
+         C10 = 0.3081961d10
+         C26 = 0d0
+         Aex = 0.40485835d5
+         gamma = 4.59105d0
+         beta = 2.36594d0
+         A = (/-6022.04193d0, -0.200727603516760356d1, 0.302710123527149044d5, 0.952678499004718833d4, &
+              -0.263132712461278206d5,-0.414199125447689439d5, 0.100454724828577862d6, &
+              0.950433282843468915d5, -0.502202855817934591d7, -0.112315449566019326d7, &
+              0.105565865633448541d9,-0.626929930064849034d8, -0.134149332172454119d10,&
+              0.182316049840707183d10, 0.101425117010240822d11, -0.220493424364290123d11, &
+              -0.406817871927934494d11, 0.144231985783280396d12, 0.379491474653734665d11, &
+              -0.514523137448139771d12, 0.342211848747264038d12, 0.839583017514805054d12, &
+              -0.131052566070353687d13, -0.385189954553600769d11, 0.135760501276292969d13, &
+              -0.108790546442390417d13, 0.282033835345282288d12/)
 
-        do j = 0, 25
-           VSinglet(i) = VSinglet(i) + a(j+1)*xi**j
-        enddo
-
-     else 
-        VSinglet(i) = -C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - C26/(XO(i)**26.0d0) &
-             - Aex*(XO(i)**gamma)*EXP((-1)*beta*XO(i))
-
-     endif
-
-  enddo
-   
-end subroutine Rubidium87Singlet
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine Rubidium87Triplet(XO,NPP,VLIM,VTriplet)
-  implicit none
-  integer NPP, i, j
-  double precision VLIM, VTriplet(NPP), XO(NPP)
-  double precision Rsr, Rlr, Ns, u1, u2, b, Rm, xi
-  double precision C6, C8, C10, C26, Aex, gamma, beta
-  double precision, DIMENSION(13) :: a
-
-  Rsr = 5.07d0
-  Ns = 4.5338950d0
-  u1 = -0.619088543d3
-  u2 = 0.956231677d6
-  b = -0.33d0
-  Rlr = 11.00d0
-  Rm = 6.093345d0
-  C6 = 0.2270032d8
-  C8 = 0.7782886d9
-  C10 = 0.2868869d11
-  C26 = 0.2819810d26
-  Aex = 0.1317786d5
-  gamma = 5.317689d0
-  beta = 2.093816d0
-  a = (/-241.503352d0, -0.672503402304666542d0, 0.195494577140503543d4, -0.141544168453406223d4,&
-       -0.221166468149940465d4, 0.165443726445793004d4, -0.596412188910614259d4, &
-       0.654481694231538040d4, 0.261413416681972012d5, -0.349701859112702878d5,&
-       -0.328185277155018630d5,0.790208849885562522d5, -0.398783520249289213d5 /)
-
-  do i = 1, NPP
-     if (XO(i) .LE. Rsr) then
-        VTriplet(i) = u1 + u2/(XO(i)**Ns)
-     else if ((XO(i) .GE. Rsr) .AND. (XO(i) .LE. Rlr)) then
-        xi = (XO(i) - Rm)/(XO(i) + b*Rm)
-        VTriplet(i) = 0d0
-
-        do j = 0, 12
-           VTriplet(i) = VTriplet(i) + a(j+1)*xi**j
-        enddo
+     case (6)
+         IMN1 = 6
+         IMN2 = IMN1
+         call POTGENLI2(ESTATE,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
+         
+     case (7)
+        IMN1 = 7
+        IMN2 = IMN1
+        call POTGENLI2(ESTATE,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
         
-     else 
-        VTriplet(i) = -C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - C26/(XO(i)**26.0d0) &
-             + Aex*(XO(i)**gamma)*EXP((-1)*beta*XO(i))
-     endif
-
-  enddo
-endsubroutine Rubidium87Triplet
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine PotassiumTriplet(A,XO,NPP,VLIM,VTriplet) !A = 39 for K-39, A = 40 for K-40
-  implicit none
-  integer NPP, i, j, A
-  double precision VLIM, VTriplet(NPP), XO(NPP)
-  double precision Rsr, Rlr, Ns, u1, u2, b, Rm, xi, nu
-  double precision C6, C8, C10, Aex, gamma, beta
-  double precision, DIMENSION(21) :: acf
-  double precision mu39, mu40
-
-  Rsr = 4.750d0
-  Ns = 6d0
-  u1 = -0.6948000684d3
-  u2 = 0.7986755824d7
-  b = -0.300d0
-  Rlr = 12.00d0
-  Rm = 5.73392370d0
-  C6 = 0.1892652670d8
-  C8 =  0.5706799527d9
-  C10 = 0.1853042722d11
-  Aex =0.90092159d4
-  gamma = 5.19500d0
-  beta = 2.13539d0
-  acf = (/-255.015289d0, -0.84057856111142d0, 0.20960112217307d4, -0.17090298954603d4, &
-       -0.17873773359495d4, 0.29451253739583d4, -0.20200089247397d5, &
-       -0.35699524005434d5, 0.59869055371895d6, -0.71054353363636d6,&
-       -0.61711841390175d7,0.19365507566961d8, 0.67930587059121d7, &
-       -0.12020061704172d9, 0.21603959986951d9,-0.63531969223760d8,-0.52391212820709d9, &
-       0.15913304648629d10,-0.24792546567713d10,0.20326031881106d10,-0.68044508325774d9/)
-  nu = 0.23803737d0
-  mu39 = 35513.3d0
-  mu40 = 36425d0
-  
-if (A.EQ. 39) then    !K-39 Triplet
-  do i = 1, NPP
-     if (XO(i) .LE. Rsr) then
-        VTriplet(i) = u1 + u2/(XO(i)**Ns)
-     else if ((XO(i) .GE. Rsr) .AND. (XO(i) .LE. Rlr)) then
-        xi = (XO(i) - Rm)/(XO(i) + b*Rm)
-        VTriplet(i) = 0d0
-
-        do j = 0, 20
-           VTriplet(i) = VTriplet(i) + acf(j+1)*xi**j
-        enddo
+     case default
+        write(6,*) "Invalid ISTATE value"
+        stop
+     end select
         
-     else 
-        VTriplet(i) = -C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) &
-             + Aex*(XO(i)**gamma)*EXP((-1)*beta*XO(i))
-     endif
+  else if (ESTATE .EQ. 3) then  !Ground state triplet
+     select case (ISTATE)
 
-  enddo
-else if (A.EQ.40) then  !K-40 Triplet
-     do i = 1, NPP
-     if (XO(i) .LE. Rsr) then
-        VTriplet(i) = u1 + u2/(XO(i)**Ns)
-     else if ((XO(i) .GE. Rsr) .AND. (XO(i) .LE. Rlr)) then
-        xi = (XO(i) - Rm)/(XO(i) + b*Rm)
-        VTriplet(i) = 0d0
+     case (1:2) !Rubidium
+        N = 13
+        allocate(A(N))
+         RSR = 5.07d0
+         NS = 4.5338950d0
+         U1 = -0.619088543d3
+         U2 = 0.956231677d6
+         B = -0.33d0
+         RLR = 11.00d0
+         RM = 6.093345d0
+         C6 = 0.2270032d8
+         C8 = 0.7782886d9
+         C10 = 0.2868869d11
+         C26 = 0.2819810d26
+         Aex = 0.1317786d5
+         gamma = 5.317689d0
+         beta = 2.093816d0
+         nu0 = 0d0
+         nu1 = 0d0
+         A = (/-241.503352d0, -0.672503402304666542d0, 0.195494577140503543d4, -0.141544168453406223d4,&
+              -0.221166468149940465d4, 0.165443726445793004d4, -0.596412188910614259d4, &
+              0.654481694231538040d4, 0.261413416681972012d5, -0.349701859112702878d5,&
+              -0.328185277155018630d5,0.790208849885562522d5, -0.398783520249289213d5 /)
 
-        do j = 0, 20
-           VTriplet(i) = VTriplet(i) + acf(j+1)*xi**j
-        enddo
-        
-     else 
-        VTriplet(i) = -C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) &
-             + Aex*(XO(i)**gamma)*EXP((-1)*beta*XO(i))
-     endif
-
-     VTriplet(i) = VTriplet(i) + nu*(1 - mu39/mu40)*((2*Rm)/(XO(i)+Rm))**6
-  enddo
-else
-   WRITE(6,*) "Invalid A value"
-   stop
-end if
-
-endsubroutine PotassiumTriplet
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine PotassiumSinglet(A,XO,NPP,VLIM,VSinglet) !A = 39 for K-39, A = 40 for K-40
-  implicit none
-  integer NPP, i, j, A
-  double precision VLIM, VSinglet(NPP), XO(NPP)
-  double precision Rsr, Rlr, Ns, u1, u2, b, Rm, xi, yi
-  double precision C6, C8, C10, Aex, gamma, beta
-  double precision, DIMENSION(32) :: acf
-  double precision mu39, mu40
-  double precision nu0, nu1
-
-  Rsr = 2.870d0
-  Ns = 12d0
-  u1 = -0.263145571d4
-  u2 = 0.813723194d9
-  b = -0.400d0
-  Rlr = 12.00d0
-  Rm = 3.92436437d0
-  C6 = 0.1892652670d8
-  C8 =  0.5706799527d9
-  C10 = 0.1853042722d11
-  Aex = 0.90092159d4
-  gamma = 5.19500d0
-  beta = 2.13539d0
-  acf = (/-4450.899484d0, 0.30601009538111d-1, 0.13671217000518d5,0.10750910095361d5, &
-       -0.20933401680991d4,-0.19385874804675d5,-0.49208915890513d5,0.11026639220148d6, &
-       0.72867339500920d6,-0.29310679369135d7,-0.12407070106619d8,0.40333947198094d8, &
-       0.13229848871390d9, -0.37617673798775d9,-0.95250413275787d9,0.24655585744641d10, &
-       0.47848257695164d10,-0.11582132109947d11,-0.17022518297651d11,0.39469335034593d11, &
-       0.43141949844339d11,-0.97616955325128d11,-0.77417530685917d11,0.17314133615879d12, &
-       0.96118849114926d11,-0.21425463041449d12,-0.78513081754125d11, 0.17539493131251d12, &
-       0.37939637008662d11,-0.85271868691526d11,-0.82123523240949d10,0.18626451751424d11/)
-  nu0 = 0.13148609d0
-  nu1 = 2.08523853d0
-  mu39 = 35513.3d0
-  mu40 = 36425d0
-  
-if (A.EQ.39) then
-  do i = 1, NPP
-     if (XO(i) .LE. Rsr) then
-        VSinglet(i) = u1 + u2/(XO(i)**Ns)
-     else if ((XO(i) .GE. Rsr) .AND. (XO(i) .LE. Rlr)) then
-        xi = (XO(i) - Rm)/(XO(i) + b*Rm)
-        VSinglet(i) = 0d0
-
-        do j = 0, 31
-           VSinglet(i) = VSinglet(i) + acf(j+1)*xi**j
-        enddo
-        
-     else 
-        VSinglet(i) = -C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) &
-             + Aex*(XO(i)**gamma)*EXP((-1)*beta*XO(i))
-     endif
-
-  enddo
-else if (A.EQ.40) then
-     do i = 1, NPP
-     if (XO(i) .LE. Rsr) then
-        VSinglet(i) = u1 + u2/(XO(i)**Ns)
-     else if ((XO(i) .GE. Rsr) .AND. (XO(i) .LE. Rlr)) then
-        xi = (XO(i) - Rm)/(XO(i) + b*Rm)
-        VSinglet(i) = 0d0
-
-        do j = 0, 31
-           VSinglet(i) = VSinglet(i) + acf(j+1)*xi**j
-        enddo
-        
-     else 
-        VSinglet(i) = -C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) &
-             + Aex*(XO(i)**gamma)*EXP((-1)*beta*XO(i))
-     endif
+      case (3:4) !Potassium
+         N = 21
+         allocate(A(N))
+           RSR = 4.750d0
+           NS = 6d0
+           U1 = -0.6948000684d3
+           U2 = 0.7986755824d7
+           B = -0.300d0
+           RLR = 12.00d0
+           RM = 5.73392370d0
+           C6 = 0.1892652670d8
+           C8 =  0.5706799527d9
+           C10 = 0.1853042722d11
+           C26 = 0.0d0
+           Aex =0.90092159d4
+           gamma = 5.19500d0
+           beta = 2.13539d0
+           A = (/-255.015289d0, -0.84057856111142d0, 0.20960112217307d4, -0.17090298954603d4, &
+                -0.17873773359495d4, 0.29451253739583d4, -0.20200089247397d5, &
+                -0.35699524005434d5, 0.59869055371895d6, -0.71054353363636d6,&
+                -0.61711841390175d7,0.19365507566961d8, 0.67930587059121d7, &
+                -0.12020061704172d9, 0.21603959986951d9,-0.63531969223760d8,-0.52391212820709d9, &
+                0.15913304648629d10,-0.24792546567713d10,0.20326031881106d10,-0.68044508325774d9/)
+           nu0 = 0.23803737d0
+           nu1 = 0.0d0
+        case (5) !Sodium
+         N = 9
+         allocate(A(N))
+         RSR = 4.2780d0
+         U1 = -0.2435819d3
+         U2 = 0.1488425d7
+         RM = 5.149085d0
+         NS = 6
+         RLR = 11.00d0
+         B = -0.40d0
+         nu0 = 0d0
+         nu1 = 0d0
+         C6 = 0.75186131d7
+         C8 = 0.1686430d9
+         C10 = 0.3081961d10
+         C26 = 0d0
+         Aex = 0.40485835d5
+         gamma = 4.59105d0
+         beta = 2.36594d0
+         A = (/-172.90517d0, 0.355691862122135882d1, 0.910756126766199941d3, &
+              -0.460619207631179620d3, 0.910227086296958532d3, -0.296064051187991117d4, &
+              -0.496106499110302684d4, 0.147539144920038962d5, -0.819923776793683828d4/)
+      case (6)
+         IMN1 = 6
+         IMN2 = IMN1
+        call POTGENLI2(ESTATE,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
+     case (7)
+        IMN1 = 7
+        IMN2 = IMN1
+        call POTGENLI2(ESTATE,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
+         
+     case default
+        write(6,*) "Invalid ISTATE value"
+        stop 
+     end select
      
-     yi = (XO(i) - Rm)/(XO(i) + b*Rm)
-     VSinglet(i) = VSinglet(i) + (nu0 + nu1*yi)*(1 - mu39/mu40)*((2*Rm)/(XO(i)+Rm))**6
-  enddo
-  
-else
-   WRITE(6,*) "Invalid A value"
-   stop
-end if
+  else
+     write(6,*) "Invalid ESTATE value"
+  end if
 
-endsubroutine PotassiumSinglet
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  if((ISTATE.NE.6).AND.(ISTATE.NE.7))then
+     do i = 1, NPP
+        if(XO(i) .LE. RSR) then
+           VV(i) = U1 + U2/(XO(i)**NS)
+        else if ((XO(i) .GE. RSR) .AND. (XO(i) .LE. RLR)) then
+           xi = (XO(i) - RM)/(XO(i) + B*RM)
+           VV(i) = 0.0d0
+
+           do j = 0, N-1
+              VV(i) = VV(i) + A(j+1)*xi**j
+           enddo
+        else
+           VV(i) = -C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - C26/(XO(i)**26.0d0)
+
+           if(ESTATE.EQ.1) then
+              VV(i) = VV(i) - Aex*(XO(i)**gamma)*EXP((-1)*beta*XO(i))
+           elseif(ESTATE.EQ.3) then
+              VV(i) = VV(i) + Aex*(XO(i)**gamma)*EXP((-1)*beta*XO(i))
+           else
+              Write(6,*) "Invalid ESTATE value"
+           endif
+        
+        endif
+
+        VV(i) = VV(i) + (nu0 + nu1*((XO(i) - RM)/(XO(i) + B*RM)))*(1 - MU/MUREF)*((2*RM)/(XO(i)+RM))**6
+     enddo
+  endif
+
+  
+  
+END SUBROUTINE
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! Subroutine for retrieving the nuclear spin, electronic spin, hyperfine constant (in MHz),
+! nuclear gyromagnetic ratio, electronic gyromagnetic ratio, mass (in atomic units),
+! for the selected atomic species:
+!   87-Rb [ISTATE = 1]
+!   85-Rb [ISTATE = 2]
+!   39-K [ISTATE = 3]   
+!   40-K [ISTATE = 4]    
+!   23-Na [ISTATE = 5]
+!    6-Li [ISTATE = 6]
+!    7-Li [ISTATE = 7]
+!
+! The reduced mass (MU) and reduced mass for the reference isotopologue (MUREF) are for the
+! homonuclear molecules 
+!
+! Electronic (s) and nuclear (i) spins are multiplied by two
+! Nuclear g-factors need to be multiplied by the Bohr magneton
+! Nuclear g-factors and hyperfine constants are from [Arimondo et al. Rev. Mod. Phys. 49, 31 (1977)]
+!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
+  implicit none
+  integer ISTATE, i, s 
+  double precision AHf, gi, MU, MUREF, mass
+  double precision amuAU
+
+  amuAU = 1.66053906660d-27/9.109383701528d-31  !mass conversion to atomic units
+  s = 1                    !electronic spin
+  
+  select case (ISTATE)
+  case (1) !Rb-87
+     gi = -0.000995141410d0
+     i = 3
+     AHf = 3417.3413064215d0
+     mass = 86.909180527*amuAU
+     MU = mass/2
+     MUREF = MU
+     
+  case (2) !Rb-85
+     gi = -0.00029364006d0
+     i = 5
+     AHf = 1011.9108132d0
+     mass = 84.911789738*amuAU
+     MU = mass/2  
+     MUREF = (86.909180527*amuAU)/2 !Reference reduced mass is 87-Rb2
+     
+  case (3) !K-39
+     gi = -0.00014193489d0
+     i = 3
+     AHf = 230.85986013d0
+     mass = 38.963708d0*amuAU
+     MU = mass/2
+     MUREF = MU
+     
+  case (4) !K-40
+     gi = 0.00017649034d0
+     i = 8
+     AHf = -285.730824d0
+     mass = 39.964008d0*amuAU
+     MU = mass/2
+     MUREF = (38.963708d0*amuAU)/2 !Reference reduced mass is 39-K2
+     
+  case (5) !Na-23
+     gi =  -0.00080461088d0
+     i = 3
+     AHf = 885.81306445d0
+     mass = 22.98976928*amuAU
+     MU = mass/2
+     MUREF = MU
+
+  case (6) !Li-6   
+     gi = -0.00044765403d0
+     i = 2
+     AHf = 152.136840720d0
+     mass = 6.0151223*amuAU
+     MU = mass/2
+     MUREF = (7.016004*amuAU)/2 !Reference reduced mass is 7-Li2
+
+  case(7) !Li-7
+     gi = -0.0011822136d0
+     i = 3
+     AHf = 401.75204335d0
+     mass = (7.016004*amuAU)/2
+     MU = mass/2
+     MUREF = MU
+     
+  case default
+     write(6,*) "Invalid ISTATE value"
+     stop
+     
+  end select
+  
+     
+  
+End Subroutine AtomData
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
