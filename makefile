@@ -8,7 +8,7 @@ FORCEDP = #-fdefault-real-8 -fdefault-double-
 LAPACK =   -framework accelerate
 ARPACK =  -L/usr/local/lib/ -larpack
 INCLUDE =  -I/usr/local/include
-OBJS  = besselnew.o threejsixj.o Bsplines.o quadrature.o AlkaliScattering.o units.o matrix_stuff.o 
+OBJS  = besselnew.o threejsixj.o Bsplines.o quadrature.o POTGENLI2.o AlkaliScattering.o units.o matrix_stuff.o 
 
 AlkaliScattering.x: ${OBJS} 
 	${CMP} ${STND} ${DEBUG} ${OBJS} ${INCLUDE} ${LAPACK}  ${ARPACK} ${OPTFLAG} ${FORCEDP} -o AlkaliScattering.x
@@ -39,6 +39,9 @@ quadrature.mod: quadrature.o
 
 quadrature.o: quadrature.f90
 	${CMP} ${STND} ${FORCEDP} ${OPTFLAG} -c quadrature.f90
+
+POTGENLI2.o: POTGENLI2.f
+	${CMP} ${STND} ${FORCEDP} ${OPTFLAG} -c POTGENLI2.f
 
 threejsixj.o: threejsixj.f
 	${CMP} ${STND} ${FORCEDP} ${OPTFLAG} -c threejsixj.f
