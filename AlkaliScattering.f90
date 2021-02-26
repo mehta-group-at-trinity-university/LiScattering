@@ -144,6 +144,7 @@ module hyperfine
   implicit none
   double precision, parameter :: muB = 1.3996244936142    !Bohr magneton in units (MHz/Gauss)
   double precision, parameter :: gs = 2.00231930436256d0 ! electron g factor
+  double precision, parameter :: muN = 0.000762267d0 !Nuclear magneton in units (MHz/Gauss)
 
   
   type hf1atom
@@ -531,7 +532,7 @@ program main
   use datastructures
   use scattering
   implicit none
-  integer NPP, iR, iB, ihf, n, i, j, A, nc, nr, ESTATE, ISTATE
+  integer NPP, iR, iB, ihf, n, i, j, A, nc, nr, ESTATE, ISTATE, IMN1
   integer nspin1, nspin2, espin1, espin2 !nspin is the nuclear spin and espin is the electronic spin
   integer i1,i2,s1,s2,S,sym,size1,size2,NBgrid,NEgrid,mtot, lwave,NumOpen
   double precision, allocatable :: XO(:), VSinglet(:), VTriplet(:), RM2(:), R(:)
@@ -552,16 +553,17 @@ program main
 
   ISTATE = 1  !select atomic species
 
-  call AtomData (ISTATE, AHf1, nspin1, espin1, gi1, MU, MUREF, mass1)  !atom 1 data (and atom 2 for homonuclear molecules)
+  call AtomData (ISTATE, AHf1, nspin1, espin1, gi1, MU, MUREF, mass1)  !atom 1 data (and atom 2 for identical particles)
+  !write(6,*) AHf1, nspin1, espin1, gi1, MU, MUREF, mass1
 
   ! initialize the angular momentum routines
   call setupam
 
   ! determine the size of the one-atom hyperfine/zeeman hamiltonian
-  NBgrid = 500
+  NBgrid = 1000
   NEgrid = 20
   Bmin = 0d0
-  Bmax = 1100d0
+  Bmax = 1200d0
   !make the magnetic field grid and energy grid
   allocate(Bgrid(NBgrid),Egrid(NEgrid))
   call GridMaker(Bgrid,NBgrid,Bmin,Bmax,'linear')
@@ -605,7 +607,7 @@ program main
   sym = 1 ! set to +1 for bosonic K-39, Rb-85, Rb-87, and Na-23; -1 for fermionic K-40; 0 for any mixed collision
   lwave = 0 ! s wave collisions
   xmin = 0.03d0 ! use atomic units here (bohr)
-  xmax = 300d0 ! use atomic units here (bohr)
+  xmax = 600d0 ! use atomic units here (bohr)
   dx = (xmax-xmin)/(dble(NPP-1))
   do iR=1, NPP
      R(iR) = xmin + (iR-1)*dx
@@ -635,7 +637,6 @@ program main
      write(30,*) R(iR), VTriplet(iR)
   enddo
 
- ! STOP
   
   mtot = 4  !multiply mtot by 2
   
@@ -676,7 +677,7 @@ program main
      identity(i,i)=1d0
      ystart(i,i)=1d20
   enddo
-  open(unit = 50, file = "Rb87FR.dat")
+  open(unit = 50, file = "Rb85FR.dat") 
 
   do iB = 1, NBgrid 
      yi(:,:)=ystart(:,:)
@@ -686,7 +687,7 @@ program main
      VHZ(:,:,NPP) = VSinglet(NPP)*SPmat(:,:) + VTriplet(NPP)*TPmat(:,:) + HHZ2(:,:) 
      call MyDSYEV(VHZ(:,:,NPP),size2,EVAL,AsymChannels)
      Eth(:)=EVAL(:)
-    ! Write(20,*) iB, Eth
+     Write(20,*) Bgrid(iB), Eth
 
      do iE = 1, 1
         NumOpen=0        
@@ -702,26 +703,22 @@ program main
 
 
            !----- Rotate into the asymptotic eigenstates -------!
-           !call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,VHZ(:,:,iR),size2,0d0,TEMP,size2)
-           !call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,RotatedVHZ(:,:,iR),size2)
+           call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,VHZ(:,:,iR),size2,0d0,TEMP,size2)
+           call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,RotatedVHZ(:,:,iR),size2)
            !-----------------------------------------------------!
            !write(1000+iB,*) R(iR), (RotatedVHZ(n,n,iR), n=1,NumOpen+1)!EVAL(:)!VHZ(:,:,iR)
 
-           do nr = 1, size2
-              do nc = 1, size2
-                 if(nr.NE.nc) VHZ(nr,nc,iR) = 0d0
-              enddo
-           enddo
+
  
         enddo
 
         !     write(6,*) "yi = "
         !     call printmatrix(yi,size2,size2,6) 
-       call logderprop(muref,Energy,identity,weights,NPP,yi,yf,R,VHZ,size2) !call logderprop(muref,Energy,identity,weights,NPP,yi,yf,R,RotatedVHZ,size2)
+      call logderprop(mu,Energy,identity,weights,NPP,yi,yf,R,RotatedVHZ,size2)
             ! write(6,*) "yf = "
         !call printmatrix(yf,size2,size2,20)
        ! write(70,*) Bgrid(iB), ((yf(i,j), i = 1,size2), j = 1,size2)
-        call CalcK(yf,R(NPP),SD,muref,3d0,1d0,Energy,Eth,size2,NumOpen)
+        call CalcK(yf,R(NPP),SD,mu,3d0,1d0,Energy,Eth,size2,NumOpen)
         !     write(2000+iB,*) Bgrid(iB), (SD%K(j,j), j=1,size2)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
        write(50,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*muref*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
         !        write(50,'(100d20.10)') Egrid(iE), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
@@ -1073,12 +1070,12 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, RM2)
      case (6)
          IMN1 = 6
          IMN2 = IMN1
-         call POTGENLI2(ESTATE,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
+         call POTGENLI2(1,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
          
      case (7)
         IMN1 = 7
         IMN2 = IMN1
-        call POTGENLI2(ESTATE,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
+        call POTGENLI2(1,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
         
      case default
         write(6,*) "Invalid ISTATE value"
@@ -1162,11 +1159,11 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, RM2)
       case (6)
          IMN1 = 6
          IMN2 = IMN1
-        call POTGENLI2(ESTATE,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
+        call POTGENLI2(2,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
      case (7)
         IMN1 = 7
         IMN2 = IMN1
-        call POTGENLI2(ESTATE,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
+        call POTGENLI2(2,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
          
      case default
         write(6,*) "Invalid ISTATE value"
@@ -1189,7 +1186,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, RM2)
               VV(i) = VV(i) + A(j+1)*xi**j
            enddo
         else
-           VV(i) = -C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - C26/(XO(i)**26.0d0)
+           VV(i) = -C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0)  - C26/(XO(i)**26.0d0)
 
            if(ESTATE.EQ.1) then
               VV(i) = VV(i) - Aex*(XO(i)**gamma)*EXP((-1)*beta*XO(i))
@@ -1287,10 +1284,10 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      MUREF = (7.016004*amuAU)/2 !Reference reduced mass is 7-Li2
 
   case(7) !Li-7
-     gi = -0.0011822136d0
+     gi =  -0.0011822136d0
      i = 3
      AHf = 401.75204335d0
-     mass = (7.016004*amuAU)/2
+     mass = (7.016004*amuAU)
      MU = mass/2
      MUREF = MU
      
