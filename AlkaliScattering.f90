@@ -129,12 +129,13 @@ CONTAINS
    call CompSqrMatInv(tmp,no)
    SD%S = MATMUL(SD%S,tmp)
    SD%T = -II*0.5d0*(SD%S-Identity(1:no,1:no))
-   SD%sigma = conjg(SD%T)*SD%T*Pi/(2d0*mu*EE)
+   !SD%sigma = conjg(SD%T)*SD%T*Pi/(2d0*mu*EE)
 
    SD%tandel = SD%K(1,1)
    SD%delta = atan(SD%tandel)
    SD%sindel = sin(SD%delta)
    SD%sin2del = SD%sindel**2
+   SD%sigma = (4*pi/(2d0*mu*(EE-Eth(1))))*SD%sin2del
 
  END SUBROUTINE CalcK
 end module scattering
@@ -551,7 +552,7 @@ program main
   type(hf1atom), allocatable :: hf1(:) 
   TYPE(ScatData) :: SD
 
-  ISTATE = 1  !select atomic species
+  ISTATE = 2  !select atomic species
 
   call AtomData (ISTATE, AHf1, nspin1, espin1, gi1, MU, MUREF, mass1)  !atom 1 data (and atom 2 for identical particles)
   !write(6,*) AHf1, nspin1, espin1, gi1, MU, MUREF, mass1
@@ -561,13 +562,13 @@ program main
 
   ! determine the size of the one-atom hyperfine/zeeman hamiltonian
   NBgrid = 1000
-  NEgrid = 20
+  NEgrid = 1000
   Bmin = 0d0
   Bmax = 1200d0
   !make the magnetic field grid and energy grid
   allocate(Bgrid(NBgrid),Egrid(NEgrid))
   call GridMaker(Bgrid,NBgrid,Bmin,Bmax,'linear')
-  call GridMaker(Egrid,NEgrid,1d-15,1d-10,'linear') ! measure the collision energy in Hartree
+  call GridMaker(Egrid,NEgrid,1d-15,1.6d-7,'linear') ! measure the collision energy in Hartree
   !------------------------------------------------------------------
   !call once with size1 = 0 to determine the size of the basis.
   size1 = 0
@@ -638,7 +639,7 @@ program main
   enddo
 
   
-  mtot = 4  !multiply mtot by 2
+  mtot = -8  !multiply mtot by 2
   
   call MakeHF2Basis(nspin1, espin1, nspin1, espin1, sym, lwave, mtot, size2)
   write(6,*) "size of the symmetrized 2-atom hyperfine basis = ", size2
@@ -679,7 +680,7 @@ program main
   enddo
   open(unit = 50, file = "Rb85FR.dat") 
 
-  do iB = 1, NBgrid 
+  do iB = 1, 1!NBgrid 
      yi(:,:)=ystart(:,:)
      call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
      HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
@@ -689,7 +690,7 @@ program main
      Eth(:)=EVAL(:)
      Write(20,*) Bgrid(iB), Eth
 
-     do iE = 1, 1
+     do iE = 1, NEgrid !1
         NumOpen=0        
         Energy = Eth(1) + Egrid(iE)!*nKPerHartree
         !write(6,*) "energy = ", energy
@@ -720,10 +721,10 @@ program main
        ! write(70,*) Bgrid(iB), ((yf(i,j), i = 1,size2), j = 1,size2)
         call CalcK(yf,R(NPP),SD,mu,3d0,1d0,Energy,Eth,size2,NumOpen)
         !     write(2000+iB,*) Bgrid(iB), (SD%K(j,j), j=1,size2)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-       write(50,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*muref*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-        !        write(50,'(100d20.10)') Egrid(iE), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+       !write(50,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+               write(50,'(100d20.10)') Egrid(iE)*HartreePermK, SD%sigma*(Bohrpercm**2)!(-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
         !        write(6,'(100d20.10)') Egrid(iE), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-       ! write(6,'(100d16.6)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        !write(6,'(100d16.6)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
      enddo
   enddo
   close(50)
