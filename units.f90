@@ -25,6 +25,9 @@ module units
   real*8, parameter :: amuAU = amuKg/ElectronMassKg
   real*8, parameter :: vdwbetaLi = 65.2049d0
   real*8, parameter :: nKPerHartree = 3.1668115634556D-15
+  real*8, parameter :: HartreePernK = 1/nKPerHartree
+  real*8, parameter :: HartreePermK = HartreePernK*1d-6
+  real*8, parameter :: Bohrpercm = 5.2917724900001d-9
   
 
 !!$  real*8, parameter ::  AnstperBohr,HartreeperJoule,JouleperHartree,hSI,hHartreesec,hbarcMeVfm,hbarceVnm
