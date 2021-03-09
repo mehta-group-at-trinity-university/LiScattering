@@ -601,14 +601,14 @@ program main
   deallocate(EVEC,EVAL,HHZ)
   !____________________________________________________________________
   
-  NPP = 100000
+  NPP = 250000
   VLIM = 0d0
   allocate(XO(NPP),R(NPP),weights(NPP),VSinglet(NPP),VTriplet(NPP),RM2(NPP))
 
   sym = 1 ! set to +1 for bosonic K-39, Rb-85, Rb-87, Cs-133, Li-7 and Na-23; -1 for fermionic K-40 and Li-6; 0 for any mixed collision
   lwave = 0 ! s wave collisions
   xmin = 0.03d0 ! use atomic units here (bohr)
-  xmax = 600d0 ! use atomic units here (bohr)
+  xmax = 900d0 ! use atomic units here (bohr)
   dx = (xmax-xmin)/(dble(NPP-1))
   do iR=1, NPP
      R(iR) = xmin + (iR-1)*dx
@@ -951,7 +951,7 @@ end subroutine CalcMilne
 !   23-Na2 [ISTATE = 5; ESTATE = 1]   from [Knoop et al., Phys. Rev. A 83, 042704 (2011)]
 !   6-Li2 [ISTATE = 6; ESTATE = 1]    from LeRoy POTGENLI2.f
 !   7-Li2 [ISTATE = 7; ESTATE = 1]    from LeRoy POTGENLI2.f
-! 133-Cs2 [ISTATE = 8; ESTATE = 1]    from [Coxon and Hajigeorgiou, J. Chem. Phys. 132, 094105 (2010)]
+! 133-Cs2 [ISTATE = 8; ESTATE = 1]    from [J Baldwin, MSc. Thesis from University of Waterloo (2012)]
 !
 ! for ground state triplet:
 !   87-Rb2 [ISTATE = 1; ESTATE = 3]    from [Strauss et al.,]
@@ -961,7 +961,7 @@ end subroutine CalcMilne
 !   23-Na2 [ISTATE = 5; ESTATE = 3]    from [Knoop et al., Phys. Rev. A 83, 042704 (2011)]
 !   6-Li2 [ISTATE = 6; ESTATE = 3]    from LeRoy POTGENLI2.f
 !   7-Li2 [ISTATE = 7; ESTATE = 3]    from LeRoy POTGENLI2.f
-! 133-Cs2 [ISTATE = 8; ESTATE = 3]    from [Sovkov et al., J. Chem. Phys. 147, 104301 (2017)]
+! 133-Cs2 [ISTATE = 8; ESTATE = 3]    from [J Baldwin, MSc. Thesis from University of Waterloo (2012)]
 !
 ! ON INPUT:
 !  *integer ISTATE specifies the choice of the atomic species
@@ -980,15 +980,14 @@ end subroutine CalcMilne
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, RM2)
   implicit none
-  integer NPP, ISTATE, ESTATE, i, j, N, IMN1, IMN2
+  integer NPP, ISTATE, ESTATE, i, j, N, IMN1, IMN2, iphi
   double precision XO(NPP), VV(NPP), RM2(NPP)
   double precision MU, VLIM, RSR, RLR, NS, U1, U2, B, RM, xi, MUREF
   double precision C6, C8, C10, C26, Aex, gamma, beta, nu0, nu1
   double precision, allocatable :: A(:)
-  integer p, q, m, iphi   
-  double precision De, re, ref, alpha
-  double precision yq, ym, ypalpha, uLR, phiMLR, phiMLRtemp
-  double precision phiinf, uLRre
+  double precision De, re, ref, alpha, p, q, s, bds, cds, rhoAB
+  double precision yqref, ypref, ypeq, uLR, phiMLR, phiMLRtemp
+  double precision phiinf, uLRre, DDS6, DDS8, DDS10, DDS6re, DDS8re, DDS10re
 
   if (ESTATE .EQ. 1) then  !Ground state singlet 
      select case (ISTATE)  
@@ -1086,22 +1085,22 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, RM2)
         call POTGENLI2(1,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
 
      case (8) !Cesium
-        N = 19
+        N = 23
         allocate(A(N))
-        p = 5
-        m = 6
-        q = 4
-        phiinf = -1.01628d0
-        alpha = 1.79d0
-        re = 4.6479723d0
-        De = 3649.847d0
-        C6 = 3.315d7
-        C8 = 1.29962d9
-        C10 = 5.136d10
-        ref = 5.47d0
-        A = (/-2.48715027d0, -0.7250527d0, -1.988236d0, -0.671755d0, -1.202501d0, -0.02015d0, &
-             -0.5414d0, 0.2298d0, 1.3964d0, 0.687d0, -8.655d0, 1.73d0, 32.2d0, -2.66d0, -61.0d0, &
-             6.1d0, 65.6d0, -2.0d0, -28.0d0 /)
+        p = 5d0
+        q = p
+        phiinf = 0.9469102524695
+        re = 4.647967771d0
+        De = 3650.041851d0
+        C6 = 3.3164d7
+        C8 = 1.38d9
+        C10 = 6.01d10
+        ref = 6.2d0
+        A = (/0.0949905d0, -0.372698d0, -0.04090736d0, 0.129657d0, &
+             0.1486696d0, 0.171395d0, 0.295883d0, 0.547375d0, &
+             -1.14615d0, -2.7883d0, 9.98557d0, 1.69149d1, -4.17899d1, &
+             -5.76544d1, 1.08881d2, 1.24037d2, -1.716d2, -1.6159d2, &
+             1.5781d2, 1.175d2, -7.5d1, -3.67d1, 1.3d1/)
         
      case default
         write(6,*) "Invalid ISTATE value"
@@ -1195,21 +1194,19 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, RM2)
         call POTGENLI2(2,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
         
      case (8) !Cesium 
-        N = 10
+        N = 5
         allocate(A(N))
-        p = 5
-        m = 6
-        q = 4
-        phiinf = -1.11422d0
-        alpha = 2.648d0
-        re = 6.24d0
-        De = 279.067d0
-        C6 = 3.31d7
-        C8 = 1.29962d9
-        C10 = 5.136d10
-        ref = 6.784d0
-        A = (/-2.4124d0, -0.2178d0, -0.4205d0, 2.085d0, -4.192d0, -1.95d0, 1.39d0, 1.87d0, &
-        -0.18d0, 1.11d0 /)
+        p = 5d0
+        q = p
+        phiinf = -3.971077022867d-1
+        re = 6.226182057299d0
+        De = 279.2222367314d0
+        C6 = 3.3164d7
+        C8 = 1.38d9
+        C10 = 6.01d10
+        ref = 8.7005d0
+        A = (/-4.324429443667d-1, -9.206933982533d-2, -6.845846740405d-2, &
+             -1.308218973148d-2, 3.457944786933d-1/)
          
      case default
         write(6,*) "Invalid ISTATE value"
@@ -1222,24 +1219,36 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, RM2)
 
   if((ISTATE.NE.6).AND.(ISTATE.NE.7))then
      if (ISTATE.EQ.8) then
-        uLRre = C6/(re**6.0d0) + C8/(re**8.0d0) + C10/(re**10.0d0)
+        s = -1d0
+        bds = 3.30d0
+        cds = 0.423d0
+        rhoAB = 0.434d0
+
+        DDS6re = (1 - Exp(-(rhoAB*re)*((bds/6d0) + (cds*rhoAB*re)/Sqrt(6d0))))**(6d0+s)
+        DDS8re = (1 - Exp(-(rhoAB*re)*((bds/8d0) + (cds*rhoAB*re)/Sqrt(8d0))))**(8d0+s)
+        DDS10re = (1 - Exp(-(rhoAB*re)*((bds/10d0) + (cds*rhoAB*re)/Sqrt(10d0))))**(10d0+s)
+        
+        uLRre = DDS6re*(C6/(re**6.0d0)) + DDS8re*(C8/(re**8.0d0)) + DDS10re*(C10/(re**10.0d0))
         
         do i = 1, NPP
-           uLR = C6/(XO(i)**6.0d0) + C8/(XO(i)**8.0d0) + C10/(XO(i)**10.0d0)
-           ypalpha = (XO(i)**p - re**p)/(XO(i)**p + alpha*(re**p))
-           ym = (XO(i)**m - re**m)/(XO(i)**m + re**m)
-           yq = (XO(i)**q - re**q)/(XO(i)**q + re**q)
+           DDS6 = (1 - Exp(-(rhoAB*XO(i))*(bds/6d0 + (cds*rhoAB*XO(i))/Sqrt(6d0))))**(6d0+s)
+           DDS8 = (1 - Exp(-(rhoAB*XO(i))*(bds/8d0 + (cds*rhoAB*XO(i))/Sqrt(8d0))))**(8d0+s)
+           DDS10 = (1 - Exp(-(rhoAB*XO(i))*(bds/10d0 + (cds*rhoAB*XO(i))/Sqrt(10d0))))**(10d0+s)
+           uLR = DDS6*(C6/(XO(i)**6.0d0)) + DDS8*(C8/(XO(i)**8.0d0)) + DDS10*(C10/(XO(i)**10.0d0))
+           ypref = (XO(i)**p - ref**p)/(XO(i)**p + ref**p)
+           ypeq = (XO(i)**p - re**p)/(XO(i)**p + re**p)
+           yqref = (XO(i)**q - ref**q)/(XO(i)**q + ref**q)
            phiMLR = 0d0
            phiMLRtemp = 0d0
            
            do iphi = 0, N-1
-              phiMlRtemp = (1 - ym)*(A(iphi+1))*yq**iphi
+              phiMlRtemp = (1 - ypref)*(A(iphi+1))*yqref**iphi
               phiMLR = phiMLR + phiMLRtemp
            enddo
 
-           phiMLR = phiMLR + ym*phiinf
+           phiMLR = phiMLR + ypref*phiinf
            
-           VV(i) = De*(1-(uLR/uLRre)*Exp(-phiMLR*ypalpha))**2 - De
+           VV(i) = De*(1-(uLR/uLRre)*Exp(-phiMLR*ypeq))**2 - De
            
         enddo
         
