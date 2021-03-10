@@ -561,7 +561,7 @@ program main
 
   ! determine the size of the one-atom hyperfine/zeeman hamiltonian
   NBgrid = 1000
-  NEgrid = 20
+  NEgrid = 200
   Bmin = 0d0
   Bmax = 1200d0
   !make the magnetic field grid and energy grid
@@ -679,7 +679,7 @@ program main
   enddo
   open(unit = 50, file = "Rb85FR.dat") 
 
-  do iB = 1, NBgrid 
+  do iB = 1, 1!NBgrid 
      yi(:,:)=ystart(:,:)
      call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
      HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
@@ -689,7 +689,7 @@ program main
      Eth(:)=EVAL(:)
      Write(20,*) Bgrid(iB), Eth
 
-     do iE = 1, 1
+     do iE = 1, NEgrid
         NumOpen=0        
         Energy = Eth(1) + Egrid(iE)!*nKPerHartree
         !write(6,*) "energy = ", energy
@@ -720,8 +720,9 @@ program main
        ! write(70,*) Bgrid(iB), ((yf(i,j), i = 1,size2), j = 1,size2)
         call CalcK(yf,R(NPP),SD,mu,3d0,1d0,Energy,Eth,size2,NumOpen)
         !     write(2000+iB,*) Bgrid(iB), (SD%K(j,j), j=1,size2)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-       write(50,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*muref*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-        !        write(50,'(100d20.10)') Egrid(iE), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        !write(50,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*muref*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        write(50,'(100d20.10)') Egrid(iE), SD%delta, SD%sindel, SD%sigma!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        write(6,'(100d20.10)') Egrid(iE), SD%delta, SD%sindel, SD%sigma!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
         !        write(6,'(100d20.10)') Egrid(iE), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
        ! write(6,'(100d16.6)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
      enddo
@@ -1233,7 +1234,8 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
 
   amuAU = 1.66053906660d-27/9.109383701528d-31  !mass conversion to atomic units
   s = 1                    !electronic spin
-  
+
+  ! Ahf is the hyperfine coupling in MHz.  gu
   select case (ISTATE)
   case (1) !Rb-87
      gi = -0.000995141410d0

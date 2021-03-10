@@ -583,10 +583,10 @@ program main
   call setupam
 
   ! determine the size of the one-atom hyperfine/zeeman hamiltonian
-  NBgrid = 10
-  NEgrid = 20
+  NBgrid = 5000
+  NEgrid = 10
   Bmin = 0d0
-  Bmax = 1000d0
+  Bmax = 1200d0
   !make the magnetic field grid and energy grid
   allocate(Bgrid(NBgrid),Egrid(NEgrid))
   call GridMaker(Bgrid,NBgrid,Bmin,Bmax,'linear')
@@ -665,7 +665,7 @@ program main
   sym = 1 ! set to +1 for bosonic K-39, Rb-85, and Rb-87; -1 for fermionic K-40; 0 for any mixed collision
   lwave = 0 ! s wave collisions
   xmin = 0.03d0 ! use atomic units here (bohr)
-  xmax = 40.0d0 ! use atomic units here (bohr)
+  xmax = 400.0d0 ! use atomic units here (bohr)
   dx = (xmax-xmin)/(dble(NPP-1))
   do iR=1, NPP
      R(iR) = xmin + (iR-1)*dx
@@ -766,16 +766,16 @@ program main
         !     write(6,*) "yi = "
         !     call printmatrix(yi,size2,size2,6) 
         call logderprop(mured,Energy,identity,weights,NPP,yi,yf,R,RotatedVHZ,size2)
-        write(6,*) "Energy = ", Energy, "B-field = ", Bgrid(iB), "yf = "
+        write(6,*) "Collision Energy = ", Energy-Eth(1), "B-field = ", Bgrid(iB), "yf = "
         call printmatrix(yf,size2,size2,6)
         write(200,'(f20.10)') Bgrid(iB)
         call printmatrix(yf,size2,size2,200)
-        !call CalcK(yf,R(NPP),SD,mured,3d0,1d0,Energy,Eth,size2,NumOpen)
-        !     write(2000+iB,*) Bgrid(iB), (SD%K(j,j), j=1,size2)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-        !write(50,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-        !        write(50,'(100d20.10)') Egrid(iE), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-        !        write(6,'(100d20.10)') Egrid(iE), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-        !write(6,'(100d20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        call CalcK(yf,R(NPP),SD,mured,3d0,1d0,Energy,Eth,size2,NumOpen)
+        !write(2000+iB,*) Bgrid(iB), (SD%K(j,j), j=1,size2)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        write(50,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        !write(50,'(100d20.10)') Egrid(iE), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        !write(6,'(100d20.10)') Egrid(iE), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        write(6,'(100d20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
      enddo
   enddo
   close(50)
