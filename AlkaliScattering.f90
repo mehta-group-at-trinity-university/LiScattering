@@ -129,12 +129,13 @@ CONTAINS
    call CompSqrMatInv(tmp,no)
    SD%S = MATMUL(SD%S,tmp)
    SD%T = -II*0.5d0*(SD%S-Identity(1:no,1:no))
-   SD%sigma = conjg(SD%T)*SD%T*Pi/(2d0*mu*EE)
+   !SD%sigma = conjg(SD%T)*SD%T*Pi/(2d0*mu*EE)
 
    SD%tandel = SD%K(1,1)
    SD%delta = atan(SD%tandel)
    SD%sindel = sin(SD%delta)
    SD%sin2del = SD%sindel**2
+   SD%sigma = (4*pi/(2d0*mu*(EE-Eth(1))))*SD%sin2del
 
  END SUBROUTINE CalcK
 end module scattering
@@ -551,7 +552,7 @@ program main
   type(hf1atom), allocatable :: hf1(:) 
   TYPE(ScatData) :: SD
 
-  ISTATE = 1  !select atomic species
+  ISTATE = 8  !select atomic species
 
   call AtomData (ISTATE, AHf1, nspin1, espin1, gi1, MU, MUREF, mass1)  !atom 1 data (and atom 2 for identical particles)
   !write(6,*) AHf1, nspin1, espin1, gi1, MU, MUREF, mass1
@@ -560,14 +561,16 @@ program main
   call setupam
 
   ! determine the size of the one-atom hyperfine/zeeman hamiltonian
-  NBgrid = 1000
-  NEgrid = 200
+
+  NBgrid = 300
+  NEgrid = 1000
+
   Bmin = 0d0
-  Bmax = 1200d0
+  Bmax = 1000d0
   !make the magnetic field grid and energy grid
   allocate(Bgrid(NBgrid),Egrid(NEgrid))
   call GridMaker(Bgrid,NBgrid,Bmin,Bmax,'linear')
-  call GridMaker(Egrid,NEgrid,1d-15,1d-10,'linear') ! measure the collision energy in Hartree
+  call GridMaker(Egrid,NEgrid,1d-15,1.6d-7,'linear') ! measure the collision energy in Hartree
   !------------------------------------------------------------------
   !call once with size1 = 0 to determine the size of the basis.
   size1 = 0
@@ -600,14 +603,14 @@ program main
   deallocate(EVEC,EVAL,HHZ)
   !____________________________________________________________________
   
-  NPP = 100000
+  NPP = 250000
   VLIM = 0d0
   allocate(XO(NPP),R(NPP),weights(NPP),VSinglet(NPP),VTriplet(NPP),RM2(NPP))
 
-  sym = 1 ! set to +1 for bosonic K-39, Rb-85, Rb-87, and Na-23; -1 for fermionic K-40; 0 for any mixed collision
+  sym = 1 ! set to +1 for bosonic K-39, Rb-85, Rb-87, Cs-133, Li-7 and Na-23; -1 for fermionic K-40 and Li-6; 0 for any mixed collision
   lwave = 0 ! s wave collisions
   xmin = 0.03d0 ! use atomic units here (bohr)
-  xmax = 600d0 ! use atomic units here (bohr)
+  xmax = 900d0 ! use atomic units here (bohr)
   dx = (xmax-xmin)/(dble(NPP-1))
   do iR=1, NPP
      R(iR) = xmin + (iR-1)*dx
@@ -638,7 +641,7 @@ program main
   enddo
 
   
-  mtot = 4  !multiply mtot by 2
+  mtot = 12  !multiply mtot by 2
   
   call MakeHF2Basis(nspin1, espin1, nspin1, espin1, sym, lwave, mtot, size2)
   write(6,*) "size of the symmetrized 2-atom hyperfine basis = ", size2
@@ -656,8 +659,8 @@ program main
   write(6,*) "-------------------------------"
   call printmatrix(TPmat,size2,size2,6)
 
-  
-  
+  !STOP
+    
   allocate(VHZ(size2,size2,NPP),RotatedVHZ(size2,size2,NPP),TEMP(size2,size2),AsymChannels(size2,size2))
   allocate(HHZ2(size2,size2))
   allocate(EVEC(size2,size2),EVAL(size2))
@@ -689,7 +692,9 @@ program main
      Eth(:)=EVAL(:)
      Write(20,*) Bgrid(iB), Eth
 
+
      do iE = 1, NEgrid
+
         NumOpen=0        
         Energy = Eth(1) + Egrid(iE)!*nKPerHartree
         !write(6,*) "energy = ", energy
@@ -720,11 +725,16 @@ program main
        ! write(70,*) Bgrid(iB), ((yf(i,j), i = 1,size2), j = 1,size2)
         call CalcK(yf,R(NPP),SD,mu,3d0,1d0,Energy,Eth,size2,NumOpen)
         !     write(2000+iB,*) Bgrid(iB), (SD%K(j,j), j=1,size2)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+
         !write(50,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*muref*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
         write(50,'(100d20.10)') Egrid(iE), SD%delta, SD%sindel, SD%sigma!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
         write(6,'(100d20.10)') Egrid(iE), SD%delta, SD%sindel, SD%sigma!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        
+        !write(50,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+               !write(50,'(100d20.10)') Egrid(iE)*HartreePermK, SD%sigma*(Bohrpercm**2)!(-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+
         !        write(6,'(100d20.10)') Egrid(iE), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-       ! write(6,'(100d16.6)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        !write(6,'(100d16.6)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
      enddo
   enddo
   close(50)
@@ -944,21 +954,24 @@ end subroutine CalcMilne
 !Subroutine to setup the effect adiabatic potential energy function for any
 !one of the electronic states for the alkali homonuclear molecules:
 ! for ground state singlet:
-!   87-Rb2 [ISTATE = 1; ESTATE = 1]    
-!   85-Rb2 [ISTATE = 2; ESTATE = 1]
+!   87-Rb2 [ISTATE = 1; ESTATE = 1]   from [Strauss et al.,] 
+!   85-Rb2 [ISTATE = 2; ESTATE = 1]   from [Strauss et al.,]
 !   39-K2 [ISTATE = 3; ESTATE = 1]    from [Falke et al., Phys. Rev. a 78, 012503 (2008)]
 !   40-K2 [ISTATE = 4; ESTATE = 1]    from [Falke et al., Phys. Rev. a 78, 012503 (2008)]
 !   23-Na2 [ISTATE = 5; ESTATE = 1]   from [Knoop et al., Phys. Rev. A 83, 042704 (2011)]
 !   6-Li2 [ISTATE = 6; ESTATE = 1]    from LeRoy POTGENLI2.f
 !   7-Li2 [ISTATE = 7; ESTATE = 1]    from LeRoy POTGENLI2.f
+! 133-Cs2 [ISTATE = 8; ESTATE = 1]    from [J Baldwin, MSc. Thesis from University of Waterloo (2012)]
+!
 ! for ground state triplet:
-!   87-Rb2 [ISTATE = 1; ESTATE = 3]    from [
-!   85-Rb2 [ISTATE = 2; ESTATE = 3]
+!   87-Rb2 [ISTATE = 1; ESTATE = 3]    from [Strauss et al.,]
+!   85-Rb2 [ISTATE = 2; ESTATE = 3]    from [Strauss et al., ]
 !   39-K2 [ISTATE = 3; ESTATE = 3]     from [Falke et al., Phys. Rev. a 78, 012503 (2008)]
 !   40-K2 [ISTATE = 4; ESTATE = 3]     from [Falke et al., Phys. Rev. a 78, 012503 (2008)]
 !   23-Na2 [ISTATE = 5; ESTATE = 3]    from [Knoop et al., Phys. Rev. A 83, 042704 (2011)]
 !   6-Li2 [ISTATE = 6; ESTATE = 3]    from LeRoy POTGENLI2.f
 !   7-Li2 [ISTATE = 7; ESTATE = 3]    from LeRoy POTGENLI2.f
+! 133-Cs2 [ISTATE = 8; ESTATE = 3]    from [J Baldwin, MSc. Thesis from University of Waterloo (2012)]
 !
 ! ON INPUT:
 !  *integer ISTATE specifies the choice of the atomic species
@@ -977,11 +990,14 @@ end subroutine CalcMilne
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, RM2)
   implicit none
-  integer NPP, ISTATE, ESTATE, i, j, N, IMN1, IMN2
+  integer NPP, ISTATE, ESTATE, i, j, N, IMN1, IMN2, iphi
   double precision XO(NPP), VV(NPP), RM2(NPP)
   double precision MU, VLIM, RSR, RLR, NS, U1, U2, B, RM, xi, MUREF
   double precision C6, C8, C10, C26, Aex, gamma, beta, nu0, nu1
   double precision, allocatable :: A(:)
+  double precision De, re, ref, alpha, p, q, s, bds, cds, rhoAB
+  double precision yqref, ypref, ypeq, uLR, phiMLR, phiMLRtemp
+  double precision phiinf, uLRre, DDS6, DDS8, DDS10, DDS6re, DDS8re, DDS10re
 
   if (ESTATE .EQ. 1) then  !Ground state singlet 
      select case (ISTATE)  
@@ -1068,15 +1084,33 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, RM2)
               -0.131052566070353687d13, -0.385189954553600769d11, 0.135760501276292969d13, &
               -0.108790546442390417d13, 0.282033835345282288d12/)
 
-     case (6)
+     case (6) !Lithium-6
          IMN1 = 6
          IMN2 = IMN1
          call POTGENLI2(1,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
          
-     case (7)
+     case (7) !Lithium-7
         IMN1 = 7
         IMN2 = IMN1
         call POTGENLI2(1,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
+
+     case (8) !Cesium
+        N = 23
+        allocate(A(N))
+        p = 5d0
+        q = p
+        phiinf = 0.9469102524695
+        re = 4.647967771d0
+        De = 3650.041851d0
+        C6 = 3.3164d7
+        C8 = 1.38d9
+        C10 = 6.01d10
+        ref = 6.2d0
+        A = (/0.0949905d0, -0.372698d0, -0.04090736d0, 0.129657d0, &
+             0.1486696d0, 0.171395d0, 0.295883d0, 0.547375d0, &
+             -1.14615d0, -2.7883d0, 9.98557d0, 1.69149d1, -4.17899d1, &
+             -5.76544d1, 1.08881d2, 1.24037d2, -1.716d2, -1.6159d2, &
+             1.5781d2, 1.175d2, -7.5d1, -3.67d1, 1.3d1/)
         
      case default
         write(6,*) "Invalid ISTATE value"
@@ -1135,6 +1169,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, RM2)
                 0.15913304648629d10,-0.24792546567713d10,0.20326031881106d10,-0.68044508325774d9/)
            nu0 = 0.23803737d0
            nu1 = 0.0d0
+           
         case (5) !Sodium
          N = 9
          allocate(A(N))
@@ -1157,14 +1192,31 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, RM2)
          A = (/-172.90517d0, 0.355691862122135882d1, 0.910756126766199941d3, &
               -0.460619207631179620d3, 0.910227086296958532d3, -0.296064051187991117d4, &
               -0.496106499110302684d4, 0.147539144920038962d5, -0.819923776793683828d4/)
-      case (6)
+         
+      case (6) !Lithium-6
          IMN1 = 6
          IMN2 = IMN1
-        call POTGENLI2(2,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
-     case (7)
+         call POTGENLI2(2,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
+         
+     case (7) !Lithium-7
         IMN1 = 7
         IMN2 = IMN1
         call POTGENLI2(2,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
+        
+     case (8) !Cesium 
+        N = 5
+        allocate(A(N))
+        p = 5d0
+        q = p
+        phiinf = -3.971077022867d-1
+        re = 6.226182057299d0
+        De = 279.2222367314d0
+        C6 = 3.3164d7
+        C8 = 1.38d9
+        C10 = 6.01d10
+        ref = 8.7005d0
+        A = (/-4.324429443667d-1, -9.206933982533d-2, -6.845846740405d-2, &
+             -1.308218973148d-2, 3.457944786933d-1/)
          
      case default
         write(6,*) "Invalid ISTATE value"
@@ -1176,31 +1228,69 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, RM2)
   end if
 
   if((ISTATE.NE.6).AND.(ISTATE.NE.7))then
-     do i = 1, NPP
-        if(XO(i) .LE. RSR) then
-           VV(i) = U1 + U2/(XO(i)**NS)
-        else if ((XO(i) .GE. RSR) .AND. (XO(i) .LE. RLR)) then
-           xi = (XO(i) - RM)/(XO(i) + B*RM)
-           VV(i) = 0.0d0
+     if (ISTATE.EQ.8) then
+        s = -1d0
+        bds = 3.30d0
+        cds = 0.423d0
+        rhoAB = 0.434d0
 
-           do j = 0, N-1
-              VV(i) = VV(i) + A(j+1)*xi**j
-           enddo
-        else
-           VV(i) = -C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0)  - C26/(XO(i)**26.0d0)
-
-           if(ESTATE.EQ.1) then
-              VV(i) = VV(i) - Aex*(XO(i)**gamma)*EXP((-1)*beta*XO(i))
-           elseif(ESTATE.EQ.3) then
-              VV(i) = VV(i) + Aex*(XO(i)**gamma)*EXP((-1)*beta*XO(i))
-           else
-              Write(6,*) "Invalid ESTATE value"
-           endif
+        DDS6re = (1 - Exp(-(rhoAB*re)*((bds/6d0) + (cds*rhoAB*re)/Sqrt(6d0))))**(6d0+s)
+        DDS8re = (1 - Exp(-(rhoAB*re)*((bds/8d0) + (cds*rhoAB*re)/Sqrt(8d0))))**(8d0+s)
+        DDS10re = (1 - Exp(-(rhoAB*re)*((bds/10d0) + (cds*rhoAB*re)/Sqrt(10d0))))**(10d0+s)
         
-        endif
+        uLRre = DDS6re*(C6/(re**6.0d0)) + DDS8re*(C8/(re**8.0d0)) + DDS10re*(C10/(re**10.0d0))
+        
+        do i = 1, NPP
+           DDS6 = (1 - Exp(-(rhoAB*XO(i))*(bds/6d0 + (cds*rhoAB*XO(i))/Sqrt(6d0))))**(6d0+s)
+           DDS8 = (1 - Exp(-(rhoAB*XO(i))*(bds/8d0 + (cds*rhoAB*XO(i))/Sqrt(8d0))))**(8d0+s)
+           DDS10 = (1 - Exp(-(rhoAB*XO(i))*(bds/10d0 + (cds*rhoAB*XO(i))/Sqrt(10d0))))**(10d0+s)
+           uLR = DDS6*(C6/(XO(i)**6.0d0)) + DDS8*(C8/(XO(i)**8.0d0)) + DDS10*(C10/(XO(i)**10.0d0))
+           ypref = (XO(i)**p - ref**p)/(XO(i)**p + ref**p)
+           ypeq = (XO(i)**p - re**p)/(XO(i)**p + re**p)
+           yqref = (XO(i)**q - ref**q)/(XO(i)**q + ref**q)
+           phiMLR = 0d0
+           phiMLRtemp = 0d0
+           
+           do iphi = 0, N-1
+              phiMlRtemp = (1 - ypref)*(A(iphi+1))*yqref**iphi
+              phiMLR = phiMLR + phiMLRtemp
+           enddo
 
-        VV(i) = VV(i) + (nu0 + nu1*((XO(i) - RM)/(XO(i) + B*RM)))*(1 - MU/MUREF)*((2*RM)/(XO(i)+RM))**6
-     enddo
+           phiMLR = phiMLR + ypref*phiinf
+           
+           VV(i) = De*(1-(uLR/uLRre)*Exp(-phiMLR*ypeq))**2 - De
+           
+        enddo
+        
+     else  
+        do i = 1, NPP
+           if(XO(i) .LE. RSR) then
+              VV(i) = U1 + U2/(XO(i)**NS)
+           else if ((XO(i) .GE. RSR) .AND. (XO(i) .LE. RLR)) then
+              xi = (XO(i) - RM)/(XO(i) + B*RM)
+              VV(i) = 0.0d0
+
+              do j = 0, N-1
+                 VV(i) = VV(i) + A(j+1)*xi**j
+              enddo
+           else
+              VV(i) = -C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0)  - C26/(XO(i)**26.0d0)
+
+              if(ESTATE.EQ.1) then
+                 VV(i) = VV(i) - Aex*(XO(i)**gamma)*EXP((-1)*beta*XO(i))
+              elseif(ESTATE.EQ.3) then
+                 VV(i) = VV(i) + Aex*(XO(i)**gamma)*EXP((-1)*beta*XO(i))
+              else
+                 Write(6,*) "Invalid ESTATE value"
+              endif
+
+           endif
+           
+           VV(i) = VV(i) + (nu0 + nu1*((XO(i) - RM)/(XO(i) + B*RM)))*(1 - MU/MUREF)*((2*RM)/(XO(i)+RM))**6
+        enddo
+        
+     endif
+     
   endif
 
   
@@ -1217,6 +1307,7 @@ END SUBROUTINE
 !   23-Na [ISTATE = 5]
 !    6-Li [ISTATE = 6]
 !    7-Li [ISTATE = 7]
+!  133-Cs [ISTATE = 8]
 !
 ! The reduced mass (MU) and reduced mass for the reference isotopologue (MUREF) are for the
 ! homonuclear molecules 
@@ -1290,6 +1381,14 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      i = 3
      AHf = 401.75204335d0
      mass = (7.016004*amuAU)
+     MU = mass/2
+     MUREF = MU
+
+  case(8)  !Cs-133
+     gi = -0.0003988539552
+     i = 7
+     AHf = 2298.1579425
+     mass = (132.905451933*amuAU)
      MU = mass/2
      MUREF = MU
      
