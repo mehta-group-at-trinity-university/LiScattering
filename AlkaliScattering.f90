@@ -538,11 +538,12 @@ program main
   integer i1,i2,s1,s2,S,sym,size1,size2,NBgrid,NEgrid,mtot, lwave,NumOpen
   double precision, allocatable :: XO(:), VSinglet(:), VTriplet(:), RM2(:), R(:)
   double precision, allocatable :: weights(:),ystart(:,:),yi(:,:),yf(:,:),Kmat(:,:),identity(:,:)
-  double precision, allocatable :: HHZ(:,:), Bgrid(:),Egrid(:), EVAL(:), EVEC(:,:),RotatedVHZ(:,:,:),TEMP(:,:)
-  double precision, allocatable :: SPmat(:,:), TPmat(:,:), VHZ(:,:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:)
+  double precision, allocatable :: HHZ(:,:), Bgrid(:),Egrid(:), EVAL(:), EVEC(:,:),RotatedVHZ(:,:,:),TEMP(:,:),EThreshMat(:,:)
+  double precision, allocatable :: SPmat(:,:), Sdressed(:,:), Tdressed(:,:), TPmat(:,:)
+  double precision, allocatable :: VHZ(:,:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:)
   double precision VLIM,xmin,xmax,dx
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2
-  double precision Bmin, Bmax, CGhf,Energy,h
+  double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h
   integer NA,iE
   double precision RX, RF
   double precision, allocatable :: alpha(:,:)
@@ -552,7 +553,7 @@ program main
   type(hf1atom), allocatable :: hf1(:) 
   TYPE(ScatData) :: SD
 
-  ISTATE = 8  !select atomic species
+  ISTATE = 2  !select atomic species
 
   call AtomData (ISTATE, AHf1, nspin1, espin1, gi1, MU, MUREF, mass1)  !atom 1 data (and atom 2 for identical particles)
   !write(6,*) AHf1, nspin1, espin1, gi1, MU, MUREF, mass1
@@ -563,19 +564,21 @@ program main
   ! determine the size of the one-atom hyperfine/zeeman hamiltonian
 
   NBgrid = 300
-  NEgrid = 1000
+  NEgrid = 500
 
   Bmin = 0d0
   Bmax = 1000d0
+  Emin = 2d0/HartreePermK
+  Emax = 50.d0/HartreePermK
   !make the magnetic field grid and energy grid
   allocate(Bgrid(NBgrid),Egrid(NEgrid))
   call GridMaker(Bgrid,NBgrid,Bmin,Bmax,'linear')
-  call GridMaker(Egrid,NEgrid,1d-15,1.6d-7,'linear') ! measure the collision energy in Hartree
+  call GridMaker(Egrid,NEgrid,Emin,Emax,'linear') ! measure the collision energy in Hartree
   !------------------------------------------------------------------
   !call once with size1 = 0 to determine the size of the basis.
   size1 = 0
   call MakeHF1Basis(nspin1,espin1,size1,hf1)
-  write(6,*) "size of the Rb-87 1-atom hyperfine basis = ",size1
+  write(6,*) "size of the 1-atom hyperfine basis = ",size1
   !allocate memory for the basis
   allocate(hf1(size1),EVEC(size1,size1),EVAL(size1),HHZ(size1,size1))
   call MakeHF1Basis(nspin1,espin1,size1,hf1)
@@ -603,14 +606,14 @@ program main
   deallocate(EVEC,EVAL,HHZ)
   !____________________________________________________________________
   
-  NPP = 250000
+  NPP = 1000000
   VLIM = 0d0
   allocate(XO(NPP),R(NPP),weights(NPP),VSinglet(NPP),VTriplet(NPP),RM2(NPP))
 
   sym = 1 ! set to +1 for bosonic K-39, Rb-85, Rb-87, Cs-133, Li-7 and Na-23; -1 for fermionic K-40 and Li-6; 0 for any mixed collision
   lwave = 0 ! s wave collisions
   xmin = 0.03d0 ! use atomic units here (bohr)
-  xmax = 900d0 ! use atomic units here (bohr)
+  xmax = 1000d0 ! use atomic units here (bohr)
   dx = (xmax-xmin)/(dble(NPP-1))
   do iR=1, NPP
      R(iR) = xmin + (iR-1)*dx
@@ -641,12 +644,13 @@ program main
   enddo
 
   
-  mtot = 12  !multiply mtot by 2
+  mtot = 8  !multiply mtot by 2
   
   call MakeHF2Basis(nspin1, espin1, nspin1, espin1, sym, lwave, mtot, size2)
   write(6,*) "size of the symmetrized 2-atom hyperfine basis = ", size2
   allocate(SPmat(size2,size2), TPmat(size2,size2))
-
+  allocate(Sdressed(size2,size2), Tdressed(size2,size2))
+  allocate(EThreshMat(size2,size2))
   S = 0
   call MakeSTHFProj(S, nspin1, nspin1, espin1, espin1, hf2symTempGlobal, size2, SPmat)
   write(6,*) "The singlet projection matrix:"
@@ -681,7 +685,7 @@ program main
      ystart(i,i)=1d20
   enddo
   open(unit = 50, file = "Rb85FR.dat") 
-
+  EThreshMat(:,:) = 0d0
   do iB = 1, 1!NBgrid 
      yi(:,:)=ystart(:,:)
      call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
@@ -690,8 +694,20 @@ program main
      VHZ(:,:,NPP) = VSinglet(NPP)*SPmat(:,:) + VTriplet(NPP)*TPmat(:,:) + HHZ2(:,:) 
      call MyDSYEV(VHZ(:,:,NPP),size2,EVAL,AsymChannels)
      Eth(:)=EVAL(:)
-     Write(20,*) Bgrid(iB), Eth
+     do i=1,size2
+        EThreshMat(i,i) = Eth(i)
+     enddo
 
+     Write(20,*) Bgrid(iB), Eth
+     !----- Rotate into the asymptotic eigenstates (Use the B-field dressed states) -------!
+     !Rotate the singlet projection operator
+     call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,SPmat,size2,0d0,TEMP,size2)
+     call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Sdressed,size2)
+
+     !Rotate the triplet projection operator
+     call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,TPmat,size2,0d0,TEMP,size2)
+     call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Tdressed,size2)
+     !-----------------------------------------------------!
 
      do iE = 1, NEgrid
 
@@ -703,18 +719,16 @@ program main
         enddo
 
         do iR = 1, NPP
-           VHZ(:,:,iR) = VSinglet(iR)*SPmat(:,:) + VTriplet(iR)*TPmat(:,:) + HHZ2(:,:)
+           !VHZ(:,:,iR) = VSinglet(iR)*SPmat(:,:) + VTriplet(iR)*TPmat(:,:) + HHZ2(:,:)
+           RotatedVHZ(:,:,iR) = VSinglet(iR)*Sdressed(:,:) + VTriplet(iR)*Tdressed(:,:) + EThreshMat(:,:)
            !call MyDSYEV(VHZ(:,:,iR),size2,EVAL,EVEC)  ! Calculate the adiabatic curves
 
 
            !----- Rotate into the asymptotic eigenstates -------!
-           call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,VHZ(:,:,iR),size2,0d0,TEMP,size2)
-           call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,RotatedVHZ(:,:,iR),size2)
+!           call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,VHZ(:,:,iR),size2,0d0,TEMP,size2)
+ !          call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,RotatedVHZ(:,:,iR),size2)
            !-----------------------------------------------------!
            !write(1000+iB,*) R(iR), (RotatedVHZ(n,n,iR), n=1,NumOpen+1)!EVAL(:)!VHZ(:,:,iR)
-
-
- 
         enddo
 
         !     write(6,*) "yi = "
@@ -727,11 +741,11 @@ program main
         !     write(2000+iB,*) Bgrid(iB), (SD%K(j,j), j=1,size2)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
 
         !write(50,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*muref*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-        write(50,'(100d20.10)') Egrid(iE), SD%delta, SD%sindel, SD%sigma!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-        write(6,'(100d20.10)') Egrid(iE), SD%delta, SD%sindel, SD%sigma!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        !write(50,'(100d20.10)') Egrid(iE), SD%delta, SD%sindel, SD%sigma!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        write(6,'(100d20.10)') Egrid(iE), SD%delta, SD%sindel, 2d0*SD%sigma!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
         
         !write(50,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-               !write(50,'(100d20.10)') Egrid(iE)*HartreePermK, SD%sigma*(Bohrpercm**2)!(-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        write(50,'(100d20.10)') Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)!(-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
 
         !        write(6,'(100d20.10)') Egrid(iE), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
         !write(6,'(100d16.6)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
