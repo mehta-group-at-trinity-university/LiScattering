@@ -545,7 +545,7 @@ program main
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2
   double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h
   integer NA,iE
-  double precision RX, RF
+  double precision RX, RF, Cvals(3)
   double precision, allocatable :: alpha(:,:)
   double precision, external :: VLRLi, rint
   type(hf1atom) a1, a2
@@ -626,8 +626,8 @@ program main
   ESTATE = 1 
   ! Find the "singlet" X(^1\Sigma_g^+) curve
 
-  call SetupPotential(ISTATE,ESTATE,muref,muref,NPP,VLIM,XO,VSinglet,RM2)
-
+  call SetupPotential(ISTATE,ESTATE,muref,muref,NPP,VLIM,XO,VSinglet,RM2,Cvals)
+  
   do iR=1, NPP
      VSinglet(iR) = VSinglet(iR)*InvcmPerHartree
      write(10,*) R(iR), VSinglet(iR)     
@@ -636,7 +636,7 @@ program main
   ESTATE = 3
   !Find the triplet potential
 
-  call SetupPotential(ISTATE,ESTATE,muref,muref,NPP,VLIM,XO,VTriplet,RM2)
+  call SetupPotential(ISTATE,ESTATE,muref,muref,NPP,VLIM,XO,VTriplet,RM2,Cvals)
   
   do iR=1, NPP
      VTriplet(iR) = VTriplet(iR)*InvcmPerHartree
@@ -868,98 +868,99 @@ SUBROUTINE GridMaker(grid,numpts,E1,E2,scale)
   ENDIF
 END SUBROUTINE GridMaker
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine RK4StepMilne(y,mu,lwave,energy,h,R)
+subroutine RK4StepMilne(y,mu,lwave,energy,h,R,Cvals)
   implicit none
-  double precision h,y(2),mu,energy,f(2),k1(2),k2(2),k3(2),k4(2),R
+  double precision h,y(2),mu,energy,f(2),k1(2),k2(2),k3(2),k4(2),R,Cvals(3)
   integer lwave
 
-  call dydR_Milne(R,y,mu,lwave,energy,f)
+  call dydR_Milne(R,y,mu,lwave,energy,f,Cvals)
   k1 = h * f
-  call dydR_Milne(R + 0.5d0*h,y,mu,lwave,energy,f)
+  call dydR_Milne(R + 0.5d0*h,y,mu,lwave,energy,f,Cvals)
   k2 = h * f
-  call dydR_Milne(R + 0.5d0*h,y,mu,lwave,energy,f)
+  call dydR_Milne(R + 0.5d0*h,y,mu,lwave,energy,f,Cvals)
   k3 = h * f
-  call dydR_Milne(R + h,y,mu,lwave,energy,f)
+  call dydR_Milne(R + h,y,mu,lwave,energy,f,Cvals)
   k4 = h * f
 
   y = y + k1/6.0d0 + k2/3.0d0 + k3/3.0d0 + k4/6.0d0
 
 end subroutine RK4StepMilne
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-double precision function VLRLi(mu,lwave,R)
+double precision function VLR(mu,lwave,R,Cvals)
   implicit none
   integer lwave
   double precision R, mu
+  double precision Cvals(3)
   ! in atomic units
 !  double precision, parameter :: C6=1393.39D0, C8=83425.5D0, C10=7.37211D6
   ! in van der Waals units
   !double precision, parameter :: C6=0.985829, C8=0.0138825, C10=0.000288538516
-  double precision, parameter :: C6=1d0, C8=0d0, C10=0d0
+!  double precision, parameter :: C6=1d0, C8=0d0, C10=0d0
   
-  VLRLi = -C6/R**6 - C8/R**8 - C10/R**10 + lwave*(lwave+1)/(2*mu*R*R)
+  VLR = -Cvals(1)/R**6 - Cvals(2)/R**8 - Cvals(3)/R**10 + lwave*(lwave+1)/(2*mu*R*R)
   ! van der Waals units (mu->1/2)
   !VLRLi = -C6/R**6 - C8/R**8 - C10/R**10 + lwave*(lwave+1)/(R*R)
   
-end function VLRLi
+end function VLR
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-double precision function VLRLiPrime(mu,lwave,R)
+double precision function VLRPrime(mu,lwave,R,Cvals)
   implicit none
   integer lwave
-  double precision R, mu
+  double precision R, mu, Cvals(3)
   ! in atomic units
 !  double precision, parameter :: C6=1393.39D0, C8=83425.5D0, C10=7.37211D6
   ! in van der Waals units
   !double precision, parameter :: C6=0.985829, C8=0.0138825, C10=0.000288538516
-  double precision, parameter :: C6=1d0, C8=0d0, C10=0d0
+!  double precision, parameter :: C6=1d0, C8=0d0, C10=0d0
   
-  VLRLiPrime = +6*C6/R**7 + 8*C8/R**9 + 10*C10/R**11 - 2*lwave*(lwave+1)/(2*mu*R*R*R)
+  VLRPrime = +6*Cvals(1)/R**7 + 8*Cvals(2)/R**9 + 10*Cvals(3)/R**11 - 2*lwave*(lwave+1)/(2*mu*R*R*R)
   ! van der Waals units (mu->1/2)
-  !VLRLi = -C6/R**6 - C8/R**8 - C10/R**10 + lwave*(lwave+1)/(R*R)
+  !VLR = -C6/R**6 - C8/R**8 - C10/R**10 + lwave*(lwave+1)/(R*R)
   
-end function VLRLiPrime
+end function VLRPrime
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-double precision function ksqrLRLi(energy,mu,lwave,R)
+double precision function ksqrLR(energy,mu,lwave,R,Cvals)
   implicit none
-  double precision mu, R, energy
-  double precision, external :: VLRLi
+  double precision mu, R, energy, Cvals(3)
+  double precision, external :: VLR
   integer lwave
-  ksqrLRLi = 2d0*mu*(energy - VLRLi(mu,lwave,R))
-end function ksqrLRLi
+  ksqrLR = 2d0*mu*(energy - VLR(mu,lwave,R,Cvals))
+end function ksqrLR
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine dydR_Milne(R,y,mu,lwave,energy,f)
+subroutine dydR_Milne(R,y,mu,lwave,energy,f,Cvals)
   implicit none
   integer lwave
-  double precision R,y(2),mu,energy,f(2)
-  double precision, external :: ksqrLRLi
+  double precision R,y(2),mu,energy,f(2),Cvals(3)
+  double precision, external :: ksqrLR
   
   f(1) = y(2)
-  f(2) = y(1)**(-3) - ksqrLRLi(energy,mu,lwave,R)*y(1)
+  f(2) = y(1)**(-3) - ksqrLR(energy,mu,lwave,R,Cvals)*y(1)
   
 end subroutine dydR_Milne
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine CalcMilne(R,alpha,NA,energy,lwave,mu)
+subroutine CalcMilne(R,alpha,NA,energy,lwave,mu,Cvals)
   implicit none
-  double precision RX, RF, h, energy, y(2), mu
+  double precision RX, RF, h, energy, y(2), mu,Cvals(3)
   integer NA, iR, lwave
   double precision alpha(NA,2), R(NA)
-  double precision, external :: ksqrLRLi, VLRLi, VLRLiPrime
+  double precision, external :: ksqrLR, VLR, VLRPrime
   ! make a radial grid
 
   h = R(2)-R(1)
   RX=R(1)
   RF=R(NA)
   ! set the initial conditions (WKB-like boundary conditions at RX)
-  alpha(1,1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLRLi(mu,lwave,RX))/RX**2))**(-0.25d0)
+  alpha(1,1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
   
-  !ksqrLRLi(energy,mu,lwave,RX)**(-0.25d0)
-  alpha(1,2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRLiPrime(mu, lwave, RX))) &
-       /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLRLi(mu,lwave,RX))**1.25d0)
+  !ksqrLR(energy,mu,lwave,RX)**(-0.25d0)
+  alpha(1,2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
+       /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
      
-     !-0.5d0*ksqrLRLi(energy,mu,lwave,RX)**(-0.75d0)
+     !-0.5d0*ksqrLR(energy,mu,lwave,RX)**(-0.75d0)
   y = alpha(1,:)
   do iR = 1, NA
      alpha(iR,:) = y
-     call RK4StepMilne(y,mu,lwave,energy,h,R(iR))
+     call RK4StepMilne(y,mu,lwave,energy,h,R(iR),Cvals)
   enddo
   alpha(NA,:)=y
   
@@ -1002,10 +1003,10 @@ end subroutine CalcMilne
 ! ON OUTPUT:
 !  *VV(i) is an array of the potential function values (in cm-1)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, RM2)
+SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, RM2, Cvals)
   implicit none
   integer NPP, ISTATE, ESTATE, i, j, N, IMN1, IMN2, iphi
-  double precision XO(NPP), VV(NPP), RM2(NPP)
+  double precision XO(NPP), VV(NPP), RM2(NPP), Cvals(3)
   double precision MU, VLIM, RSR, RLR, NS, U1, U2, B, RM, xi, MUREF
   double precision C6, C8, C10, C26, Aex, gamma, beta, nu0, nu1
   double precision, allocatable :: A(:)
@@ -1306,7 +1307,10 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, RM2)
      endif
      
   endif
-
+  Cvals(1) = C6
+  Cvals(2) = C8
+  Cvals(3) = C10
+  
   
   
 END SUBROUTINE
@@ -1343,6 +1347,7 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
   ! Ahf is the hyperfine coupling in MHz.  gu
   select case (ISTATE)
   case (1) !Rb-87
+     write(6,*) "Setting up the potential for Rb-87"
      gi = -0.000995141410d0
      i = 3
      AHf = 3417.3413064215d0
@@ -1351,6 +1356,7 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      MUREF = MU
      
   case (2) !Rb-85
+     write(6,*) "Setting up the potential for Rb-85"
      gi = -0.00029364006d0
      i = 5
      AHf = 1011.9108132d0
@@ -1359,6 +1365,7 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      MUREF = (86.909180527*amuAU)/2 !Reference reduced mass is 87-Rb2
      
   case (3) !K-39
+     write(6,*) "Setting up the potential for K-39"
      gi = -0.00014193489d0
      i = 3
      AHf = 230.85986013d0
@@ -1367,6 +1374,7 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      MUREF = MU
      
   case (4) !K-40
+     write(6,*) "Setting up the potential for K-40"
      gi = 0.00017649034d0
      i = 8
      AHf = -285.730824d0
@@ -1375,6 +1383,7 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      MUREF = (38.963708d0*amuAU)/2 !Reference reduced mass is 39-K2
      
   case (5) !Na-23
+     write(6,*) "Setting up the potential for Na-23"
      gi =  -0.00080461088d0
      i = 3
      AHf = 885.81306445d0
@@ -1382,7 +1391,8 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      MU = mass/2
      MUREF = MU
 
-  case (6) !Li-6   
+  case (6) !Li-6
+     write(6,*) "Setting up the potential for Li-6"
      gi = -0.00044765403d0
      i = 2
      AHf = 152.136840720d0
@@ -1391,6 +1401,7 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      MUREF = (7.016004*amuAU)/2 !Reference reduced mass is 7-Li2
 
   case(7) !Li-7
+     write(6,*) "Setting up the potential for Li-7"
      gi =  -0.0011822136d0
      i = 3
      AHf = 401.75204335d0
@@ -1399,6 +1410,7 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      MUREF = MU
 
   case(8)  !Cs-133
+     write(6,*) "Setting up the potential for Cs-133"
      gi = -0.0003988539552
      i = 7
      AHf = 2298.1579425
