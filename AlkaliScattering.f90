@@ -532,6 +532,7 @@ program main
   use hyperfine
   use datastructures
   use scattering
+  use quadrature
   implicit none
   integer NPP, iR, iB, ihf, n, i, j, A, nc, nr, ESTATE, ISTATE, IMN1
   integer nspin1, nspin2, espin1, espin2 !nspin is the nuclear spin and espin is the electronic spin
@@ -543,23 +544,25 @@ program main
   double precision, allocatable :: VHZ(:,:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:)
   double precision VLIM,xmin,xmax,dx
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2
-  double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h
+  double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw
   integer NA,iE
   double precision RX, RF, Cvals(3)
-  double precision, allocatable :: alpha(:,:)
+
   double precision, external :: VLRLi, rint
   type(hf1atom) a1, a2
   type(hf2atom) mstate1, mstate2
   type(hf1atom), allocatable :: hf1(:) 
   TYPE(ScatData) :: SD
 
-  ISTATE = 2  !select atomic species
+  ISTATE = 1  !select atomic species
 
   call AtomData (ISTATE, AHf1, nspin1, espin1, gi1, MU, MUREF, mass1)  !atom 1 data (and atom 2 for identical particles)
   !write(6,*) AHf1, nspin1, espin1, gi1, MU, MUREF, mass1
 
   ! initialize the angular momentum routines
   call setupam
+  ! initialize the Cash-Karp RK parameters
+  call initCashKarp
 
   ! determine the size of the one-atom hyperfine/zeeman hamiltonian
 
@@ -625,7 +628,7 @@ program main
 
   ESTATE = 1 
   ! Find the "singlet" X(^1\Sigma_g^+) curve
-
+  ! Returns the potential in cm^(-1)
   call SetupPotential(ISTATE,ESTATE,muref,muref,NPP,VLIM,XO,VSinglet,RM2,Cvals)
   
   do iR=1, NPP
@@ -637,12 +640,17 @@ program main
   !Find the triplet potential
 
   call SetupPotential(ISTATE,ESTATE,muref,muref,NPP,VLIM,XO,VTriplet,RM2,Cvals)
-  
+  call VdWLength(Cvals,betavdw,MU)
+  write(6,*) "The van der Waals length is: ", betavdw, "bohr"
   do iR=1, NPP
      VTriplet(iR) = VTriplet(iR)*InvcmPerHartree
      write(30,*) R(iR), VTriplet(iR)
   enddo
+  
+  energy = 0d0
+  call MQDTfunctions(Cvals, mu, lwave, energy, betavdw)
 
+  stop
   
   mtot = 8  !multiply mtot by 2
   
@@ -866,6 +874,25 @@ SUBROUTINE GridMaker(grid,numpts,E1,E2,scale)
         grid(iE) = E1 + ((iE-1)/DBLE(numpts-1))**2*DE
      ENDDO
   ENDIF
+  !--------------------------------------------
+  ! Cubic grid:
+  !--------------------------------------------
+    IF((scale.EQ."cubic").and.(numpts.gt.1)) THEN
+     DE=(E2-E1)
+     DO iE=1,numpts
+        grid(iE) = E1 + ((iE-1)/DBLE(numpts-1))**3*DE
+     ENDDO
+  ENDIF
+  !--------------------------------------------
+  ! quartic grid:
+  !--------------------------------------------
+    IF((scale.EQ."quartic").and.(numpts.gt.1)) THEN
+     DE=(E2-E1)
+     DO iE=1,numpts
+        grid(iE) = E1 + ((iE-1)/DBLE(numpts-1))**4*DE
+     ENDDO
+  ENDIF
+
 END SUBROUTINE GridMaker
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine RK4StepMilne(y,mu,lwave,energy,h,R,Cvals)
@@ -883,8 +910,33 @@ subroutine RK4StepMilne(y,mu,lwave,energy,h,R,Cvals)
   k4 = h * f
 
   y = y + k1/6.0d0 + k2/3.0d0 + k3/3.0d0 + k4/6.0d0
-
 end subroutine RK4StepMilne
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine RK5CashKarpStepMilne(y,mu,lwave,energy,h,R,Cvals,Delta)
+  use quadrature
+  implicit none
+  double precision h,y(2),mu,energy,f(2),k1(2),k2(2),k3(2),k4(2)
+  double precision k5(2),k6(2),R,Cvals(3),Delta(2)
+  integer lwave
+  
+  call dydR_Milne(R,y,mu,lwave,energy,f,Cvals)
+  k1 = h * f
+  call dydR_Milne(R + cka2*h, y + b21*k1, mu,lwave,energy,f,Cvals)
+  k2 = h * f
+  call dydR_Milne(R + cka3*h, y + b31*k1 + b32*k2, mu, lwave,energy,f,Cvals)
+  k3 = h * f
+  call dydR_Milne(R + cka4*h, y + b41*k1 + b42*k2 + b43*k3, mu,lwave,energy,f,Cvals)
+  k4 = h * f
+  call dydR_Milne(R + cka5*h, y + b51*k1 + b52*k2 + b53*k3 + b54*k4, mu,lwave,energy,f,Cvals)
+  k5 = h * f
+  call dydR_Milne(R + cka6*h, y + b61*k1 + b62*k2 + b63*k3 + b64*k4 + b65*k5, mu,lwave,energy,f,Cvals)
+  k6 = h * f
+  
+  y = y + c1*k1 + c3*k3 + c4*k4 + c6*k6
+  
+  Delta = (c1-c1s)*k1 + (c3-c3s)*k3 + (c4-c4s)*k4 + (-c5s)*k5 + (c6-c6s)*k6  
+  
+end subroutine RK5CashKarpStepMilne
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 double precision function VLR(mu,lwave,R,Cvals)
   implicit none
@@ -940,31 +992,106 @@ end subroutine dydR_Milne
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine CalcMilne(R,alpha,NA,energy,lwave,mu,Cvals)
   implicit none
-  double precision RX, RF, h, energy, y(2), mu,Cvals(3)
+  double precision h, energy, y(2), mu,Cvals(3)
   integer NA, iR, lwave
   double precision alpha(NA,2), R(NA)
-  double precision, external :: ksqrLR, VLR, VLRPrime
-  ! make a radial grid
 
   h = R(2)-R(1)
-  RX=R(1)
-  RF=R(NA)
-  ! set the initial conditions (WKB-like boundary conditions at RX)
-  alpha(1,1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
-  
-  !ksqrLR(energy,mu,lwave,RX)**(-0.25d0)
-  alpha(1,2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
-       /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
-     
-     !-0.5d0*ksqrLR(energy,mu,lwave,RX)**(-0.75d0)
   y = alpha(1,:)
-  do iR = 1, NA
-     alpha(iR,:) = y
+  do iR = 1, NA-1
      call RK4StepMilne(y,mu,lwave,energy,h,R(iR),Cvals)
+     alpha(iR+1,:) = y
   enddo
-  alpha(NA,:)=y
+
   
 end subroutine CalcMilne
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine CalcMilne2step(R,alpha,NA,energy,lwave,mu,Cvals,phaseint)
+  implicit none
+  double precision h, energy, y(2), mu,Cvals(3),y1(2),y2(2),y3(2),hhalf
+  integer NA, iR, lwave
+  double precision alpha(NA,2), R(NA),Delta(2),Delta0(2),eps, phaseint(NA),Rmid,OneThird
+  OneThird = 0.333333333333333333333333333333333d0
+  eps = 1d-10
+  ! make a radial grid
+
+  y1 = alpha(1,:)
+  Delta0= eps*y1
+  phaseint(1) = 0d0
+  
+  do iR = 1, NA-1
+     h = R(iR+1)-R(iR)
+     hhalf = 0.5d0*h
+     ! do two half-steps and use the Simpson integration rule to calculate the phase integral
+     !step from R(i) to R(i)+h/2
+     y2=y1
+     call RK4StepMilne(y2,mu,lwave,energy,hhalf,R(iR),Cvals)
+     !call RK5CashKarpStepMilne(y2,mu,lwave,energy,hhalf,R(iR),Cvals,Delta)
+     y3=y2
+     !step from R(i)+h/2 to R(i+1)
+     Rmid = R(iR) + hhalf
+     call RK4StepMilne(y3,mu,lwave,energy,hhalf, Rmid, Cvals)
+     !call RK5CashKarpStepMilne(y3,mu,lwave,energy,hhalf,Rmid,Cvals,Delta)
+     alpha(iR+1,:) = y3
+     phaseint(iR+1) = phaseint(iR) + OneThird*hhalf*(y1(1)**(-2) + 4d0*y1(1)**(-2) + y2(1)**(-2))
+     y1 = y3
+  enddo
+
+  
+end subroutine CalcMilne2step
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine MQDTfunctions(Cvals, mu, lwave, energy, betavdw)
+  use units
+  implicit none
+  integer NA, i, j, lwave
+  double precision Cvals(3), mu, betavdw, energy, h, hbig, x
+  double precision, allocatable :: alphasr(:,:), alphalr(:,:)
+  double precision, allocatable :: Rstep(:), alphastep(:,:),alpha(:,:),R(:)
+  double precision, allocatable :: Rsr(:),Rlr(:)
+  double precision, allocatable :: phaseint(:)
+  double precision RX, RM, RF
+  double precision, external :: ksqrLR, VLR, VLRPrime
+
+  RX = 0.1*betavdw
+  RF=80d0
+  RM=40d0
+  
+  NA = 200000
+
+  allocate(R(NA),alpha(NA,2),phaseint(NA))
+  call GridMaker(R,NA,RX,RF,'quadratic')
+
+  ! set the initial conditions (WKB-like boundary conditions at RX)
+  alpha(1,1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
+  alpha(1,2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
+       /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
+  
+  !call CalcMilne(R,alpha,NA,energy,lwave,mu,Cvals)
+  call CalcMilne2step(R,alpha,NA,energy,lwave,mu,Cvals,phaseint)
+
+  do i = 1, NA
+     write(101,*) R(i), alpha(i,1), alpha(i,2)
+  enddo
+
+  call CalcPhaseStandard(RX,RF,NA)
+end subroutine MQDTfunctions
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! This subroutine calculates the phase standardization according to the Ruzic scheme.
+subroutine CalcPhaseStandard(RX,RF,N)
+  implicit none
+  double precision xnu, rj, ry, rjp, ryp, RX, RF
+  double precision, allocatable :: x(:)
+  integer i, N
+  allocate(x(N))
+  xnu = 0d0
+  call GridMaker(x,N,RX,RF,'linear')
+  do i = 1, N
+     call bessjy(x(i),xnu,rj,ry,rjp,ryp)
+     write(100,*) x(i),rj,ry!,rjp,ryp
+  enddo
+  ! first just test the bessel function
+  
+end subroutine CalcPhaseStandard
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !Subroutine to setup the effect adiabatic potential energy function for any
 !one of the electronic states for the alkali homonuclear molecules:
@@ -1004,6 +1131,7 @@ end subroutine CalcMilne
 !  *VV(i) is an array of the potential function values (in cm-1)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, RM2, Cvals)
+  use units
   implicit none
   integer NPP, ISTATE, ESTATE, i, j, N, IMN1, IMN2, iphi
   double precision XO(NPP), VV(NPP), RM2(NPP), Cvals(3)
@@ -1307,9 +1435,9 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, RM2, Cva
      endif
      
   endif
-  Cvals(1) = C6
-  Cvals(2) = C8
-  Cvals(3) = C10
+  Cvals(1) = C6 * AngstromPerBohr**6 * InvcmPerHartree
+  Cvals(2) = C8 * AngstromPerBohr**8 * InvcmPerHartree
+  Cvals(3) = C10 * AngstromPerBohr**10 * InvcmPerHartree
   
   
   
@@ -1428,3 +1556,67 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
   
 End Subroutine AtomData
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine VdWLength(Cvals,beta,mu)
+  use units
+  implicit none
+  
+  double precision beta4,beta, C6g, C8g, C10g, Cvals(3), mu
+  double precision OneThird
+  C6g=Cvals(1)
+  C8g=Cvals(2)
+  C10g=Cvals(3)
+  OneThird = 0.3333333333333333333333333d0
+
+  beta4 = C6g*mu + Sqrt(6*C6g**2*mu**2 - 4*mu*(-C10g + C6g**2*mu) + &
+          (4*mu**2*(4*C10g**2 + 4*C10g*C6g**2*mu + C6g*mu*(-3*C8g**2 + C6g**3*mu)))/ &
+           (64*C10g**3*mu**3 + 96*C10g**2*C6g**2*mu**4 + 27*C8g**4*mu**4 - &
+              36*C6g**3*C8g**2*mu**5 + 8*C6g**6*mu**6 + &
+              24*C10g*C6g*mu**4*(-3*C8g**2 + 2*C6g**3*mu) + &
+              3*sqrt(3d0)*Sqrt(C8g**4*mu**7* &
+                 (128*C10g**3 + 128*C10g**2*C6g**2*mu + &
+                   C8g**2*mu*(27*C8g**2 - 8*C6g**3*mu) + &
+                   16*C10g*C6g*mu*(-9*C8g**2 + 2*C6g**3*mu))))**OneThird + &
+          (64*C10g**3*mu**3 + 96*C10g**2*C6g**2*mu**4 + 27*C8g**4*mu**4 - &
+             36*C6g**3*C8g**2*mu**5 + 8*C6g**6*mu**6 + &
+             24*C10g*C6g*mu**4*(-3*C8g**2 + 2*C6g**3*mu) + &
+             3*sqrt(3d0)*Sqrt(C8g**4*mu**7* &
+                (128*C10g**3 + 128*C10g**2*C6g**2*mu + C8g**2*mu*(27*C8g**2 - 8*C6g**3*mu) + &
+                  16*C10g*C6g*mu*(-9*C8g**2 + 2*C6g**3*mu))))**OneThird)/sqrt(6d0) + &
+       Sqrt(8*C6g**2*mu**2 - (16*mu*(-C10g + C6g**2*mu))/3. - &
+          (8*mu**2*(4*C10g**2 + 4*C10g*C6g**2*mu + C6g*mu*(-3*C8g**2 + C6g**3*mu)))/ &
+           (3.*(64*C10g**3*mu**3 + 96*C10g**2*C6g**2*mu**4 + 27*C8g**4*mu**4 - &
+                36*C6g**3*C8g**2*mu**5 + 8*C6g**6*mu**6 + &
+                24*C10g*C6g*mu**4*(-3*C8g**2 + 2*C6g**3*mu) + &
+                3*sqrt(3d0)*Sqrt(C8g**4*mu**7* &
+                   (128*C10g**3 + 128*C10g**2*C6g**2*mu + &
+                     C8g**2*mu*(27*C8g**2 - 8*C6g**3*mu) + &
+                     16*C10g*C6g*mu*(-9*C8g**2 + 2*C6g**3*mu))))**OneThird) - &
+          (2*(64*C10g**3*mu**3 + 96*C10g**2*C6g**2*mu**4 + 27*C8g**4*mu**4 - &
+                36*C6g**3*C8g**2*mu**5 + 8*C6g**6*mu**6 + &
+                24*C10g*C6g*mu**4*(-3*C8g**2 + 2*C6g**3*mu) + &
+                3*sqrt(3d0)*Sqrt(C8g**4*mu**7* &
+                   (128*C10g**3 + 128*C10g**2*C6g**2*mu + &
+                     C8g**2*mu*(27*C8g**2 - 8*C6g**3*mu) + &
+                     16*C10g*C6g*mu*(-9*C8g**2 + 2*C6g**3*mu))))**OneThird)/3. + &
+          (4*sqrt(6d0)*C8g**2*mu**2)/ &
+           Sqrt(6*C6g**2*mu**2 - 4*mu*(-C10g + C6g**2*mu) + &
+             (4*mu**2*(4*C10g**2 + 4*C10g*C6g**2*mu + C6g*mu*(-3*C8g**2 + C6g**3*mu)))/ &
+              (64*C10g**3*mu**3 + 96*C10g**2*C6g**2*mu**4 + 27*C8g**4*mu**4 - &
+                 36*C6g**3*C8g**2*mu**5 + 8*C6g**6*mu**6 + &
+                 24*C10g*C6g*mu**4*(-3*C8g**2 + 2*C6g**3*mu) + &
+                 3*sqrt(3d0)*Sqrt(C8g**4*mu**7* &
+                    (128*C10g**3 + 128*C10g**2*C6g**2*mu + &
+                      C8g**2*mu*(27*C8g**2 - 8*C6g**3*mu) + &
+                      16*C10g*C6g*mu*(-9*C8g**2 + 2*C6g**3*mu))))**OneThird + &
+             (64*C10g**3*mu**3 + 96*C10g**2*C6g**2*mu**4 + 27*C8g**4*mu**4 - &
+                36*C6g**3*C8g**2*mu**5 + 8*C6g**6*mu**6 + &
+                24*C10g*C6g*mu**4*(-3*C8g**2 + 2*C6g**3*mu) + &
+                3*sqrt(3d0)*Sqrt(C8g**4*mu**7* &
+                   (128*C10g**3 + 128*C10g**2*C6g**2*mu + &
+                     C8g**2*mu*(27*C8g**2 - 8*C6g**3*mu) + &
+                     16*C10g*C6g*mu*(-9*C8g**2 + 2*C6g**3*mu))))**OneThird))/2.
+
+     
+  beta = beta4**(0.25d0)
+  
+end subroutine VdWLength
