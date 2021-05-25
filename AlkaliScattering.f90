@@ -542,11 +542,11 @@ program main
   double precision, allocatable :: HHZ(:,:), Bgrid(:),Egrid(:), EVAL(:), EVEC(:,:),RotatedVHZ(:,:,:),TEMP(:,:),EThreshMat(:,:)
   double precision, allocatable :: SPmat(:,:), Sdressed(:,:), Tdressed(:,:), TPmat(:,:)
   double precision, allocatable :: VHZ(:,:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:)
-  double precision VLIM,xmin,xmax,dx
+  double precision VLIM,xmin,xmax,dx,phiL
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2
   double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw
-  integer NA,iE
-  double precision RX, RF, Cvals(3)
+  integer iE, NA
+  double precision RX, RM, RF, Cvals(3)
 
   double precision, external :: VLRLi, rint
   type(hf1atom) a1, a2
@@ -609,7 +609,7 @@ program main
   deallocate(EVEC,EVAL,HHZ)
   !____________________________________________________________________
   
-  NPP = 1000000
+  NPP = 1000000 ! number of points needed for the log-derivative propagator (typically very large)
   VLIM = 0d0
   allocate(XO(NPP),R(NPP),weights(NPP),VSinglet(NPP),VTriplet(NPP),RM2(NPP))
 
@@ -638,7 +638,6 @@ program main
 
   ESTATE = 3
   !Find the triplet potential
-
   call SetupPotential(ISTATE,ESTATE,muref,muref,NPP,VLIM,XO,VTriplet,RM2,Cvals)
   call VdWLength(Cvals,betavdw,MU)
   write(6,*) "The van der Waals length is: ", betavdw, "bohr"
@@ -646,10 +645,25 @@ program main
      VTriplet(iR) = VTriplet(iR)*InvcmPerHartree
      write(30,*) R(iR), VTriplet(iR)
   enddo
-  
-  energy = 0d0
-  call MQDTfunctions(Cvals, mu, lwave, energy, betavdw)
 
+  !----------------------------------------------------------------------------------------------------------------
+  ! BEGIN THE SECTION TO CALCULATE THE SINGLE-CHANNEL QDT PARAMETERS
+  !
+  ! the dispersion coefficients are the same for the singlet and triplet potentials
+  ! so this code uses the triplet values by default.  "Cvals" is initalized by the triplet call above
+  NA = 100000 ! Number of points for the single-channel QDT calculations.  Make this a multiple of 10.
+  energy = 0d0
+  RX = 0.1d0*betavdw ! this is the starting radius for the Milne solutions used to calculate the MQDT phase standard for the reference functions
+  RF = R(NPP)!4.0d0*betavdw ! Final radius for phase standard
+  RM = 40d0 ! bohr.  This is the radius at which the short-range solutions are matched to the energy-analytic reference functions.
+  call CalcPhaseStandard(RX,RF,lwave,mu,betavdw,Cvals,phiL)
+!  call CalcPhaseStandard(RX,RF,1,mu,betavdw,Cvals,phiL)
+!  call CalcPhaseStandard(RX,RF,2,mu,betavdw,Cvals,phiL)
+
+  call MQDTfunctions(NA, RX, RM, RF, Cvals, mu, lwave, energy, betavdw, phiL)
+
+  ! END THE SECTION TO CALCULATE THE SINGLE-CHANNEL QDT PARAMETERS
+  !----------------------------------------------------------------------------------------------------
   stop
   
   mtot = 8  !multiply mtot by 2
@@ -1040,56 +1054,93 @@ subroutine CalcMilne2step(R,alpha,NA,energy,lwave,mu,Cvals,phaseint)
   
 end subroutine CalcMilne2step
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine MQDTfunctions(Cvals, mu, lwave, energy, betavdw)
+subroutine MQDTfunctions(NA, RX, RM, RF, Cvals, mu, lwave, energy, betavdw, phiL)
   use units
   implicit none
   integer NA, i, j, lwave
-  double precision Cvals(3), mu, betavdw, energy, h, hbig, x
+  double precision Cvals(3), mu, betavdw, energy, h, hbig, x, f0, g0, f0p, g0p, phiL
+  double precision xnu, rj, ry, rjp, ryp, chiminus, chiminusp
   double precision, allocatable :: alphasr(:,:), alphalr(:,:)
-  double precision, allocatable :: Rstep(:), alphastep(:,:),alpha(:,:),R(:)
   double precision, allocatable :: Rsr(:),Rlr(:)
   double precision, allocatable :: phaseint(:)
+  double precision, allocatable :: alpha(:,:),R(:)
   double precision RX, RM, RF
   double precision, external :: ksqrLR, VLR, VLRPrime
-
-  RX = 0.1*betavdw
-  RF=80d0
-  RM=40d0
   
-  NA = 200000
-
   allocate(R(NA),alpha(NA,2),phaseint(NA))
-  call GridMaker(R,NA,RX,RF,'quadratic')
+  call GridMaker(R(1:NA/2),NA/2,RX,RM,'quadratic')
+  call GridMaker(R(NA/2+1:NA),NA/2,RM,RF,'linear')
 
   ! set the initial conditions (WKB-like boundary conditions at RX)
   alpha(1,1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
   alpha(1,2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
        /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
   
-  !call CalcMilne(R,alpha,NA,energy,lwave,mu,Cvals)
   call CalcMilne2step(R,alpha,NA,energy,lwave,mu,Cvals,phaseint)
 
   do i = 1, NA
-     write(101,*) R(i), alpha(i,1), alpha(i,2)
+     f0 = Pi**(-0.5d0)*alpha(i,1)*sin(phaseint(i)+phiL)
+     g0 = -Pi**(-0.5d0)*alpha(i,1)*cos(phaseint(i)+phiL)
+     f0p = alpha(i,2)/alpha(i,1) * f0 - g0/alpha(i,1)**2
+     g0p = alpha(i,2)/alpha(i,1) * g0 + f0/alpha(i,1)**2
+
+     write(101,*) R(i), alpha(i,1), alpha(i,2), phaseint(i), f0, g0
   enddo
 
-  call CalcPhaseStandard(RX,RF,NA)
+
 end subroutine MQDTfunctions
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! This subroutine calculates the phase standardization according to the Ruzic scheme.
-subroutine CalcPhaseStandard(RX,RF,N)
+subroutine CalcPhaseStandard(RX, RF, lwave,mu,betavdw,Cvals,phiL)
+  use units
   implicit none
-  double precision xnu, rj, ry, rjp, ryp, RX, RF
-  double precision, allocatable :: x(:)
-  integer i, N
-  allocate(x(N))
-  xnu = 0d0
-  call GridMaker(x,N,RX,RF,'linear')
-  do i = 1, N
-     call bessjy(x(i),xnu,rj,ry,rjp,ryp)
-     write(100,*) x(i),rj,ry!,rjp,ryp
-  enddo
+  double precision xnu, rj, ry, rjp, ryp, RX, RF, chim, chimp, betavdw, energy, mu, phiL
+  double precision Cvals(3),  f0, g0, f0p, g0p, tanphi, phi
+  double precision, allocatable :: X(:)
+  double precision, allocatable :: phaseint(:)
+  double precision, allocatable :: alpha(:,:)
+  integer i, N, lwave
+  double precision, external :: ksqrLR, VLR, VLRPrime
+
+  !-------------------------------------------------------
+  !uncomment this block to test the phase standardization
+  !agreement with the analytical values for the C6 potential
+!!$  Cvals(1) = 1d0
+!!$  Cvals(2) = 0d0
+!!$  Cvals(3) = 0d0
+!!$  betavdw = 1d0
+!!$  mu = 0.5d0
+  RX=0.1d0*betavdw
+  RF=4.0d0*betavdw
+  N = 1000000
+  !--------------------------------------------------------
+  energy = 0d0
   ! first just test the bessel function
+  allocate(x(N), alpha(N,2),phaseint(N))
+  alpha(1,1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
+  alpha(1,2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
+       /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
+  
+  xnu = 0d0
+  call GridMaker(X,N,RX,RF,'quadratic')
+  call CalcMilne2step(X,alpha,N,energy,lwave,mu,Cvals,phaseint)
+!  write(6,*) "betavdw = ", betavdw
+
+  do i = N, N
+     f0 = Pi**(-0.5d0)*alpha(i,1)*sin(phaseint(i))
+     g0 = -Pi**(-0.5d0)*alpha(i,1)*cos(phaseint(i))
+     f0p = alpha(i,2)/alpha(i,1) * f0 - g0/alpha(i,1)**2
+     g0p = alpha(i,2)/alpha(i,1) * g0 + f0/alpha(i,1)**2
+
+     call chiminus(lwave,x(i)/betavdw,chim,chimp) !this requires van der Waals units, so divide by betavdw since x(i) is in bohr
+     chimp = chimp/betavdw ! d(chi)/dR comes out in van der Waals units so this converts length to bohr
+     tanphi = -(chim*g0p - chimp*g0)/(chim*f0p - chimp*f0)
+!     write(100,*) X(i), tanphi- tan(-1d0/(2d0*RX**2) + dble(lwave)*Pi/4d0 -5d0*Pi/8d0)!, atan(tanphi)  
+  enddo
+  write(6,*) "lwave = ", lwave, "tanphi = ", tanphi!, "analytical result = ", &
+!       tan(-1d0/(2d0*RX**2) + dble(lwave)*Pi/4d0 -5d0*Pi/8d0), &
+  !       "difference = ", tanphi- tan(-1d0/(2d0*RX**2) + dble(lwave)*Pi/4d0 -5d0*Pi/8d0)
+  phiL = atan(tanphi)
   
 end subroutine CalcPhaseStandard
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

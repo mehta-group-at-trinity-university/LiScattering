@@ -277,12 +277,33 @@ c     following assumes v = n+1/2 where n=0,1,2,......
 
       sj = factor*(P*dcos(chi) - Q*dsin(chi)) 
       sy = factor*(P*dsin(chi) + Q*dcos(chi))
-      sjp=-factor*(R*dsin(chi) - S*dcos(chi))
-      syp= factor*(R*dcos(chi) - S*dsin(chi))
+      sjp = -factor*(R*dsin(chi) - S*dcos(chi))
+      syp = factor*(R*dcos(chi) - S*dsin(chi))
 
       return
       end
+!cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!chiminus is one of the ZERO energy solutions to the C6 potential for partial wave lwave.
+!chiplusp is the derivative.
+      subroutine chiminus(lwave,r,chim,chimp)
+      implicit none
+      integer lwave
+      double precision chim,chimp
+      double precision r, xnu, x,rj,ry,rjp,ryp
+      double precision xnu1, rj1, ry1, rj1p, ry1p
 
+      xnu = 0.25d0*(2d0*lwave+1d0)
+      x = 0.5d0/(r**2)
+      call bessjy(x,xnu,rj,ry,rjp,ryp)
+      chim = sqrt(r)*rj
+
+      xnu = 0.25d0*(2d0*lwave+1d0)
+      xnu1 = 0.25d0*(2d0*lwave+5d0)
+      call bessjy(x,xnu,rj,ry,rjp,ryp)
+      call bessjy(x,xnu1, rj1, ry1, rj1p, ry1p)
+      chimp = r**(-2.5d0)*(-dble(lwave)*r**2*rj + rj1)
+
+      end 
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       SUBROUTINE bessjy(x,xnu,rj,ry,rjp,ryp)
       ! From Numerical Recipes (Press et al)
