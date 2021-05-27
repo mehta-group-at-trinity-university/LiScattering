@@ -572,10 +572,10 @@ program main
   call GridMaker(Egrid,NEgrid,Emin,Emax,'linear') ! measure the collision energy in Hartree
   !--------------------------------------------------!
   
-  ISTATE = 6  !select atomic species (see AtomData for documentation)
-  sym = -1 ! set to +1 for bosonic K-39, Rb-85, Rb-87, Cs-133, Li-7 and Na-23; -1 for fermionic K-40 and Li-6; 0 for any mixed collision
+  ISTATE = 7  !select atomic species (see AtomData for documentation)
+  sym = 1 ! set to +1 for bosonic K-39, Rb-85, Rb-87, Cs-133, Li-7 and Na-23; -1 for fermionic K-40 and Li-6; 0 for any mixed collision
   lwave = 0 ! s wave collisions
-  mtot = 0  ! really mtot (total two-atom F projection) multiplied by 2
+  mtot = 4  ! really mtot (total two-atom F projection) multiplied by 2
 
 
   call AtomData(ISTATE, AHf1, nspin1, espin1, gi1, MU, MUREF, mass1)  !atom 1 data (and atom 2 for identical particles)
