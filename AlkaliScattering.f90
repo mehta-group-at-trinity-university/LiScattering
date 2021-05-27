@@ -536,16 +536,20 @@ program main
   integer NPP, iR, iB, ihf, n, i, j, A, nc, nr, ESTATE, ISTATE, IMN1
   integer nspin1, nspin2, espin1, espin2 !nspin is the nuclear spin and espin is the electronic spin
   integer i1,i2,s1,s2,S,sym,size1,size2,NBgrid,NEgrid,mtot, lwave,NumOpen
-  double precision, allocatable :: XO(:), VSinglet(:), VTriplet(:), RM2(:), R(:)
-  double precision, allocatable :: weights(:),ystart(:,:),yi(:,:),yf(:,:),Kmat(:,:),identity(:,:)
+  integer Nsr, Nlr
+  double precision, allocatable :: Rsr(:), Rlr(:),VsrSinglet(:),VsrTriplet(:),VlrSinglet(:),VlrTriplet(:)
+  double precision, allocatable :: RotatedVsrHZ(:,:,:),RotatedVlrHZ(:,:,:)
+  double precision, allocatable :: wSR(:),wLR(:)
+  double precision, allocatable :: VSinglet(:), VTriplet(:), R(:)
+  double precision, allocatable :: weights(:),ystart(:,:),yi(:,:),ym(:,:),yf(:,:),Kmat(:,:),identity(:,:)
   double precision, allocatable :: HHZ(:,:), Bgrid(:),Egrid(:), EVAL(:), EVEC(:,:),RotatedVHZ(:,:,:),TEMP(:,:),EThreshMat(:,:)
   double precision, allocatable :: SPmat(:,:), Sdressed(:,:), Tdressed(:,:), TPmat(:,:)
-  double precision, allocatable :: VHZ(:,:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:)
+  double precision, allocatable :: VHZ(:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:)
   double precision VLIM,Rmin,Rmax,dR,phiL
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2
   double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw
   integer iE, NA
-  double precision RX, RM, RF, Cvals(3)
+  double precision RX, Rmid, RF, Cvals(3)
 
   double precision, external :: VLRLi, rint
   type(hf1atom) a1, a2
@@ -553,21 +557,26 @@ program main
   type(hf1atom), allocatable :: hf1(:) 
   TYPE(ScatData) :: SD
 
+  !-----------------------------------------------------!
   ! Set the energy and B-field grid
   NBgrid = 300
-  NEgrid = 200
+  NEgrid = 100
   
   Bmin = 0d0
-  Bmax = 1000d0
-  Emin = 2d0/HartreePermK
-  Emax = 50.d0/HartreePermK
+  Bmax = 1200d0
+  Emin = 1d-6/HartreePermK !25d0/HartreePermK
+  Emax = 50d0/HartreePermK !35d0/HartreePermK
   !make the magnetic field grid and energy grid
   allocate(Bgrid(NBgrid),Egrid(NEgrid))
   call GridMaker(Bgrid,NBgrid,Bmin,Bmax,'linear')
   call GridMaker(Egrid,NEgrid,Emin,Emax,'linear') ! measure the collision energy in Hartree
+  !--------------------------------------------------!
   
-  
-  ISTATE = 2  !select atomic species (see AtomData for documentation)
+  ISTATE = 6  !select atomic species (see AtomData for documentation)
+  sym = -1 ! set to +1 for bosonic K-39, Rb-85, Rb-87, Cs-133, Li-7 and Na-23; -1 for fermionic K-40 and Li-6; 0 for any mixed collision
+  lwave = 0 ! s wave collisions
+  mtot = 0  ! really mtot (total two-atom F projection) multiplied by 2
+
 
   call AtomData(ISTATE, AHf1, nspin1, espin1, gi1, MU, MUREF, mass1)  !atom 1 data (and atom 2 for identical particles)
   !write(6,*) AHf1, nspin1, espin1, gi1, MU, MUREF, mass1
@@ -609,12 +618,6 @@ program main
 
   deallocate(EVEC,EVAL,HHZ)
   !____________________________________________________________________
-
-
-  sym = 1 ! set to +1 for bosonic K-39, Rb-85, Rb-87, Cs-133, Li-7 and Na-23; -1 for fermionic K-40 and Li-6; 0 for any mixed collision
-  lwave = 0 ! s wave collisions
-  mtot = 8  ! really mtot (total two-atom F projection) multiplied by 2
-
   call MakeHF2Basis(nspin1, espin1, nspin1, espin1, sym, lwave, mtot, size2)
   write(6,'(A,I3)') "size of the symmetrized 2-atom hyperfine basis = ", size2
   write(6,*)
@@ -637,7 +640,7 @@ program main
   allocate(HHZ2(size2,size2))
   allocate(EVEC(size2,size2),EVAL(size2))
   call AllocateScat(SD,size2)
-  allocate(identity(size2,size2),ystart(size2,size2),yi(size2,size2),yf(size2,size2),Eth(size2))
+  allocate(identity(size2,size2),ystart(size2,size2),yi(size2,size2),ym(size2,size2),yf(size2,size2),Eth(size2))
 
   identity(:,:)=0d0
   ystart(:,:)=0d0
@@ -647,55 +650,74 @@ program main
      ystart(i,i)=1d20
   enddo
 
-  NPP = 100000 ! number of points needed for the log-derivative propagator (typically very large if integrating out to Rmax)
-  VLIM = 0d0
-  allocate(XO(NPP),R(NPP),weights(NPP),VSinglet(NPP),VTriplet(NPP),RM2(NPP))
-
   Rmin = 0.03d0 ! use atomic units here (bohr)
+  Rmid = 100d0
   Rmax = 500d0 ! use atomic units here (bohr)
-  dR = (Rmax-Rmin)/(dble(NPP-1))
-  do iR=1, NPP
-     R(iR) = Rmin + (iR-1)*dR
-  enddo
+  NPP = 1000000 ! number of points needed for the log-derivative propagator (typically very large if integrating out to Rmax)
+  Nsr = 800000
+  Nlr = 200000
+  VLIM = 0d0
+  allocate(R(NPP),weights(NPP),VSinglet(NPP),VTriplet(NPP))
+  allocate(Rsr(Nsr),Rlr(Nlr),wSR(Nsr),wLR(Nlr),VsrSinglet(Nsr),VlrSinglet(Nlr),VsrTriplet(Nsr),VlrTriplet(Nlr))
+  call GridMaker(R,NPP,Rmin,Rmax,'linear')
+!  dR = (Rmax-Rmin)/(dble(NPP-1))
+!  do iR=1, NPP
+!     R(iR) = Rmin + (iR-1)*dR
+!  enddo
 
   write(6,*) 'setting up potentials' 
-  XO(:) = R(:)*BohrPerAngstrom  !X0 is in Angstroms for the call to setup the singlet/triplet potentials
-
-  ESTATE = 1 
   ! Find the "singlet" X(^1\Sigma_g^+) curve
+  ESTATE = 1 
   ! Returns the potential in cm^(-1)
-  call SetupPotential(ISTATE,ESTATE,muref,muref,NPP,VLIM,XO,VSinglet,RM2,Cvals)
-
-  do iR=1, NPP
-     VSinglet(iR) = VSinglet(iR)*InvcmPerHartree
-     write(10,*) R(iR), VSinglet(iR)     
-  enddo
-
-  ESTATE = 3
+  call SetupPotential(ISTATE,ESTATE,muref,muref,NPP,VLIM,R*BohrPerAngstrom,VSinglet,Cvals)  
   !Find the triplet potential
-  call SetupPotential(ISTATE,ESTATE,muref,muref,NPP,VLIM,XO,VTriplet,RM2,Cvals)
+  ESTATE = 3
+  call SetupPotential(ISTATE,ESTATE,muref,muref,NPP,VLIM,R*BohrPerAngstrom,VTriplet,Cvals)
+  
+  ! Find the van der Waals length
   call VdWLength(Cvals,betavdw,MU)
-  write(6,*) "The van der Waals length is: ", betavdw, "bohr"
-  do iR=1, NPP
-     VTriplet(iR) = VTriplet(iR)*InvcmPerHartree
-     write(30,*) R(iR), VTriplet(iR)
-  enddo
-
-!  stop
-  allocate(VHZ(size2,size2,NPP),RotatedVHZ(size2,size2,NPP))
+  write(6,'(A,F6.2,A)') "The van der Waals length is: ", betavdw, " bohr"
+  ! convert to atomic units
+  VSinglet(:) = VSinglet(:)*InvcmPerHartree
+  VTriplet(:) = VTriplet(:)*InvcmPerHartree 
 
   ! prepare some arrays for the log-derivative propagator
-  do iR = 1, NPP-1
-     if (mod(iR,2).eq.1)  weights(iR)=4d0
-     if (mod(iR,2).eq.0)  weights(iR)=2d0
-  enddo
-  weights(NPP)=1d0
+  call GridMaker(Rsr,Nsr,Rmin,Rmid,'linear')
+  call GridMaker(Rlr,Nlr,Rmid,Rmax,'linear')
+  call SetLogderWeights(weights,NPP)
+  call SetLogderWeights(wSR,Nsr)
+  call SetLogderWeights(wLR,Nlr)
   
-  open(unit = 50, file = "Rb85FR.dat") 
+  ESTATE = 1
+  call SetupPotential(ISTATE,ESTATE,muref,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrSinglet,Cvals)
+  call SetupPotential(ISTATE,ESTATE,muref,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrSinglet,Cvals)
+  ESTATE = 3
+  call SetupPotential(ISTATE,ESTATE,muref,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrTriplet,Cvals)
+  call SetupPotential(ISTATE,ESTATE,muref,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrTriplet,Cvals)
+  VsrSinglet(:)=  VsrSinglet(:)*InvcmPerHartree
+  VsrTriplet(:)=  VsrTriplet(:)*InvcmPerHartree
+  VlrSinglet(:)=  VlrSinglet(:)*InvcmPerHartree
+  VlrTriplet(:)=  VlrTriplet(:)*InvcmPerHartree
+  
+  write(6,'(A)') "See fort.10 and fort.30 for the singlet/triplet potentials"
+  do iR=1, Nsr
+     write(10,*) Rsr(iR), VsrSinglet(iR)     
+     write(30,*) Rsr(iR), VsrTriplet(iR)
+  enddo
+  do iR=1, Nlr
+     write(10,*) Rlr(iR), VlrSinglet(iR)     
+     write(30,*) Rlr(iR), VlrTriplet(iR)
+  enddo
+
+  allocate(VHZ(size2,size2),RotatedVHZ(size2,size2,NPP))
+  allocate(RotatedVsrHZ(size2,size2,Nsr),RotatedVlrHZ(size2,size2,Nlr))
+  
+  open(unit = 50, file = "EnergyDependence.dat")
+  open(unit = 51, file = "FieldDependence.dat") 
   EThreshMat(:,:) = 0d0
 
   !----------------------------------------------------------------------------------------------------------------
-  ! BEGIN THE SECTION TO CALCULATE THE SINGLE-CHANNEL QDT PARAMETERS
+  ! BEGIN THE SECTION TO CALCULATE THE SINGLE-CHANNEL QDT functions and parameters
   !
   ! the dispersion coefficients are the same for the singlet and triplet potentials
   ! so this code uses the triplet values by default.  "Cvals" is initalized by the triplet call above
@@ -703,24 +725,27 @@ program main
 !!$  energy = 0d0
 !!$  RX = 0.1d0*betavdw ! this is the starting radius for the Milne solutions used to calculate the MQDT phase standard for the reference functions
 !!$  RF = R(NPP)!4.0d0*betavdw ! Final radius for phase standard
-!!$  RM = 40d0 ! bohr.  This is the radius at which the short-range solutions are matched to the energy-analytic reference functions.
-!!$  call CalcPhaseStandard(RX,RF,lwave,mu,betavdw,Cvals,phiL)
+!!$  Rmid = 40d0 ! bohr.  This is the radius at which the short-range solutions are matched to the energy-analytic reference functions.
+!!$  call CalcPhaseStandard(RX,RF,lwave,mu,betavdw,Cvals,phiL) ! calculate the phase standardization for lwave = 0
 !!$  !  call CalcPhaseStandard(RX,RF,1,mu,betavdw,Cvals,phiL) ! lwave = 1
 !!$  !  call CalcPhaseStandard(RX,RF,2,mu,betavdw,Cvals,phiL) ! lwave = 2
 !!$
-!!$  call MQDTfunctions(NA, RX, RM, RF, Cvals, mu, lwave, energy, betavdw, phiL)
+!!$  call MQDTfunctions(NA, RX, Rmid, RF, Cvals, mu, lwave, energy, betavdw, phiL)
   !  stop
   ! END THE SECTION TO CALCULATE THE SINGLE-CHANNEL QDT PARAMETERS
   !----------------------------------------------------------------------------------------------------
-
-
-  do iB = 1, 1!NBgrid 
+  ! The MQDT calculation requires that we calculate a short-range K-matrix on a coarse energy and B-field grid
+  ! For the Feshbach resonance calculation, we do this at E = 0 (lowest threshold) on a coarse B-field grid
+  write(6,*) "See fort.20 for the field dependence of the scattering thresholds."
+  write(6,*) "See file EnergyDependence.dat for the energy-dependent cross section"
+  write(6,*) "See file FieldDependence.dat for the field-dependent scattering length at threshold"
+  do iB = 1, NBgrid 
      yi(:,:)=ystart(:,:)
      call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
      HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
      !Find the asymptotic channel states
-     VHZ(:,:,NPP) = VSinglet(NPP)*SPmat(:,:) + VTriplet(NPP)*TPmat(:,:) + HHZ2(:,:) 
-     call MyDSYEV(VHZ(:,:,NPP),size2,EVAL,AsymChannels)
+     VHZ(:,:) = VlrSinglet(Nlr)*SPmat(:,:) + VlrTriplet(Nlr)*TPmat(:,:) + HHZ2(:,:) 
+     call MyDSYEV(VHZ(:,:),size2,EVAL,AsymChannels)
      Eth(:)=EVAL(:)
      do i=1,size2
         EThreshMat(i,i) = Eth(i)
@@ -738,15 +763,17 @@ program main
 
      do iR = 1, NPP
         RotatedVHZ(:,:,iR) = VSinglet(iR)*Sdressed(:,:) + VTriplet(iR)*Tdressed(:,:) + EThreshMat(:,:)
-        !VHZ(:,:,iR) = VSinglet(iR)*SPmat(:,:) + VTriplet(iR)*TPmat(:,:) + HHZ2(:,:) ! use this to find the adiabatic curves if needed
-        !call MyDSYEV(VHZ(:,:,iR),size2,EVAL,EVEC)  ! Calculate the adiabatic curves if needed
-        !write(1000+iB,*) R(iR), (RotatedVHZ(n,n,iR), n=1,NumOpen+1)!EVAL(:)!VHZ(:,:,iR)
      enddo
 
-     !-----------------------------------------------------!
-     ! Set the energy grid and the magnetic field grid
+     do iR = 1, Nsr
+        RotatedVsrHZ(:,:,iR) = VsrSinglet(iR)*Sdressed(:,:) + VsrTriplet(iR)*Tdressed(:,:) + EThreshMat(:,:)
+     enddo
+     do iR = 1, Nlr
+        RotatedVlrHZ(:,:,iR) = VlrSinglet(iR)*Sdressed(:,:) + VlrTriplet(iR)*Tdressed(:,:) + EThreshMat(:,:)
+     enddo
+
      ! Start the energy loop
-     do iE = 1, NEgrid
+     do iE = 1, 1!NEgrid
         NumOpen=0        
         Energy = Eth(1) + Egrid(iE)!*nKPerHartree
         !write(6,*) "energy = ", energy
@@ -754,25 +781,37 @@ program main
            if(energy.gt.Eth(j)) NumOpen = NumOpen+1
         enddo
         call logderprop(mu,Energy,identity,weights,NPP,yi,yf,R,RotatedVHZ,size2)
-        call CalcK(yf,R(NPP),SD,mu,3d0,1d0,Energy,Eth,size2,NumOpen)
+!        call logderprop(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,RotatedVsrHZ,size2)
+!        call logderprop(mu,Energy,identity,wLR,Nlr,ym,yf,Rlr,RotatedVlrHZ,size2)
+        call CalcK(yf,Rmax,SD,mu,3d0,1d0,Energy,Eth,size2,NumOpen)
+!        call CalcK(ym,Rsr(Nsr),SD,mu,3d0,1d0,Energy,Eth,size2,NumOpen)
 
         ! Various output statements:
-        !write(50,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*muref*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-        !write(50,'(100d20.10)') Egrid(iE), SD%delta, SD%sindel, SD%sigma!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-        !write(6,'(100d20.10)') Egrid(iE), SD%delta, SD%sindel, 2d0*SD%sigma!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-        !write(50,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        if(iE.eq.1) then ! Write the field dependence at the lowest energy (close to threshold)
+           !write(51,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*muref*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+           write(51,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        endif
+
         write(50,'(100d20.10)') Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)!(-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-        write(6,'(A12,I4,A1,I4,A5,A20,100d14.5)') "iE/NEgrid = ",iE,'/',NEgrid,"   | ", "(energy, sigma) = ", &
-             Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)!(-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        !write(6,'(A12,I4,A1,I4,A5,A29,100d14.5)') "iE/NEgrid = ",iE,'/',NEgrid,"   | ", "(energy (mK), sigma (cm^2)) = ", &
+        !     Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)!(-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+
+        write(6,'(A12, I4, A1, I4, A3, A12,I4,A1,I4,A5,A29,100d14.5)') "iB/NBGrid = ", iB,'/',NBgrid, &
+             " | ", "iE/NEgrid = ",iE,'/',NEgrid,"   | ", "(energy (mK), sigma (cm^2)) = ", &
+             Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)
+
+        !        write(6,'(A12,I4,A1,I4,A5,A20,100d14.5)') "iE/NEgrid = ",iB,'/',NBgrid,"   | ", "(energy, sigma) = ", &
+!             Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)!(-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
 
         !        write(6,'(100d20.10)') Egrid(iE), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
         !write(6,'(100d16.6)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
      enddo
+     
   enddo
   close(50)
 
   !  deallocate(SPmat,TPmat,VHZ)
-  deallocate(Bgrid,XO,R,VSinglet,VTriplet,RM2)
+  deallocate(Bgrid,R,VSinglet,VTriplet)
 
 10 format(100F10.4)
 end program main
@@ -788,6 +827,20 @@ function dkdelta(a,b)
   return
 end function dkdelta
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine SetLogderWeights(weights,Npts)
+  implicit none
+  integer Npts,iR
+  double precision weights(Npts)
+
+
+  do iR = 1, Npts-1
+     if (mod(iR,2).eq.1)  weights(iR)=4d0
+     if (mod(iR,2).eq.0)  weights(iR)=2d0
+  enddo
+  weights(Npts)=1d0
+
+end subroutine SetLogderWeights
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine logderprop(mu,Energy,identity,weights,NPP,yi,yf,XO,Pot,size)
   implicit none
   integer i,j,step,NPP,size
@@ -801,7 +854,6 @@ subroutine logderprop(mu,Energy,identity,weights,NPP,yi,yf,XO,Pot,size)
   double precision, parameter :: onethird = 0.333333333333333333333d0
 
   h=XO(2)-XO(1)
-
   yprevious = yi
   do step = 1, NPP
      vtemp1 = 2d0*mu*(identity*Energy-Pot(:,:,step))
@@ -1205,11 +1257,12 @@ end subroutine CalcPhaseStandard
 ! ON OUTPUT:
 !  *VV(i) is an array of the potential function values (in cm-1)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, RM2, Cvals)
+SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
   use units
   implicit none
   integer NPP, ISTATE, ESTATE, i, j, N, IMN1, IMN2, iphi
-  double precision XO(NPP), VV(NPP), RM2(NPP), Cvals(3)
+  double precision, intent(in) :: XO(NPP)
+  double precision VV(NPP), RM2(NPP), Cvals(3)
   double precision MU, VLIM, RSR, RLR, NS, U1, U2, B, RM, xi, MUREF
   double precision C6, C8, C10, C26, Aex, gamma, beta, nu0, nu1
   double precision, allocatable :: A(:)
@@ -1708,15 +1761,3 @@ subroutine VdWLength(Cvals,beta,mu)
 
 end subroutine VdWLength
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine progress(j,jtot)
-  implicit none
-  integer(kind=4)::j,k,jtot
-!!$  character(len=17)::bar="???% |          |"
-!!$  write(unit=bar(1:3),fmt="(i3)") 10*j
-!!$  do k=1, j
-!!$    bar(6+k:6+k)="*"
-!!$  enddo
-!!$  ! print the progress bar.
-!!$  write(unit=6,fmt="(a1,a1,a17)") '+',char(13), bar
-  return
-end subroutine progress

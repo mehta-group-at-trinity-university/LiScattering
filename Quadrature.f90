@@ -50,7 +50,7 @@ CONTAINS
   END SUBROUTINE GetGaussFactors
 
   subroutine initCashKarp
-    ! These are the coefficients needed for the imbedded RK method of Cash and Karp. See Numerical Recipes RKCK.f
+  ! These are the coefficients needed for the imbedded RK method of Cash and Karp. See Numerical Recipes RKCK.f
     cka2 = 0.2d0
     cka3 = 0.3d0
     cka4 = 0.6d0
@@ -67,7 +67,7 @@ CONTAINS
     b52 = 2.5d0
     b53 = -70d0/27d0 !-2.59259259259259259259259259259d0
     b54 = 35d0/27d0 !1.29629629629629629629629629630d0
-    b61 = 1631d0/55296 !0.0294958043981481481481481481481d0
+    b61 = 1631d0/55296d0 !0.0294958043981481481481481481481d0
     b62 = 175d0/512d0 !0.341796875d0
     b63 = 575d0/13828d0 !0.0415943287037037037037037037037d0
     b64 = 44275d0/110529d0 !0.400345413773148148148148148148
