@@ -2,7 +2,7 @@ CMP     = gfortran
 F132FORM = -ffixed-line-length-132
 OPTFLAG = -O3
 FREEFORM = -ffree-form
-STND = -fdec #-std=gnu
+STND = #-fdec #-std=gnu
 DEBUG   = -fcheck=all
 FORCEDP = #-fdefault-real-8 -fdefault-double-
 LAPACK =   -framework accelerate
