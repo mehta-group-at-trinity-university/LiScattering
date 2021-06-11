@@ -4,7 +4,12 @@ module units
   ! For example KPerInvcm means "Kelvin in units of inverse cm".
   ! The numerical value on the RHS is therefore the value of 1K per 1 cm**(-1)
   ! The values were taken mostly from the NIST CODATA tables circa 2020.
+<<<<<<< HEAD
   
+=======
+
+  real*8, parameter :: Pi = 3.14159265358979323846264338328
+>>>>>>> MQDT
   real*8, parameter :: KPerInvcm = 1.4387862961655296d0
   real*8, parameter :: mKPerInvcm = 1.4387862961655296d3
   real*8, parameter :: InvcmPerHartree = 4.556335252912088d-6
@@ -25,6 +30,13 @@ module units
   real*8, parameter :: amuAU = amuKg/ElectronMassKg
   real*8, parameter :: vdwbetaLi = 65.2049d0
   real*8, parameter :: nKPerHartree = 3.1668115634556D-15
+<<<<<<< HEAD
+=======
+  real*8, parameter :: HartreePernK = 1/nKPerHartree
+  real*8, parameter :: HartreePermK = HartreePernK*1d-6
+  real*8, parameter :: Bohrpercm = 5.2917724900001d-9
+
+>>>>>>> MQDT
   
 
 !!$  real*8, parameter ::  AnstperBohr,HartreeperJoule,JouleperHartree,hSI,hHartreesec,hbarcMeVfm,hbarceVnm

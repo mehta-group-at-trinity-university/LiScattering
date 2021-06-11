@@ -187,14 +187,22 @@ c!
 !     xscale is a constant number that must be chosen at the beginning of a scattering calculation.
       INTEGER n
       DOUBLE PRECISION si,sip,sk,skp,x,ri,rk,rip,rkp,ldi,ldk,xscale
+<<<<<<< HEAD
       DOUBLE PRECISION factor,order,RTPIO2
+=======
+      DOUBLE PRECISION factor,order,RTPIO2,ldbigI,ldbigK
+>>>>>>> MQDT
       double precision RT2OPI,bigk, bigi, bigkp, bigip
       PARAMETER (RTPIO2=1.25331413731550d0)
       PARAMETER (RT2OPI=0.7978845608028654d0)
       if(n.lt.0.d0.or.x.le.0.d0) then
          write(6,*) 'bad arguments in sphbesik, (n, x) = ', n, x
       endif
+<<<<<<< HEAD
       order=n+0.5d0
+=======
+      order=dble(n)+0.5d0
+>>>>>>> MQDT
 
 c$$$  call bessik(x,order,ri,rk,rip,rkp)
 c$$$  factor=RT2OPI*sqrt(x)
@@ -203,10 +211,17 @@ c$$$  sk=factor*rk
 c$$$  sjp=factor*rip+si/(2.d0*x)
 c$$$  syp=factor*rkp+sk/(2.d0*x)
 
+<<<<<<< HEAD
       call MyScaledBessIK(x, order, ri, rk, rip, rkp, ldi,ldk)
 !     Inu(x) = exp(x) * alpha(x)
 !     Knu(x) = exp(-x) * beta(x)
 !     This routine returns alpha, beta, alpha', beta', I'/I, and K'/K
+=======
+      call MyScaledBessIK(x, order, ri, rk, rip, rkp, ldbigI,ldbigK)
+!     Inu(x) = exp(x) * alpha(x)
+!     Knu(x) = exp(-x) * beta(x)
+!     The above routine returns alpha, beta, alpha', beta', I'/I, and K'/K
+>>>>>>> MQDT
       factor=RT2OPI*sqrt(x)
       si = ri*factor*exp(x-xscale)
       sk = rk*factor*exp(xscale-x)
@@ -214,8 +229,17 @@ c$$$  syp=factor*rkp+sk/(2.d0*x)
       bigip = exp(x-xscale)*(rip+ri)
       sip = factor*bigip + si/(2.d0*x)
       skp = factor*bigkp + sk/(2.d0*x)
+<<<<<<< HEAD
       ldi = sip/si
       ldk = skp/sk
+=======
+!      ldi = sip/si
+!      ldk = skp/sk
+!     I've commented out the above two lines in favor of the following two
+!     which should be more numerically stable since it avoids exponentially large numbers
+      ldi = 1d0/(2d0*x) + ldbigI
+      ldk = 1d0/(2d0*x) + ldbigK
+>>>>>>> MQDT
       return
       END SUBROUTINE Mysphbesik
       
@@ -277,12 +301,42 @@ c     following assumes v = n+1/2 where n=0,1,2,......
 
       sj = factor*(P*dcos(chi) - Q*dsin(chi)) 
       sy = factor*(P*dsin(chi) + Q*dcos(chi))
+<<<<<<< HEAD
       sjp=-factor*(R*dsin(chi) - S*dcos(chi))
       syp= factor*(R*dcos(chi) - S*dsin(chi))
 
       return
       end
 
+=======
+      sjp = -factor*(R*dsin(chi) - S*dcos(chi))
+      syp = factor*(R*dcos(chi) - S*dsin(chi))
+
+      return
+      end
+!cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!chiminus is one of the ZERO energy solutions to the C6 potential for partial wave lwave.
+!chiplusp is the derivative.
+      subroutine chiminus(lwave,r,chim,chimp)
+      implicit none
+      integer lwave
+      double precision chim,chimp
+      double precision r, xnu, x,rj,ry,rjp,ryp
+      double precision xnu1, rj1, ry1, rj1p, ry1p
+
+      xnu = 0.25d0*(2d0*lwave+1d0)
+      x = 0.5d0/(r**2)
+      call bessjy(x,xnu,rj,ry,rjp,ryp)
+      chim = sqrt(r)*rj
+
+      xnu = 0.25d0*(2d0*lwave+1d0)
+      xnu1 = 0.25d0*(2d0*lwave+5d0)
+      call bessjy(x,xnu,rj,ry,rjp,ryp)
+      call bessjy(x,xnu1, rj1, ry1, rj1p, ry1p)
+      chimp = r**(-2.5d0)*(-dble(lwave)*r**2*rj + rj1)
+
+      end 
+>>>>>>> MQDT
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       SUBROUTINE bessjy(x,xnu,rj,ry,rjp,ryp)
       ! From Numerical Recipes (Press et al)
@@ -558,8 +612,13 @@ c     following assumes v = n+1/2 where n=0,1,2,......
          betap = dexp(x)*(rkp+rk)
          beta = dexp(x)*rk
       endif
+<<<<<<< HEAD
       ldi = -1.d0 +  alphap/alpha
       ldk = +1.d0 +  betap/beta
+=======
+      ldi = +1.d0 +  alphap/alpha
+      ldk = -1.d0 +  betap/beta
+>>>>>>> MQDT
 
       end
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc

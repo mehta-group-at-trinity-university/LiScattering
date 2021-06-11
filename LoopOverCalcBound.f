@@ -78,7 +78,11 @@ c     read in domain information
      >     QTemp(NumChan,NumChan,PotInterpPoints),
      >     dP(NumChan,NumChan,PotInterpPoints)) ! 
 
+<<<<<<< HEAD
       write(6,*), '#Reading in the adiabatic potentials and couplings'
+=======
+      write(6,*) '#Reading in the adiabatic potentials and couplings'
+>>>>>>> MQDT
 
       call ReadCurves(PotInterpPoints,R,Ucurves,P,QTemp,Q,NumChan,NumTot) ! 
 
@@ -225,7 +229,11 @@ c      call CheckBasisPhi(RMin,RMax,Left,Right,RDim,RNumPoints,RPoints,0,Order,6
 
       x=RMin
       do while (x.lt.RMax)
+<<<<<<< HEAD
          write(777,*), x, phirecon(x,1,1,evec,Left,Right,RDim,MatrixDim,RNumPoints,RPoints,order) ! 
+=======
+         write(777,*) x, phirecon(x,1,1,evec,Left,Right,RDim,MatrixDim,RNumPoints,RPoints,order) ! 
+>>>>>>> MQDT
          x=x+0.05
       enddo
 
@@ -559,6 +567,7 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       return
       end
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+<<<<<<< HEAD
       subroutine Mydggev(N,H,LDH,L,LDL,eval,evec)
       implicit none
       integer LDH,N,LDL,info
@@ -627,6 +636,76 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       deallocate(ipiv,work)
       end
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+=======
+c$$$      subroutine Mydggev(N,H,LDH,L,LDL,eval,evec)
+c$$$      implicit none
+c$$$      integer LDH,N,LDL,info
+c$$$      double precision H(LDH,N),L(LDL,N),eval(N),evec(N,N)
+c$$$      double precision, allocatable :: alphar(:),alphai(:),beta(:),work(:),VL(:,:)
+c$$$      integer lwork,i,im,in,j
+c$$$
+c$$$      allocate(alphar(N),alphai(N),beta(N))
+c$$$
+c$$$
+c$$$      info = 0
+c$$$      lwork = -1
+c$$$      allocate(work(1))
+c$$$      call dggev('N','V',N,H,LDH,L,LDL,alphar,alphai,beta,VL,1,evec,N,work,lwork,info) ! 
+c$$$      do im = 1,N
+c$$$         alphar(im)=0.0d0
+c$$$         alphai(im)=0.0d0
+c$$$         beta(im)=0.0d0
+c$$$         eval(im)=0.0d0
+c$$$         do in = 1,N
+c$$$            evec(im,in)=0.0d0
+c$$$         enddo
+c$$$      enddo
+c$$$
+c$$$      lwork=work(1)
+c$$$      deallocate(work)
+c$$$      allocate(work(lwork))
+c$$$      call dggev('N','V',N,H,LDH,L,LDL,alphar,alphai,beta,VL,1,evec,N,work,lwork,info) ! 
+c$$$      
+c$$$      do i = 1, N
+c$$$         if (abs(alphai(i)).ge.1e-12) then
+c$$$            print*, '#eigenvalue may be complex! alphai(',i,')=',alphai(i) ! 
+c$$$         endif
+c$$$         if(abs(beta(i)).ge.1e-12) then
+c$$$            eval(i) = -alphar(i)/beta(i)
+c$$$         endif
+c$$$      enddo
+c$$$
+c$$$      call deigsrt(eval,evec,N,N)
+c$$$
+c$$$      do i = 1,N
+c$$$         eval(i)=-eval(i)
+c$$$      enddo
+c$$$
+c$$$      deallocate(alphar,alphai,beta)
+c$$$      deallocate(work)
+c$$$
+c$$$      end
+
+c$$$cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+c$$$      subroutine CompSqrMatInv(A, N)
+c$$$      implicit none
+c$$$      integer N,info,lwk
+c$$$      integer, allocatable :: ipiv(:)
+c$$$      double precision, allocatable :: work(:)
+c$$$      double complex A(N,N)
+c$$$      allocate(ipiv(N))
+c$$$      call zgetrf(N, N, A, N, ipiv, info)
+c$$$      allocate(work(1))
+c$$$      lwk = -1
+c$$$      call zgetri(N, A, N, ipiv, work, lwk, info)
+c$$$      lwk = work(1)
+c$$$      deallocate(work)
+c$$$      allocate(work(lwk))
+c$$$      call zgetri(N, A, N, ipiv, work, lwk, info)
+c$$$      deallocate(ipiv,work)
+c$$$      end
+c$$$cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+>>>>>>> MQDT
      
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       subroutine CheckPot(Pot,RNumPoints,NumChan,LegPoints,xLeg,RPoints,iSector) ! 
@@ -645,10 +724,17 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
                xScaledZero = 0.5d0*(bx+ax)
                do lx = 1,LegPoints
                   x = xIntScale(kx)*xLeg(lx)+xScaledZero
+<<<<<<< HEAD
                   write(888,*), x, Pot(mch,nch,lx,kx,iSector)
                enddo
             enddo
             write(888,*), ' '
+=======
+                  write(888,*) x, Pot(mch,nch,lx,kx,iSector)
+               enddo
+            enddo
+            write(888,*) ' '
+>>>>>>> MQDT
          enddo
       enddo
       
@@ -687,10 +773,17 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
             xScaledZero = 0.5d0*(bx+ax)
             do lx = 1,LegPoints
                x = xIntScale(kx)*xLeg(lx)+xScaledZero
+<<<<<<< HEAD
                write(file,*), x, u(lx,kx,ix)
             enddo
          enddo
          write(file,*), ' '
+=======
+               write(file,*) x, u(lx,kx,ix)
+            enddo
+         enddo
+         write(file,*) ' '
+>>>>>>> MQDT
       enddo      
       
       deallocate(xIntScale)
