@@ -36,10 +36,11 @@ CONTAINS
   END SUBROUTINE DeAllocateScat
 
 END MODULE DataStructures
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 module scattering
   use datastructures
   !****************************************************************************************************
-
 CONTAINS
   SUBROUTINE CalcK(Y,rm,SD,mu,d,alpha,EE,Eth,NumChannels,NumOpen)
     !   use DipoleDipole
@@ -275,7 +276,7 @@ contains
        enddo
     enddo
     write(6,*)
-    
+
     allocate(tempstates(size),symstates(size))
     count = 0
     do n1 = 1, size
@@ -523,17 +524,270 @@ contains
 
   end subroutine MakeSTHFProj
 end module hyperfine
+!!$!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!-------------------------------------------------------------------------------------------------------
+module MQDT
+  use units
+  implicit none
+  integer Lmax, NHFEnergyGrid,NThresholdEPoints,InterpOrder
+  double precision, allocatable :: HFEnergyGrid(:), ThresholdEnergyGrid(:)
+  double precision, allocatable :: gam(:), phistandard(:), cotgamma(:)
+  double precision, allocatable :: cotgammaknots(:), cotgammabcoef(:)
+  double precision MaxZeemanSplitting
+!!$!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+contains 
+  subroutine initMQDT(RX,RF,mu,betavdw,Cvals)
+    implicit none
+    double precision RX, RF, Emin, Emid, Emax, mu, betavdw,Cvals(3)
+    integer lp1
+    ! Emin to Emid should be the "threshold (or ultracold regime)
+    ! I'll set Emid to 50 mK
+    ! Emax should be set to the maximum hyperfine splitting, since for a threshold collision, t
+    Lmax = 3
+    NThresholdEPoints = 100
+    NHFEnergyGrid = 200
+    InterpOrder = 2
+    allocate(phistandard(Lmax+1))
+    allocate(cotgamma(NHFEnergyGrid))
+    allocate(gam(NHFEnergyGrid))
+    allocate(HFEnergyGrid(NHFEnergyGrid))
+    allocate(cotgammaknots(NHFEnergyGrid+InterpOrder))
+    allocate(cotgammabcoef(NHFEnergyGrid))
 
+    write(6,'(A66)')  "Calculating the phase standard for the reference functions for..."
+    !    write(6,'(A60)')  "----------------------------------------------------------"
+    write(6,'(A7,A12, A12)') "    L  ", "       phi  ", "      C6-phi    "
+    write(6,'(A7,A12, A12)') "-------", "--------------","----------------"
+    do lp1 = 1, Lmax+1
+       call CalcPhaseStandard(RX,RF,lp1-1,mu,betavdw,Cvals,phistandard(lp1))
+       write(6,'(I5, F14.6, F14.6)') lp1-1, phistandard(lp1), tan(-1d0/(2d0*RX**2) + dble(lp1-1)*Pi/4d0 -5d0*Pi/8d0)
+    enddo
+    write(6,*)
+    Emin = 1d-6/HartreePermK
+    call GridMaker(HFEnergyGrid, NHFEnergyGrid, -Emin - MaxZeemanSplitting, -Emin , "linear")
+!!$    HFEnergyGrid(:) = HFEnergyGrid(:) + Emin + MaxZeemanSplitting
+    !call GridMaker(HFEnergyGrid, NHFEnergyGrid, Emin, Emin + MaxZeemanSplitting , "linear")
+
+
+  end subroutine initMQDT
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  subroutine MQDTfunctions(R1, R2, NA, scale, Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf,f0, g0, f0p, g0p)
+    use units
+    implicit none
+    integer NA, i, j, lwave
+    double precision Cvals(3), mu, betavdw, energy, f0, g0, f0p, g0p, phiL
+    double precision alpha0(2), alphaf(2)
+    double precision, allocatable :: phaseint(:)
+    double precision, allocatable :: alpha(:,:),R(:)
+    double precision R1, R2
+    CHARACTER(LEN=*), INTENT(IN) :: scale
+
+    allocate(R(NA),alpha(NA,2),phaseint(NA))
+    call GridMaker(R,NA,R1,R2,scale)
+    alpha(1,:) = alpha0
+
+    call CalcMilne2step(R,alpha,NA,energy,lwave,mu,Cvals,phaseint)
+    alphaf = alpha(NA,:)
+    do i = 1, NA
+       f0 = Pi**(-0.5d0)*alpha(i,1)*sin(phaseint(i)+phiL)
+       g0 = -Pi**(-0.5d0)*alpha(i,1)*cos(phaseint(i)+phiL)
+       f0p = alpha(i,2)/alpha(i,1) * f0 - g0/alpha(i,1)**2
+       g0p = alpha(i,2)/alpha(i,1) * g0 + f0/alpha(i,1)**2
+       !     write(101,*) R(i), alpha(i,1), alpha(i,2), phaseint(i), f0, g0
+    enddo
+
+  end subroutine MQDTfunctions
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  subroutine SetupInterpGamma(RX,RF,size,lwave,mu,betavdw,Cvals,phiL)
+    use bspline
+    !This calculates the tan(gamma) MQDT parameter.  See Ruzic's PRA for details
+    ! While in principle this can be calculated once as a function of energy, interpolated and
+    ! evaluated at the relative energy for each channel, here I'm doing it the "brute force" way
+    ! I simply re-calculate tan(gamma) and setup the cot(gamma) matrix for each channel at each needed energy
+    implicit none
+    integer lwave, iE, ix, Nx,size,ith,INBV
+    double precision RX, RF, mu, betavdw, Cvals(3), phiL,EvdW
+    double precision x, y,dy, xscale, si, sk, sip, skp, ldk, ldi, kappa, f0, f0p, g0, g0p
+    double precision alpha0(2),alphaf(2),energy, tangamma, Emin, offset
+ !   double precision, allocatable :: Q(:), WORK(:)
+    !    double precision, allocatable :: xgrid(:), Rgrid(:)
+    !    double precision, allocatable :: phaseint(:)
+    double precision, external :: ksqrLR, VLR, VLRPrime
+!    allocate Q((2*InterpOrder-1)*NHFEnergyGrid), WORK(3*InterpOrder))
+    Emin = 1d-6/HartreePermK
+    EvdW = 1d0/(2d0*mu*betavdw**2)
+    alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
+    alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
+         /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
+
+    xscale=0d0
+    Nx = 1000000
+    cotgamma = 0d0
+    offset = 2*Emin + MaxZeemanSplitting
+    !  allocate(xgrid(Nx),Rgrid(Nx))
+    !  call GridMaker(Rgrid, Nx, RX, RF, "quadratic")
+
+    do iE = 1, NHFEnergyGrid
+       ! For gamma, the energy represents a binding, so...
+       energy = HFEnergyGrid(iE)! - (Emin + MaxZeemanSplitting)
+       kappa = sqrt(2*mu*abs(energy))
+       alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
+       alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
+            /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
+       call MQDTfunctions(RX, RF, Nx,"quadratic", Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
+
+       x = kappa*RF
+       call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
+       tangamma = -(g0p - kappa*ldk*g0)/(f0p - kappa*ldk*f0)
+       cotgamma(iE)= 1d0/tangamma
+       gam(iE) = atan(tangamma)
+       !       write(6,*) iE,"/",NHFEnergyGrid, HFEnergyGrid(iE) - (Emin + MaxZeemanSplitting), cotgamma(iE), gam(iE)
+       write(6,*) iE,"/",NHFEnergyGrid, HFEnergyGrid(iE), cotgamma(iE), gam(iE)
+!       write(400,*)  HFEnergyGrid(iE)/EvdW, cotgamma(iE), gam(iE)
+       !     write(400,*) xgrid(ix), ldk
+!       HFEnergyGrid(iE) = dble(iE)
+    enddo
+    write(6,*) "InterpOrder = ", InterpOrder
+
+    !call SetupInterp(HFEnergyGrid,cotgamma,NHFEnergyGrid,InterpOrder,cotgammaknots,cotgammabcoef)
+    call dbsnak(NHFEnergyGrid, HFEnergyGrid, InterpOrder, cotgammaknots)
+
+
+   ! do iE = 1, NHFEnergyGrid
+!       if(cotgammaknots(iE).ge.cotgammaknots(iE+1)) then
+    !      write(6,*) "testing:", iE,  cotgammaknots(iE), cotgammaknots(iE+1)
+!       endif
+    !enddo
+
+    call dbsint(NHFEnergyGrid,HFEnergyGrid,cotgamma,InterpOrder,cotgammaknots,cotgammabcoef)
+!    stop
+!    INBV=1
+    ! test the interpolation
+
+    do iE = 1, NHFEnergyGrid-1
+       !x  = 0.5d0*(HFEnergyGrid(iE)+HFEnergyGrid(iE+1))
+       x  = HFEnergyGrid(iE)
+       !       call polint(HFEnergyGrid(iE:iE+1),cotgamma(iE:iE+1),1,x,y,dy)
+       !       write(400,*) x, atan(1d0/y)!, dy
+       !              write(6,*) iE,"/",NHFEnergyGrid, HFEnergyGrid(iE), cotgammaknots(InterpOrder+iE)
+       write(6,*) "Test: ",iE,"/",NHFEnergyGrid, HFEnergyGrid(iE)/EvdW, cotgamma(iE), &
+            dbsval(x,InterpOrder,cotgammaknots,NHFEnergyGrid,cotgammabcoef) ! gam(iE)
+       
+!       write(6,*) "Test: ",iE,"/",NHFEnergyGrid, x - (Emin + MaxZeemanSplitting), cotgamma(iE), &
+!            dbsval(x,InterpOrder,cotgammaknots,NHFEnergyGrid,cotgammabcoef) ! gam(iE)
+       !       energy  = -0.5d0*(HFEnergyGrid(iE)+HFEnergyGrid(iE+1))
+!       write(400,*) x - (Emin + MaxZeemanSplitting), &
+!            dbsval(HFEnergyGrid(iE),InterpOrder,cotgammaknots,NHFEnergyGrid,cotgammabcoef) ! gam(iE)
+       write(400,*) x, &
+            dbsval(x,InterpOrder,cotgammaknots,NHFEnergyGrid,cotgammabcoef) ! gam(iE)
+       !       write(6,*) iE,"/",NHFEnergyGrid, energy/EvdW, gam(iE)
+       
+    enddo
+  end subroutine SetupInterpGamma
+  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  ! This subroutine calculates the phase standardization according to the Ruzic scheme.
+  subroutine CalcPhaseStandard(RX,RF,lwave,mu,betavdw,Cvals,phiL)
+    use units
+    implicit none
+    double precision xnu, rj, ry, rjp, ryp, RX, RF, chim, chimp, betavdw, energy, mu, phiL
+    double precision Cvals(3),  f0, g0, f0p, g0p, tanphi, phi
+    double precision, allocatable :: X(:)
+    double precision, allocatable :: phaseint(:)
+    double precision, allocatable :: alpha(:,:)
+    integer i, N, lwave
+    double precision, external :: ksqrLR, VLR, VLRPrime
+
+    !-------------------------------------------------------
+    !uncomment this block to test the phase standardization
+    !agreement with the analytical values for the C6 potential
+!!$  Cvals(1) = 1d0
+!!$  Cvals(2) = 0d0
+!!$  Cvals(3) = 0d0
+!!$  betavdw = 1d0
+!!$  mu = 0.5d0
+!!$  RX=0.1d0*betavdw
+!!$  RF=4.0d0*betavdw
+    !--------------------------------------------------------
+
+    N = 1000000
+    energy = 0d0
+    ! first just test the bessel function
+    allocate(x(N), alpha(N,2),phaseint(N))
+    alpha(1,1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
+    alpha(1,2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
+         /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
+
+    xnu = 0d0
+    call GridMaker(X,N,RX,RF,'quadratic')
+    call CalcMilne2step(X,alpha,N,energy,lwave,mu,Cvals,phaseint)
+    !  write(6,*) "betavdw = ", betavdw
+
+    do i = N, N
+       f0 = Pi**(-0.5d0)*alpha(i,1)*sin(phaseint(i))
+       g0 = -Pi**(-0.5d0)*alpha(i,1)*cos(phaseint(i))
+       f0p = alpha(i,2)/alpha(i,1) * f0 - g0/alpha(i,1)**2
+       g0p = alpha(i,2)/alpha(i,1) * g0 + f0/alpha(i,1)**2
+
+       call chiminus(lwave,x(i)/betavdw,chim,chimp) !this requires van der Waals units, so divide by betavdw since x(i) is in bohr
+       chimp = chimp/betavdw ! d(chi)/dR comes out in van der Waals units so this converts length to bohr
+       tanphi = -(chim*g0p - chimp*g0)/(chim*f0p - chimp*f0)
+       !     write(100,*) X(i), tanphi- tan(-1d0/(2d0*RX**2) + dble(lwave)*Pi/4d0 -5d0*Pi/8d0)!, atan(tanphi)  
+    enddo
+    !  write(6,*) "lwave = ", lwave, "tanphi = ", tanphi!, "analytical result = ", &
+    !       tan(-1d0/(2d0*RX**2) + dble(lwave)*Pi/4d0 -5d0*Pi/8d0), &
+    !       "difference = ", tanphi- tan(-1d0/(2d0*RX**2) + dble(lwave)*Pi/4d0 -5d0*Pi/8d0)
+    phiL = atan(tanphi)
+
+  end subroutine CalcPhaseStandard
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  subroutine CalcKsr(ym, Ksr, size2, RX, RM, energy, Eth, lwave, mu, Cvals, betavdw, phiL)
+    implicit none
+    integer size2, lwave, i, NA
+    double precision mu, betavdw, phiL, RX, RM, energy,alpha0(2),alpham(2),alphaf(2),f0,g0,f0p,g0p
+    double precision ym(size2,size2), Eth(size2), Cvals(3)
+    double precision f0mat(size2,size2), g0mat(size2,size2), f0pmat(size2,size2),g0pmat(size2,size2), Ksr(size2,size2)
+    double precision temp1(size2,size2), temp2(size2,size2)
+    double precision, external :: ksqrLR, VLR, VLRPrime
+
+    ! Ksr = (Y g - g')^(-1) (Y f - f')
+    alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
+    alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
+         /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
+    f0mat = 0d0
+    g0mat = 0d0
+    f0pmat = 0d0
+    g0pmat = 0d0
+    NA = 1000000
+    ! Construct the diagonal reference function matrices
+    do i = 1, size2
+       call MQDTfunctions(RX, RM, NA,"quadratic", Cvals, mu, lwave, energy-Eth(i), betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
+       f0mat(i,i) = f0
+       f0pmat(i,i) = f0p
+       g0mat(i,i) = g0
+       g0pmat(i,i) = g0p
+    enddo
+
+    temp1 = MATMUL(ym,g0mat) - g0pmat
+    temp2 = MATMUL(ym,f0mat) - f0pmat
+    call sqrmatinv(temp1,size2)
+    Ksr = MATMUL(temp1,temp2)
+
+  end subroutine CalcKsr
+
+end module MQDT
 
 !****************************************************************************************************
 program main
   use units
+  use MQDT
+  use bspline
   use hyperfine
   use datastructures
   use scattering
   use quadrature
   implicit none
-  integer NPP, iR, iB, ihf, n, i, j, A, nc, nr, ESTATE, ISTATE, IMN1
+  integer iR, iB, ihf, n, i, j, A, nc, nr, ESTATE, ISTATE, IMN1
   integer nspin1, nspin2, espin1, espin2 !nspin is the nuclear spin and espin is the electronic spin
   integer i1,i2,s1,s2,S,sym,size1,size2,NBgrid,NEgrid,mtot, lwave,NumOpen
   integer Nsr, Nlr
@@ -543,26 +797,26 @@ program main
   double precision, allocatable :: VSinglet(:), VTriplet(:), R(:)
   double precision, allocatable :: weights(:),ystart(:,:),yi(:,:),ym(:,:),yf(:,:),Kmat(:,:),identity(:,:)
   double precision, allocatable :: HHZ(:,:), Bgrid(:),Egrid(:), EVAL(:), EVEC(:,:),RotatedVHZ(:,:,:),TEMP(:,:),EThreshMat(:,:)
-  double precision, allocatable :: cotgamma(:,:,:),Ktemp1(:,:),Ktemp2(:,:),KPQ(:,:),KQP(:,:)
+  double precision, allocatable :: CotGammaMat(:,:,:),Ktemp1(:,:),Ktemp2(:,:),KPQ(:,:),KQP(:,:)
   double precision, allocatable :: SPmat(:,:), Sdressed(:,:), Tdressed(:,:), TPmat(:,:)
   double precision, allocatable :: VHZ(:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:),Ksr(:,:),RmidArray(:)
   double precision VLIM,Rmin,Rmax,dR,phiL
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2
   double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw
   integer iE, NA,iRmid,NRmid
-  double precision RX, Rmid, RF, Cvals(3), Ktilde
+  double precision RX, Rmid, RF, Cvals(3), Ktilde,Rdum(2),Vdum(2)
 
   double precision, external :: VLR, rint, abar
   type(hf1atom) a1, a2
   type(hf2atom) mstate1, mstate2
   type(hf1atom), allocatable :: hf1(:) 
   TYPE(ScatData) :: SD
-
+  
   !-----------------------------------------------------!
   ! Set the energy and B-field grid
-  NBgrid = 200
+  NBgrid = 100
   NEgrid = 100
-  
+
   Bmin = 1d-3
   Bmax = 1200d0
   Emin = 1d-6/HartreePermK !25d0/HartreePermK
@@ -573,7 +827,7 @@ program main
   call GridMaker(Egrid,NEgrid,Emin,Emax,'linear') ! measure the collision energy in Hartree
 
   !--------------------------------------------------!
-  
+
   ISTATE = 6  !select atomic species (see AtomData for documentation)
   sym = -1 ! set to +1 for bosonic K-39, Rb-85, Rb-87, Cs-133, Li-7 and Na-23; -1 for fermionic K-40 and Li-6; 0 for any mixed collision
   lwave = 0 ! s wave collisions
@@ -627,7 +881,7 @@ program main
   allocate(SPmat(size2,size2), TPmat(size2,size2))
   allocate(Sdressed(size2,size2), Tdressed(size2,size2))
   allocate(EThreshMat(size2,size2),Ksr(size2,size2))
-  
+
   S = 0
   call MakeSTHFProj(S, nspin1, nspin1, espin1, espin1, hf2symTempGlobal, size2, SPmat)
   write(6,*) "The singlet projection matrix:"
@@ -645,9 +899,10 @@ program main
   allocate(EVEC(size2,size2),EVAL(size2))
   call AllocateScat(SD,size2)
   allocate(identity(size2,size2),ystart(size2,size2),yi(size2,size2),ym(size2,size2),yf(size2,size2),Eth(size2))
-  allocate(cotgamma(size2-1,size2-1,NEgrid))
+  allocate(CotGammaMat(size2-1,size2-1,NEgrid))
   allocate(Ktemp1(size2-1,size2-1),Ktemp2(1,1))
   allocate(KPQ(1,size2-1),KQP(size2-1,1))
+
   identity(:,:)=0d0
   ystart(:,:)=0d0
   yf(:,:)=0d0
@@ -655,101 +910,82 @@ program main
      identity(i,i)=1d0
      ystart(i,i)=1d20
   enddo
-  
 
+  call MakeHHZ2(Bgrid(NBgrid),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
+  HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
+  !Find the asymptotic channel states
+  call MyDSYEV(HHZ2,size2,Eth,AsymChannels)
+  MaxZeemanSplitting = Eth(size2) - Eth(1)
+  write(6,*) "Maximum Zeeman splitting is at B = ", Bgrid(NBgrid), "is DE = ", MaxZeemanSplitting
+  !  stop
+
+  
   open(unit = 50, file = "EnergyDependence.dat")
   open(unit = 51, file = "FieldDependence.dat")
   open(unit = 52, file = "RDependenceKsr.dat")
-  
+  open(unit = 53, file = "QuantumDefects-B.dat")
+  open(unit = 54, file = "QuantumDefects-E.dat")
+
   ! None of the code above this line depends on the radial grid.
   !----------------------------------------------------------------------------------------------------
-  NRmid = 10
-  allocate(RmidArray(NRmid))
-  call GridMaker(RmidArray,NRmid,15d0,50d0,'linear')
-  
   Rmin = 0.03d0 ! use atomic units here (bohr)  
   Rmax = 500d0 ! use atomic units here (bohr)
-  !  NPP = 1000000 ! number of points needed for the log-derivative propagator (typically very large if integrating out to Rmax)
+  ! Call the SetupPotential routine for a dummy array just to get the Cvals.
+  Rdum(1) = Rmin
+  Rdum(2) = Rmax
+  call SetupPotential(ISTATE,1,muref,muref,2,VLIM,Rdum*BohrPerAngstrom,Vdum,Cvals)
+  ! Find the van der Waals length
+  call VdWLength(Cvals,betavdw,MU)
+  write(6,'(A,F6.2,A)') "The van der Waals length is: ", betavdw, " bohr"
+  RX = 0.1d0*betavdw ! this is the starting radius for the Milne solutions used to calculate the MQDT phase standard for the reference functions
+  RF = Rmax     !4.0d0*betavdw ! Final radius for phase standard
+  call initMQDT(RX,RF,mu,betavdw,Cvals)
+  call SetupInterpGamma(RX,RF,size2,lwave,mu,betavdw,Cvals,phistandard(lwave+1))
+  !stop
+  
+  NRmid = 10
+  allocate(RmidArray(NRmid))
+  call GridMaker(RmidArray,NRmid,30d0,40d0,'linear')
+
   Nsr = 200000
   Nlr = 200000
   VLIM = 0d0
-  allocate(VHZ(size2,size2))
-  !  allocate(RotatedVHZ(size2,size2,NPP))
-  allocate(RotatedVsrHZ(size2,size2,Nsr),RotatedVlrHZ(size2,size2,Nlr))
-  
 
-     !  allocate(R(NPP),weights(NPP),VSinglet(NPP),VTriplet(NPP))
+  allocate(VHZ(size2,size2))
+  allocate(RotatedVsrHZ(size2,size2,Nsr),RotatedVlrHZ(size2,size2,Nlr))
   allocate(Rsr(Nsr),Rlr(Nlr),wSR(Nsr),wLR(Nlr),VsrSinglet(Nsr),VlrSinglet(Nlr),VsrTriplet(Nsr),VlrTriplet(Nlr))
 
+  call SetLogderWeights(wSR,Nsr) ! Set the array of weights needed for the log-der propagator
+  call SetLogderWeights(wLR,Nlr) ! These don't depend on the radial points, just the number of points
+
+  goto 11
   do iRmid = NRmid, NRmid
-     Rmid = RmidArray(iRmid)
-     !  call GridMaker(R,NPP,Rmin,Rmax,'linear')
-     
-!!$  write(6,*) 'setting up potentials' 
-!!$  ! Find the "singlet" X(^1\Sigma_g^+) curve
-!!$  ESTATE = 1 
-!!$  ! Returns the potential in cm^(-1)
-!!$  call SetupPotential(ISTATE,ESTATE,muref,muref,NPP,VLIM,R*BohrPerAngstrom,VSinglet,Cvals)  
-!!$  !Find the triplet potential
-!!$  ESTATE = 3
-!!$  call SetupPotential(ISTATE,ESTATE,muref,muref,NPP,VLIM,R*BohrPerAngstrom,VTriplet,Cvals)
-     
-     
-     ! convert to atomic units
-!!$  VSinglet(:) = VSinglet(:)*InvcmPerHartree
-!!$  VTriplet(:) = VTriplet(:)*InvcmPerHartree 
-     
+     Rmid = RmidArray(iRmid)     
      ! prepare some arrays for the log-derivative propagator
-     call GridMaker(Rsr,Nsr,Rmin,Rmid,'linear')
+     call GridMaker(Rsr,Nsr,Rmin,Rmid,'linear')  ! Make the radial grids
      call GridMaker(Rlr,Nlr,Rmid,Rmax,'linear')
-     !  call SetLogderWeights(weights,NPP)
-     call SetLogderWeights(wSR,Nsr)
-     call SetLogderWeights(wLR,Nlr)
-     
+
      ESTATE = 1
      call SetupPotential(ISTATE,ESTATE,muref,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrSinglet,Cvals)
      call SetupPotential(ISTATE,ESTATE,muref,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrSinglet,Cvals)
      ESTATE = 3
      call SetupPotential(ISTATE,ESTATE,muref,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrTriplet,Cvals)
      call SetupPotential(ISTATE,ESTATE,muref,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrTriplet,Cvals)
-     VsrSinglet(:)=  VsrSinglet(:)*InvcmPerHartree
-     VsrTriplet(:)=  VsrTriplet(:)*InvcmPerHartree
-     VlrSinglet(:)=  VlrSinglet(:)*InvcmPerHartree
-     VlrTriplet(:)=  VlrTriplet(:)*InvcmPerHartree
+
      if(iRmid.eq.NRmid) then
         write(6,'(A)') "See fort.10 and fort.30 for the singlet/triplet potentials"
         do iR=1, Nsr
            write(10,*) Rsr(iR), abs((VsrSinglet(iR) - VLR(mu,lwave,Rsr(iR),Cvals))/VsrSinglet(iR))
            write(30,*) Rsr(iR), abs((VsrTriplet(iR) - VLR(mu,lwave,Rsr(iR),Cvals))/VsrTriplet(iR))
         enddo
-        
 !!$     do iR=1, Nlr
 !!$        write(10,*) Rlr(iR), VlrSinglet(iR)     
 !!$        write(30,*) Rlr(iR), VlrTriplet(iR)
 !!$     enddo
      endif
-       ! Find the van der Waals length
-     call VdWLength(Cvals,betavdw,MU)
-     write(6,'(A,F6.2,A)') "The van der Waals length is: ", betavdw, " bohr"
 
      EThreshMat(:,:) = 0d0
-     
-     !----------------------------------------------------------------------------------------------------------------
-     ! BEGIN THE SECTION TO CALCULATE THE SINGLE-CHANNEL QDT functions and parameters
-     !
-     ! the dispersion coefficients are the same for the singlet and triplet potentials
-     ! so this code uses the triplet values by default.  "Cvals" is initalized by the triplet call above
-!     NA = 100000 ! Number of points for the single-channel QDT calculations.  Make this a multiple of 10.
 
-     RX = 0.1d0*betavdw ! this is the starting radius for the Milne solutions used to calculate the MQDT phase standard for the reference functions
-     RF = Rlr(Nlr)!4.0d0*betavdw ! Final radius for phase standard
-     
-     call CalcPhaseStandard(RX,RF,lwave,mu,betavdw,Cvals,phiL) ! calculate the phase standardization for lwave = 0
-     !  call CalcPhaseStandard(RX,RF,1,mu,betavdw,Cvals,phiL) ! lwave = 1
-     !  call CalcPhaseStandard(RX,RF,2,mu,betavdw,Cvals,phiL) ! lwave = 2
-!!$
-!!$  call MQDTfunctions(NA, RX, Rmid, RF, Cvals, mu, lwave, energy, betavdw, phiL)
-     !  stop
      ! END THE SECTION TO CALCULATE THE SINGLE-CHANNEL QDT PARAMETERS
      !----------------------------------------------------------------------------------------------------
      ! The MQDT calculation requires that we calculate a short-range K-matrix on a coarse energy and B-field grid
@@ -757,39 +993,39 @@ program main
      write(6,*) "See fort.20 for the field dependence of the scattering thresholds."
      write(6,*) "See file EnergyDependence.dat for the energy-dependent cross section"
      write(6,*) "See file FieldDependence.dat for the field-dependent scattering length at threshold"
-     
+     write(6,*) "See file QuantumDefects-B.dat for field dependence of quantum defects."
+     write(6,*) "See file QuantumDefects-E.dat for energy dependence of quantum defects."
      do iB = 1, NBgrid 
         yi = ystart
+        HHZ2(:,:) = 0d0
         call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
         HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
         !Find the asymptotic channel states
         VHZ(:,:) = VlrSinglet(Nlr)*SPmat(:,:) + VlrTriplet(Nlr)*TPmat(:,:) + HHZ2(:,:) 
-        !     call MyDSYEV(VHZ(:,:),size2,EVAL,AsymChannels)
         call MyDSYEV(VHZ,size2,Eth,AsymChannels)
-        !     Eth(:)=EVAL(:)
         do i=1,size2
            EThreshMat(i,i) = Eth(i)
         enddo
-        
+
         Write(20,*) Bgrid(iB), Eth
-        !Calculate the tan(gamma) matrix
+
 
         !----- Rotate into the asymptotic eigenstates (Use the B-field dressed states) -------!
         !Rotate the singlet projection operator
         call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,SPmat,size2,0d0,TEMP,size2)
         call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Sdressed,size2)
-        
+
         !Rotate the triplet projection operator
         call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,TPmat,size2,0d0,TEMP,size2)
         call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Tdressed,size2)
-        
+
         do iR = 1, Nsr
            RotatedVsrHZ(:,:,iR) = VsrSinglet(iR)*Sdressed(:,:) + VsrTriplet(iR)*Tdressed(:,:) + EThreshMat(:,:)
         enddo
         do iR = 1, Nlr
            RotatedVlrHZ(:,:,iR) = VlrSinglet(iR)*Sdressed(:,:) + VlrTriplet(iR)*Tdressed(:,:) + EThreshMat(:,:)
         enddo
-        
+
         ! Start the energy loop
         do iE = 1, 1!NEgrid
            NumOpen=0        
@@ -802,30 +1038,51 @@ program main
               write(6,*) "More than one open channel -- must modify the algorithm.  Stopping"
               stop
            endif
-           call CalcTanGamma(RX,RF,size2,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,iE,cotgamma)
-           call logderprop(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,RotatedVsrHZ,size2)
-           call CalcKsr(ym, Ksr, size2, RX, Rsr(Nsr), energy, Eth, lwave, mu, Cvals, betavdw, phiL)
+           if((iE.eq.1)) then
+              call logderprop(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,RotatedVsrHZ,size2)
+           endif
+
+           call CalcTanGamma(RX,RF,size2,lwave,mu,betavdw,Cvals,phistandard(lwave+1),Egrid,NEgrid,Eth,iE,CotGammaMat)
+!!$           do i = 1, size2-1
+!!$!              write(6,*) Egrid(iE)-Eth(i)+Eth
+!!$              CotGammaMat(i,i,iE) = dbsval(Egrid(iE)-Eth(i+1)+Eth(1),InterpOrder,cotgammaknots,NHFEnergyGrid,cotgammabcoef)
+!!$           enddo
+           call CalcKsr(ym, Ksr, size2, RX, Rsr(Nsr), energy, Eth, lwave, mu, Cvals, betavdw, phistandard(lwave+1))
            call MyDSYEV(Ksr,size2,EVAL,EVEC)
            !write(6,'(I4,A5,i4,100d14.4)') iB,' / ', NBgrid,EVAL
 !!$           write(6,*) Rmid, EVAL
 !!$           write(52,*) Rmid, EVAL
-           write(6,*) Bgrid(iB), Ktilde!(1d0-Ktilde)*abar(lwave) !Rmid, (atan(EVAL(i))/Pi, i=1,size2)
-!           write(52,*) Rmid, (atan(EVAL(i))/Pi, i=1,size2)!EVAL!,Ksr
+           write(6,*) iB, "/", NBgrid, Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw !Rmid, (atan(EVAL(i))/Pi, i=1,size2)
+           !           write(52,*) Rmid, (atan(EVAL(i))/Pi, i=1,size2)!EVAL!,Ksr
 
-           Ktemp1 = Ksr(2:size2,2:size2) + cotgamma(:,:,iE)
+           Ktemp1 = Ksr(2:size2,2:size2) + CotGammaMat(:,:,iE)
            KQP = Ksr(2:size2,1:1)
            KPQ = Ksr(1:1,2:size2)
-           
+
            call sqrmatinv(Ktemp1,size2-1)
            Ktemp2 = MATMUL(KPQ,MATMUL(Ktemp1,KQP))
-           write(6,*) "Ktemp2:"
-           call printmatrix(Ktemp2,1,1,6)
+           !           write(6,*) "Ktemp2:"
+           !           call printmatrix(Ktemp2,1,1,6)
            Ktilde = Ksr(1,1) - Ktemp2(1,1)
            write(51,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw
+           write(53,*) Bgrid(iB), (atan(EVAL(i))/Pi, i = 1, size2)
         enddo
      enddo
   enddo
+
   stop
+11 Rmid = RmidArray(NRmid)     
+  
+  ! prepare some arrays for the log-derivative propagator
+  call GridMaker(Rsr,Nsr,Rmin,Rmid,'linear')  ! Make the radial grids
+  call GridMaker(Rlr,Nlr,Rmid,Rmax,'linear')
+  
+  ESTATE = 1
+  call SetupPotential(ISTATE,ESTATE,muref,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrSinglet,Cvals)
+  call SetupPotential(ISTATE,ESTATE,muref,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrSinglet,Cvals)
+  ESTATE = 3
+  call SetupPotential(ISTATE,ESTATE,muref,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrTriplet,Cvals)
+  call SetupPotential(ISTATE,ESTATE,muref,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrTriplet,Cvals)
   
   !----------------------------------------------------------------------------------------------------
   !This next loop is does the full log-derivative calculation
@@ -841,7 +1098,7 @@ program main
      VHZ(:,:) = VlrSinglet(Nlr)*SPmat(:,:) + VlrTriplet(Nlr)*TPmat(:,:) + HHZ2(:,:) 
      !     call MyDSYEV(VHZ(:,:),size2,EVAL,AsymChannels)
      call MyDSYEV(VHZ(:,:),size2,Eth,AsymChannels)
-!     Eth(:)=EVAL(:)
+     !     Eth(:)=EVAL(:)
      do i=1,size2
         EThreshMat(i,i) = Eth(i)
      enddo
@@ -855,10 +1112,6 @@ program main
      !Rotate the triplet projection operator
      call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,TPmat,size2,0d0,TEMP,size2)
      call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Tdressed,size2)
-
-!!$     do iR = 1, NPP
-!!$        RotatedVHZ(:,:,iR) = VSinglet(iR)*Sdressed(:,:) + VTriplet(iR)*Tdressed(:,:) + EThreshMat(:,:)
-!!$     enddo
 
      do iR = 1, Nsr
         RotatedVsrHZ(:,:,iR) = VsrSinglet(iR)*Sdressed(:,:) + VsrTriplet(iR)*Tdressed(:,:) + EThreshMat(:,:)
@@ -875,11 +1128,11 @@ program main
         do j = 1, size2
            if(energy.gt.Eth(j)) NumOpen = NumOpen+1
         enddo
-!        call logderprop(mu,Energy,identity,weights,NPP,yi,yf,R,RotatedVHZ,size2)
+
         call logderprop(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,RotatedVsrHZ,size2)
         call logderprop(mu,Energy,identity,wLR,Nlr,ym,yf,Rlr,RotatedVlrHZ,size2)
         call CalcK(yf,Rmax,SD,mu,3d0,1d0,Energy,Eth,size2,NumOpen)
-!        call CalcK(ym,Rsr(Nsr),SD,mu,3d0,1d0,Energy,Eth,size2,NumOpen)
+        !        call CalcK(ym,Rsr(Nsr),SD,mu,3d0,1d0,Energy,Eth,size2,NumOpen)
 
         ! Various output statements:
         if(iE.eq.1) then ! Write the field dependence at the lowest energy (close to threshold)
@@ -896,12 +1149,12 @@ program main
              Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)
 
         !        write(6,'(A12,I4,A1,I4,A5,A20,100d14.5)') "iE/NEgrid = ",iB,'/',NBgrid,"   | ", "(energy, sigma) = ", &
-!             Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)!(-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        !             Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)!(-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
 
         !        write(6,'(100d20.10)') Egrid(iE), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
         !write(6,'(100d16.6)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
      enddo
-     
+
   enddo
   close(50)
   close(51)
@@ -967,7 +1220,7 @@ end subroutine SetLogderWeights
 !!$  double precision, parameter :: OneTwelfth = 0.083333333333333333333d0
 !!$
 !!$end subroutine NumerovMC
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine logderprop(mu,Energy,identity,weights,NPP,yi,yf,XO,Pot,size)
   implicit none
   integer i,j,step,NPP,size
@@ -1070,6 +1323,15 @@ SUBROUTINE GridMaker(grid,numpts,E1,E2,scale)
      DE=(E2-E1)
      DO iE=1,numpts
         grid(iE) = E1 + ((iE-1)/DBLE(numpts-1))**4*DE
+     ENDDO
+  ENDIF
+  !--------------------------------------------
+  ! squareroot grid:
+  !--------------------------------------------
+  IF((scale.EQ."squareroot").and.(numpts.gt.1)) THEN
+     DE=(E2-E1)
+     DO iE=1,numpts
+        grid(iE) = E1 + ((iE-1)/DBLE(numpts-1))**0.5d0*DE
      ENDDO
   ENDIF
 
@@ -1220,132 +1482,19 @@ subroutine CalcMilne2step(R,alpha,NA,energy,lwave,mu,Cvals,phaseint)
 
 end subroutine CalcMilne2step
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine MQDTfunctions(R1, R2, NA, scale, Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf,f0, g0, f0p, g0p)
-  use units
-  implicit none
-  integer NA, i, j, lwave
-  double precision Cvals(3), mu, betavdw, energy, f0, g0, f0p, g0p, phiL
-  double precision alpha0(2), alphaf(2)
-  double precision, allocatable :: phaseint(:)
-  double precision, allocatable :: alpha(:,:),R(:)
-  double precision R1, R2
-  CHARACTER(LEN=*), INTENT(IN) :: scale
 
-  allocate(R(NA),alpha(NA,2),phaseint(NA))
-  call GridMaker(R,NA,R1,R2,scale)
-  alpha(1,:) = alpha0
-  
-  call CalcMilne2step(R,alpha,NA,energy,lwave,mu,Cvals,phaseint)
-  alphaf = alpha(NA,:)
-  do i = 1, NA
-     f0 = Pi**(-0.5d0)*alpha(i,1)*sin(phaseint(i)+phiL)
-     g0 = -Pi**(-0.5d0)*alpha(i,1)*cos(phaseint(i)+phiL)
-     f0p = alpha(i,2)/alpha(i,1) * f0 - g0/alpha(i,1)**2
-     g0p = alpha(i,2)/alpha(i,1) * g0 + f0/alpha(i,1)**2
-!     write(101,*) R(i), alpha(i,1), alpha(i,2), phaseint(i), f0, g0
-  enddo
-
-
-end subroutine MQDTfunctions
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-! This subroutine calculates the phase standardization according to the Ruzic scheme.
-subroutine CalcPhaseStandard(RX,RF,lwave,mu,betavdw,Cvals,phiL)
-  use units
-  implicit none
-  double precision xnu, rj, ry, rjp, ryp, RX, RF, chim, chimp, betavdw, energy, mu, phiL
-  double precision Cvals(3),  f0, g0, f0p, g0p, tanphi, phi
-  double precision, allocatable :: X(:)
-  double precision, allocatable :: phaseint(:)
-  double precision, allocatable :: alpha(:,:)
-  integer i, N, lwave
-  double precision, external :: ksqrLR, VLR, VLRPrime
-
-  !-------------------------------------------------------
-  !uncomment this block to test the phase standardization
-  !agreement with the analytical values for the C6 potential
-!!$  Cvals(1) = 1d0
-!!$  Cvals(2) = 0d0
-!!$  Cvals(3) = 0d0
-!!$  betavdw = 1d0
-!!$  mu = 0.5d0
-!!$  RX=0.1d0*betavdw
-!!$  RF=4.0d0*betavdw
-  N = 1000000
-  !--------------------------------------------------------
-  energy = 0d0
-  ! first just test the bessel function
-  allocate(x(N), alpha(N,2),phaseint(N))
-  alpha(1,1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
-  alpha(1,2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
-       /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
-
-  xnu = 0d0
-  call GridMaker(X,N,RX,RF,'quadratic')
-  call CalcMilne2step(X,alpha,N,energy,lwave,mu,Cvals,phaseint)
-  !  write(6,*) "betavdw = ", betavdw
-
-  do i = N, N
-     f0 = Pi**(-0.5d0)*alpha(i,1)*sin(phaseint(i))
-     g0 = -Pi**(-0.5d0)*alpha(i,1)*cos(phaseint(i))
-     f0p = alpha(i,2)/alpha(i,1) * f0 - g0/alpha(i,1)**2
-     g0p = alpha(i,2)/alpha(i,1) * g0 + f0/alpha(i,1)**2
-
-     call chiminus(lwave,x(i)/betavdw,chim,chimp) !this requires van der Waals units, so divide by betavdw since x(i) is in bohr
-     chimp = chimp/betavdw ! d(chi)/dR comes out in van der Waals units so this converts length to bohr
-     tanphi = -(chim*g0p - chimp*g0)/(chim*f0p - chimp*f0)
-     !     write(100,*) X(i), tanphi- tan(-1d0/(2d0*RX**2) + dble(lwave)*Pi/4d0 -5d0*Pi/8d0)!, atan(tanphi)  
-  enddo
-  write(6,*) "lwave = ", lwave, "tanphi = ", tanphi!, "analytical result = ", &
-  !       tan(-1d0/(2d0*RX**2) + dble(lwave)*Pi/4d0 -5d0*Pi/8d0), &
-  !       "difference = ", tanphi- tan(-1d0/(2d0*RX**2) + dble(lwave)*Pi/4d0 -5d0*Pi/8d0)
-  phiL = atan(tanphi)
-
-end subroutine CalcPhaseStandard
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine CalcKsr(ym, Ksr, size2, RX, RM, energy, Eth, lwave, mu, Cvals, betavdw, phiL)
-  implicit none
-  integer size2, lwave, i, NA
-  double precision mu, betavdw, phiL, RX, RM, energy,alpha0(2),alpham(2),alphaf(2),f0,g0,f0p,g0p
-  double precision ym(size2,size2), Eth(size2), Cvals(3)
-  double precision f0mat(size2,size2), g0mat(size2,size2), f0pmat(size2,size2),g0pmat(size2,size2), Ksr(size2,size2)
-  double precision temp1(size2,size2), temp2(size2,size2)
-  double precision, external :: ksqrLR, VLR, VLRPrime
-  
-  ! Ksr = (Y g - g')^(-1) (Y f - f')
-  alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
-  alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
-       /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
-  f0mat = 0d0
-  g0mat = 0d0
-  f0pmat = 0d0
-  g0pmat = 0d0
-  NA = 1000000
-  ! Construct the diagonal reference function matrices
-  do i = 1, size2
-     call MQDTfunctions(RX, RM, NA,"quadratic", Cvals, mu, lwave, energy-Eth(i), betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
-     f0mat(i,i) = f0
-     f0pmat(i,i) = f0p
-     g0mat(i,i) = g0
-     g0pmat(i,i) = g0p
-  enddo
-  
-  temp1 = MATMUL(ym,g0mat) - g0pmat
-  temp2 = MATMUL(ym,f0mat) - f0pmat
-  call sqrmatinv(temp1,size2)
-  Ksr = MATMUL(temp1,temp2)
-  
-end subroutine CalcKsr
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine CalcTanGamma(RX,RF,size,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,iE,cotgamma)
+subroutine CalcTanGamma(RX,RF,size,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,iE,CotGammaMat)
   !This calculates the tan(gamma) MQDT parameter.  See Ruzic's PRA for details
   ! While in principle this can be calculated once as a function of energy, interpolated and
   ! evaluated at the relative energy for each channel, here I'm doing it the "brute force" way
   ! I simply re-calculate tan(gamma) and setup the cot(gamma) matrix for each channel at each needed energy
+  use MQDT
   implicit none
   integer lwave, NEgrid, iE, ix, Nx,size,ith
-  double precision RX, RF, mu, betavdw, Cvals(3), phiL, Egrid(NEgrid), cotgamma(size-1,size-1,NEgrid),EvdW
+  double precision RX, RF, mu, betavdw, Cvals(3), phiL, Egrid(NEgrid), CotGammaMat(size-1,size-1,NEgrid),EvdW
   double precision x, xscale, si, sk, sip, skp, ldk, ldi, kappa, f0, f0p, g0, g0p,Eth(size)
-  double precision alpha0(2),alphaf(2),energy, tangamma, gam
+  double precision alpha0(2),alphaf(2),energy, tangamma, gamlocal
   double precision, allocatable :: xgrid(:), Rgrid(:)
   double precision, allocatable :: phaseint(:)
   double precision, external :: ksqrLR, VLR, VLRPrime
@@ -1354,35 +1503,37 @@ subroutine CalcTanGamma(RX,RF,size,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,
   alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
   alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
        /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
-  
+
   xscale=0d0
   Nx = 1000000
-  cotgamma = 0d0
-!  allocate(xgrid(Nx),Rgrid(Nx))
-!  call GridMaker(Rgrid, Nx, RX, RF, "quadratic")
-!  do iE = 1, NEgrid
+  CotGammaMat = 0d0
+  !  allocate(xgrid(Nx),Rgrid(Nx))
+  !  call GridMaker(Rgrid, Nx, RX, RF, "quadratic")
+  !  do iE = 1, NEgrid
   do ith = 2, size
      ! For gamma, the energy represents a binding, so
-     
+
      energy = Egrid(iE)-Eth(ith)+Eth(1)
      kappa = sqrt(2*mu*abs(energy))
      alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
      alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
           /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
      call MQDTfunctions(RX, RF, Nx,"quadratic", Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
-     
+
      x = kappa*RF
      call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
      tangamma = -(g0p - kappa*ldk*g0)/(f0p - kappa*ldk*f0)
-     cotgamma(ith-1,ith-1,iE) = 1d0/tangamma
-     gam = atan(tangamma)
+     CotGammaMat(ith-1,ith-1,iE) = 1d0/tangamma
+     gamlocal = atan(tangamma)
      !     write(400,*) xgrid(ix), ldk
      !write(400,*) energy/EvdW, gam(iE)
   enddo
- ! enddo
+  ! enddo
 
-  
+
 end subroutine CalcTanGamma
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !Subroutine to setup the effect adiabatic potential energy function for any
 !one of the electronic states for the alkali homonuclear molecules:
@@ -1422,6 +1573,9 @@ end subroutine CalcTanGamma
 !  *VV(i) is an array of the potential function values (in cm-1)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
+  ! Calculates the singlet/triplet potentials at radial points XO(:)
+  ! XO must be given in Angstroms
+  ! The potential is returned in VV(:) in Hartree (converted to hartree at the end of the subroutine.)
   use units
   implicit none
   integer NPP, ISTATE, ESTATE, i, j, N, IMN1, IMN2, iphi
@@ -1534,7 +1688,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
               VV(i) = VV(i) + Scorr*(XO(i) - re)**2
            endif
         enddo
-        
+
      case (7) !Lithium-7
         IMN1 = 7
         IMN2 = IMN1
@@ -1543,7 +1697,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
         C10 = 2.786830D+09!2.78604d9
         call POTGENLI2(1,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)!,.FALSE.)
         ! No short-range correction needed for Li-7 in the singlet state.  This already gives a scattering length of 34.331 bohr
-        
+
      case (8) !Cesium
         N = 23
         allocate(A(N))
@@ -1768,6 +1922,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
   Cvals(2) = C8 * AngstromPerBohr**8 * InvcmPerHartree
   Cvals(3) = C10 * AngstromPerBohr**10 * InvcmPerHartree
 
+  VV(:) = VV(:)*InvcmPerHartree ! Convert to atomic units
 
 
 END SUBROUTINE SetupPotential
@@ -1993,6 +2148,7 @@ SUBROUTINE polint(xa,ya,n,x,y,dy)
   enddo
   return
 END SUBROUTINE polint
+
 SUBROUTINE ratint(xa,ya,n,x,y,dy)
   INTEGER n,NMAX
   double precision dy,x,y,xa(n),ya(n),TINY
@@ -2049,3 +2205,16 @@ double precision function abar(L)
        (Gamma(1.25d0 + L/2.d0)*Gamma(0.5d0 + L)))**(2d0/(1d0 + 2d0*L))
 
 end function abar
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine SetupInterp(X,Y,NX,Order,knots,Ybcoef)
+  use bspline
+  implicit none
+  integer NX, Order
+  double precision X(NX),Y(NX),knots(NX+Order),Ybcoef(NX)
+
+  call dbsnak(NX, X, Order, knots)
+  call dbsint(NX,X,Y,Order,knots,Ybcoef)
+
+  ! To call the interpolated function at point x, call the function:
+  ! dbsval(x,Order,knots,NX,Ybcoef) ! 
+end subroutine SetupInterp

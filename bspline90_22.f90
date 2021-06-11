@@ -223,12 +223,21 @@ contains
        xveci  = xvec(ix)
        ilp1mx = min0(ix+kx,nxp1)
        leftx   = max0(leftx,ix)
-       if (xveci .lt. xknot(leftx)) goto 998
+       if (xveci .lt. xknot(leftx)) then
+          write(6,*) "subroutine dbsint: error xveci.lt.xknot(leftx)"
+          write(6,*) leftx, xveci, xknot(leftx)
+          goto 998
+       endif
 30     if (xveci .lt. xknot(leftx+1)) go to 40
        leftx = leftx + 1
        if (leftx .lt. ilp1mx) go to 30
        leftx = leftx - 1
-       if (xveci .gt. xknot(leftx+1)) goto 998
+       ! The following conditional changed by NP Mehta to allow for machine-precision differences.
+       if ((xveci - xknot(leftx+1)).gt.(abs(xveci)*1d-12)) then  
+          write(6,*) "subroutine dbsint: error xveci.gt.xknot(leftx+1)"
+          write(6,*) leftx+1, xveci- xknot(leftx+1),(xveci*1d-12)
+          goto 998
+       endif
 40     call bsplvb (xknot,nx+kx,kx,1,xveci,leftx,bcoef)
        jj = ix - leftx + 1 + (leftx - kx) * (kx + kxm1)
        do ik = 1, kx
