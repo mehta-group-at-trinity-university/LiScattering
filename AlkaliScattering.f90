@@ -668,10 +668,10 @@ program main
   call GridMaker(RmidArray,NRmid,15d0,50d0,'linear')
   
   Rmin = 0.03d0 ! use atomic units here (bohr)  
-  Rmax = 500d0 ! use atomic units here (bohr)
+  Rmax = 2000d0 ! use atomic units here (bohr)
   !  NPP = 1000000 ! number of points needed for the log-derivative propagator (typically very large if integrating out to Rmax)
-  Nsr = 200000
-  Nlr = 200000
+  Nsr = 100000
+  Nlr = 800000
   VLIM = 0d0
   allocate(VHZ(size2,size2))
   !  allocate(RotatedVHZ(size2,size2,NPP))
@@ -809,7 +809,7 @@ program main
            !write(6,'(I4,A5,i4,100d14.4)') iB,' / ', NBgrid,EVAL
 !!$           write(6,*) Rmid, EVAL
 !!$           write(52,*) Rmid, EVAL
-           write(6,*) Bgrid(iB), Ktilde!(1d0-Ktilde)*abar(lwave) !Rmid, (atan(EVAL(i))/Pi, i=1,size2)
+
 !           write(52,*) Rmid, (atan(EVAL(i))/Pi, i=1,size2)!EVAL!,Ksr
 
            Ktemp1 = Ksr(2:size2,2:size2) + cotgamma(:,:,iE)
@@ -818,14 +818,15 @@ program main
            
            call sqrmatinv(Ktemp1,size2-1)
            Ktemp2 = MATMUL(KPQ,MATMUL(Ktemp1,KQP))
-           write(6,*) "Ktemp2:"
-           call printmatrix(Ktemp2,1,1,6)
+!           write(6,*) "Ktemp2:"
+!           call printmatrix(Ktemp2,1,1,6)
            Ktilde = Ksr(1,1) - Ktemp2(1,1)
            write(51,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw
+           write(6,*) iB,"/",NBgrid,Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw
         enddo
      enddo
   enddo
-  stop
+!  stop
   
   !----------------------------------------------------------------------------------------------------
   !This next loop is does the full log-derivative calculation
