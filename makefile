@@ -2,21 +2,6 @@ CMP     = gfortran
 F132FORM = -ffixed-line-length-132
 OPTFLAG = -O3
 FREEFORM = -ffree-form
-<<<<<<< HEAD
-STND = #-std=gnu
-DEBUG   = -fcheck=all
-FORCEDP = #-fdefault-real-8 -fdefault-double-8
-LAPACK =   -framework accelerate
-ARPACK =  -L/usr/local/lib/ -larpack
-INCLUDE =  -I/usr/local/include
-OBJS  = besselnew.o threejsixj.o Bsplines.o quadrature.o POTGENLI2.o LiScattering.o units.o matrix_stuff.o 
-
-LiScattering.x: ${OBJS} 
-	${CMP} ${STND} ${DEBUG} ${OBJS} ${INCLUDE} ${LAPACK}  ${ARPACK} ${OPTFLAG} ${FORCEDP} -o LiScattering.x
-
-LiScattering.o: LiScattering.f90 units.o
-	${CMP} ${STND} ${DEBUG} ${FORCEDP} ${FREEFORM} ${OPTFLAG} -c LiScattering.f90
-=======
 STND = #-fdec #-std=gnu
 DEBUG   = -fcheck=all
 FORCEDP = #-fdefault-real-8 -fdefault-double-
@@ -30,7 +15,6 @@ AlkaliScattering.x: ${OBJS}
 
 AlkaliScattering.o: AlkaliScattering.f90 units.o
 	${CMP} ${STND} ${DEBUG} ${FORCEDP} ${FREEFORM} ${OPTFLAG} -c AlkaliScattering.f90
->>>>>>> MQDT
 
 #RMATPROP2016.o: RMATPROP2016.f90 quadrature.o
 #	${CMP} ${STND} ${DEBUG} ${FORCEDP} ${FREEFORM} ${OPTFLAG} -c RMATPROP2016.f90

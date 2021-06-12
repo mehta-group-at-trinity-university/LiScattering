@@ -2,16 +2,11 @@ MODULE Quadrature
   IMPLICIT NONE
   INTEGER LegPoints
   DOUBLE PRECISION, ALLOCATABLE :: xLeg(:),wLeg(:)
-<<<<<<< HEAD
-  CHARACTER*64 LegendreFile
-=======
   double precision wbode10(10)
   CHARACTER*64 LegendreFile
   double precision cka2, cka3, cka4, cka5, cka6
   double precision b21, b31, b32, b41, b42, b43, b51, b52, b53, b54, b61, b62, b63, b64, b65
   double precision c1, c3, c4, c6, c1s, c3s, c4s, c5s, c6s
-
->>>>>>> MQDT
 
 CONTAINS
   SUBROUTINE GetGaussFactors(File,Points,x,w)
@@ -53,9 +48,6 @@ CONTAINS
     RETURN
   END SUBROUTINE GetGaussFactors
 
-<<<<<<< HEAD
-
-=======
   subroutine initCashKarp
   ! These are the coefficients needed for the imbedded RK method of Cash and Karp. See Numerical Recipes RKCK.f
     cka2 = 0.2d0
@@ -107,7 +99,5 @@ CONTAINS
 
   end subroutine initbode10
 
-  
->>>>>>> MQDT
-!***********************************************************************
+  !***********************************************************************
 END MODULE Quadrature
