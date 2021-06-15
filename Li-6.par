@@ -1,0 +1,13 @@
+# This is a parameter file for input into AlkaliScattering.x
+# ISTATE (for Li-6)  SYM (+1 for boson)
+  6	      	      -1
+# L (partial wave)    2*MFtot (twice total F projection)
+  0 	     	      0
+# Rmin		      Rmid		Rmax  (all in bohr)
+  0.03d0	      40d0		1000d0
+# Nsr		      Nlr
+  50000		      1000000
+# NEgrid	      Emin		Emax (enter energy range in mK)
+  10		      1d-6		50d0
+# NBgrid	      Bmin		Bmax (enter B-field range in gauss)
+  10		      1100d0		1200d0

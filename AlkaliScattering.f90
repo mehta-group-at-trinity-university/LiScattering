@@ -548,7 +548,7 @@ program main
   double precision, allocatable :: VHZ(:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:),Ksr(:,:),RmidArray(:)
   double precision VLIM,Rmin,Rmax,dR,phiL
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2
-  double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw
+  double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw,Rmidmax
   integer iE, NA,iRmid,NRmid
   double precision RX, Rmid, RF, Cvals(3), Ktilde
 
@@ -560,24 +560,45 @@ program main
 
   !-----------------------------------------------------!
   ! Set the energy and B-field grid
-  NBgrid = 200
-  NEgrid = 100
-  
-  Bmin = 1d-3
-  Bmax = 1200d0
-  Emin = 1d-6/HartreePermK !25d0/HartreePermK
-  Emax = 0.5d0/HartreePermK !35d0/HartreePermK
+!!$  NBgrid = 10
+!!$  NEgrid = 100
+!!$  
+!!$  Bmin = 1100d0
+!!$  Bmax = 1200d0
+!!$  Emin = 1d-6/HartreePermK !25d0/HartreePermK
+!!$  Emax = 0.5d0/HartreePermK !35d0/HartreePermK
+
+
+  !--------------------------------------------------!
+
+  read(5,*)
+  read(5,*)
+  read(5,*) ISTATE, sym
+  read(5,*)
+  read(5,*) lwave, mtot
+  read(5,*)
+  read(5,*) Rmin, Rmidmax, Rmax
+  read(5,*)
+  read(5,*) Nsr, Nlr
+  read(5,*)
+  read(5,*) NEgrid, Emin, Emax  ! enter in mK
+  read(5,*)
+  read(5,*) NBgrid, Bmin, Bmax  ! enter in Gauss
+
+  Emin = Emin/HartreePermK
+  Emax = Emax/HartreePermK
+
   !make the magnetic field grid and energy grid
   allocate(Egrid(NEgrid),Bgrid(NBgrid))
   call GridMaker(Bgrid,NBgrid,Bmin,Bmax,'linear')
   call GridMaker(Egrid,NEgrid,Emin,Emax,'linear') ! measure the collision energy in Hartree
 
-  !--------------------------------------------------!
-  
-  ISTATE = 6  !select atomic species (see AtomData for documentation)
-  sym = -1 ! set to +1 for bosonic K-39, Rb-85, Rb-87, Cs-133, Li-7 and Na-23; -1 for fermionic K-40 and Li-6; 0 for any mixed collision
-  lwave = 0 ! s wave collisions
-  mtot = 0  ! really mtot (total two-atom F projection) multiplied by 2
+!!$  ISTATE = 6  !select atomic species (see AtomData for documentation)
+!!$  sym = -1 ! set to +1 for bosonic K-39, Rb-85, Rb-87, Cs-133, Li-7 and Na-23; -1 for fermionic K-40 and Li-6; 0 for any mixed collision
+!!$  lwave = 0 ! s wave collisions
+!!$  mtot = 0  ! really mtot (total two-atom F projection) multiplied by 2
+!!$  Rmin = 0.03d0 ! use atomic units here (bohr)  
+!!$  Rmax = 700d0 ! use atomic units here (bohr)
 
 
   call AtomData(ISTATE, AHf1, nspin1, espin1, gi1, MU, MUREF, mass1)  !atom 1 data (and atom 2 for identical particles)
@@ -663,15 +684,10 @@ program main
   
   ! None of the code above this line depends on the radial grid.
   !----------------------------------------------------------------------------------------------------
-  NRmid = 10
+  NRmid = 2
   allocate(RmidArray(NRmid))
-  call GridMaker(RmidArray,NRmid,15d0,50d0,'linear')
-  
-  Rmin = 0.03d0 ! use atomic units here (bohr)  
-  Rmax = 2000d0 ! use atomic units here (bohr)
-  !  NPP = 1000000 ! number of points needed for the log-derivative propagator (typically very large if integrating out to Rmax)
-  Nsr = 100000
-  Nlr = 800000
+  call GridMaker(RmidArray,NRmid,15d0,Rmidmax,'linear')
+
   VLIM = 0d0
   allocate(VHZ(size2,size2))
   !  allocate(RotatedVHZ(size2,size2,NPP))
@@ -838,11 +854,10 @@ program main
      yi(:,:)=ystart(:,:)
      call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
      HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
+
      !Find the asymptotic channel states
      VHZ(:,:) = VlrSinglet(Nlr)*SPmat(:,:) + VlrTriplet(Nlr)*TPmat(:,:) + HHZ2(:,:) 
-     !     call MyDSYEV(VHZ(:,:),size2,EVAL,AsymChannels)
      call MyDSYEV(VHZ(:,:),size2,Eth,AsymChannels)
-!     Eth(:)=EVAL(:)
      do i=1,size2
         EThreshMat(i,i) = Eth(i)
      enddo
@@ -856,10 +871,6 @@ program main
      !Rotate the triplet projection operator
      call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,TPmat,size2,0d0,TEMP,size2)
      call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Tdressed,size2)
-
-!!$     do iR = 1, NPP
-!!$        RotatedVHZ(:,:,iR) = VSinglet(iR)*Sdressed(:,:) + VTriplet(iR)*Tdressed(:,:) + EThreshMat(:,:)
-!!$     enddo
 
      do iR = 1, Nsr
         RotatedVsrHZ(:,:,iR) = VsrSinglet(iR)*Sdressed(:,:) + VsrTriplet(iR)*Tdressed(:,:) + EThreshMat(:,:)
