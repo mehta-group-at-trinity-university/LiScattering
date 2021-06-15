@@ -697,6 +697,10 @@ program main
      !  allocate(R(NPP),weights(NPP),VSinglet(NPP),VTriplet(NPP))
   allocate(Rsr(Nsr),Rlr(Nlr),wSR(Nsr),wLR(Nlr),VsrSinglet(Nsr),VlrSinglet(Nlr),VsrTriplet(Nsr),VlrTriplet(Nlr))
 
+  ! prepare some arrays for the log-derivative propagator
+  call SetLogderWeights(wSR,Nsr)
+  call SetLogderWeights(wLR,Nlr)
+
   do iRmid = NRmid, NRmid
      Rmid = RmidArray(iRmid)
      !  call GridMaker(R,NPP,Rmin,Rmax,'linear')
@@ -715,12 +719,9 @@ program main
 !!$  VSinglet(:) = VSinglet(:)*InvcmPerHartree
 !!$  VTriplet(:) = VTriplet(:)*InvcmPerHartree 
      
-     ! prepare some arrays for the log-derivative propagator
+
      call GridMaker(Rsr,Nsr,Rmin,Rmid,'linear')
      call GridMaker(Rlr,Nlr,Rmid,Rmax,'linear')
-     !  call SetLogderWeights(weights,NPP)
-     call SetLogderWeights(wSR,Nsr)
-     call SetLogderWeights(wLR,Nlr)
      
      ESTATE = 1
      call SetupPotential(ISTATE,ESTATE,muref,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrSinglet,Cvals)
@@ -843,7 +844,7 @@ program main
      enddo
   enddo
 !  stop
-  
+100 continue  
   !----------------------------------------------------------------------------------------------------
   !This next loop is does the full log-derivative calculation
   write(51,*)
