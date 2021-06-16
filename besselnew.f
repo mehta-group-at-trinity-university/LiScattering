@@ -196,6 +196,7 @@ c!
       endif
       order=dble(n)+0.5d0
 
+
 c$$$  call bessik(x,order,ri,rk,rip,rkp)
 c$$$  factor=RT2OPI*sqrt(x)
 c$$$  si=factor*ri
@@ -207,6 +208,7 @@ c$$$  syp=factor*rkp+sk/(2.d0*x)
 !     Inu(x) = exp(x) * alpha(x)
 !     Knu(x) = exp(-x) * beta(x)
 !     The above routine returns alpha, beta, alpha', beta', I'/I, and K'/K
+
       factor=RT2OPI*sqrt(x)
       si = ri*factor*exp(x-xscale)
       sk = rk*factor*exp(xscale-x)
@@ -214,12 +216,14 @@ c$$$  syp=factor*rkp+sk/(2.d0*x)
       bigip = exp(x-xscale)*(rip+ri)
       sip = factor*bigip + si/(2.d0*x)
       skp = factor*bigkp + sk/(2.d0*x)
+
 !      ldi = sip/si
 !      ldk = skp/sk
 !     I've commented out the above two lines in favor of the following two
 !     which should be more numerically stable since it avoids exponentially large numbers
       ldi = 1d0/(2d0*x) + ldbigI
       ldk = 1d0/(2d0*x) + ldbigK
+
       return
       END SUBROUTINE Mysphbesik
       
@@ -281,6 +285,7 @@ c     following assumes v = n+1/2 where n=0,1,2,......
 
       sj = factor*(P*dcos(chi) - Q*dsin(chi)) 
       sy = factor*(P*dsin(chi) + Q*dcos(chi))
+
       sjp = -factor*(R*dsin(chi) - S*dcos(chi))
       syp = factor*(R*dcos(chi) - S*dsin(chi))
 
@@ -308,6 +313,7 @@ c     following assumes v = n+1/2 where n=0,1,2,......
       chimp = r**(-2.5d0)*(-dble(lwave)*r**2*rj + rj1)
 
       end 
+
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       SUBROUTINE bessjy(x,xnu,rj,ry,rjp,ryp)
       ! From Numerical Recipes (Press et al)
@@ -583,6 +589,7 @@ c     following assumes v = n+1/2 where n=0,1,2,......
          betap = dexp(x)*(rkp+rk)
          beta = dexp(x)*rk
       endif
+
       ldi = +1.d0 +  alphap/alpha
       ldk = -1.d0 +  betap/beta
 

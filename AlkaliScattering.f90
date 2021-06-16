@@ -787,6 +787,8 @@ program main
   use scattering
   use quadrature
   implicit none
+  logical writepot
+  integer CALCTYPE
   integer iR, iB, ihf, n, i, j, A, nc, nr, ESTATE, ISTATE, IMN1
   integer nspin1, nspin2, espin1, espin2 !nspin is the nuclear spin and espin is the electronic spin
   integer i1,i2,s1,s2,S,sym,size1,size2,NBgrid,NEgrid,mtot, lwave,NumOpen
@@ -802,7 +804,7 @@ program main
   double precision, allocatable :: VHZ(:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:),Ksr(:,:),RmidArray(:)
   double precision VLIM,Rmin,Rmax,dR,phiL
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2
-  double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw
+  double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw,Rmidmax
   integer iE, NA,iRmid,NRmid
   double precision RX, Rmid, RF, Cvals(3), Ktilde,Rdum(2),Vdum(2)
 
@@ -810,40 +812,54 @@ program main
   type(hf1atom) a1, a2
   type(hf2atom) mstate1, mstate2
   type(hf1atom), allocatable :: hf1(:) 
-  TYPE(ScatData) :: SD
+  Type(Scatdata) :: SD
   
   !-----------------------------------------------------!
   ! Set the energy and B-field grid
-  NBgrid = 100
-  NEgrid = 100
+!!$  NBgrid = 10
+!!$  NEgrid = 100
+!!$  
+!!$  Bmin = 1100d0
+!!$  Bmax = 1200d0
+!!$  Emin = 1d-6/HartreePermK !25d0/HartreePermK
+!!$  Emax = 0.5d0/HartreePermK !35d0/HartreePermK
 
-  Bmin = 1d-3
-  Bmax = 1200d0
-  Emin = 1d-6/HartreePermK !25d0/HartreePermK
-  Emax = 0.5d0/HartreePermK !35d0/HartreePermK
+
+  !--------------------------------------------------!
+
+  read(5,*)
+  read(5,*)
+  read(5,*) ISTATE, sym, CALCTYPE
+  read(5,*)
+  read(5,*) lwave, mtot, writepot
+  read(5,*)
+  read(5,*) Rmin, Rmidmax, Rmax
+  read(5,*)
+  read(5,*) Nsr, Nlr
+  read(5,*)
+  read(5,*) NEgrid, Emin, Emax  ! enter in mK
+  read(5,*)
+  read(5,*) NBgrid, Bmin, Bmax  ! enter in Gauss
+
+  Emin = Emin/HartreePermK
+  Emax = Emax/HartreePermK
+
   !make the magnetic field grid and energy grid
   allocate(Egrid(NEgrid),Bgrid(NBgrid))
   call GridMaker(Bgrid,NBgrid,Bmin,Bmax,'linear')
   call GridMaker(Egrid,NEgrid,Emin,Emax,'linear') ! measure the collision energy in Hartree
 
-  !--------------------------------------------------!
-
-  ISTATE = 6  !select atomic species (see AtomData for documentation)
-  sym = -1 ! set to +1 for bosonic K-39, Rb-85, Rb-87, Cs-133, Li-7 and Na-23; -1 for fermionic K-40 and Li-6; 0 for any mixed collision
-  lwave = 0 ! s wave collisions
-  mtot = 0  ! really mtot (total two-atom F projection) multiplied by 2
-
-
   call AtomData(ISTATE, AHf1, nspin1, espin1, gi1, MU, MUREF, mass1)  !atom 1 data (and atom 2 for identical particles)
   !write(6,*) AHf1, nspin1, espin1, gi1, MU, MUREF, mass1
+
   ! initialize the angular momentum routines
   call setupam
   ! initialize the Cash-Karp RK parameters (this may not even be used)
-  call initCashKarp
+  ! call initCashKarp  !Currently the code doesn't use the Cash-Karp RK step -- just uses two RK4 steps.
 
   !------------------------------------------------------------------
-  ! determine the size of the one-atom hyperfine/zeeman hamiltonian
-  !call once with size1 = 0 to determine the size of the basis.
+  ! Determine the size of the one-atom hyperfine/zeeman hamiltonian.
+  ! Call once with size1 = 0 to determine the size of the basis.
   size1 = 0
   call MakeHF1Basis(nspin1,espin1,size1,hf1)
   write(6,'(A,I3)') "size of the 1-atom hyperfine basis = ",size1
@@ -928,29 +944,11 @@ program main
 
   ! None of the code above this line depends on the radial grid.
   !----------------------------------------------------------------------------------------------------
-  Rmin = 0.03d0 ! use atomic units here (bohr)  
-  Rmax = 500d0 ! use atomic units here (bohr)
-  ! Call the SetupPotential routine for a dummy array just to get the Cvals.
-  Rdum(1) = Rmin
-  Rdum(2) = Rmax
-  call SetupPotential(ISTATE,1,muref,muref,2,VLIM,Rdum*BohrPerAngstrom,Vdum,Cvals)
-  ! Find the van der Waals length
-  call VdWLength(Cvals,betavdw,MU)
-  write(6,'(A,F6.2,A)') "The van der Waals length is: ", betavdw, " bohr"
-  RX = 0.1d0*betavdw ! this is the starting radius for the Milne solutions used to calculate the MQDT phase standard for the reference functions
-  RF = Rmax     !4.0d0*betavdw ! Final radius for phase standard
-  call initMQDT(RX,RF,mu,betavdw,Cvals)
-  call SetupInterpGamma(RX,RF,size2,lwave,mu,betavdw,Cvals,phistandard(lwave+1))
-  !stop
-  
-  NRmid = 10
+  NRmid = 2
   allocate(RmidArray(NRmid))
-  call GridMaker(RmidArray,NRmid,30d0,40d0,'linear')
+  call GridMaker(RmidArray,NRmid,15d0,Rmidmax,'linear')
 
-  Nsr = 200000
-  Nlr = 200000
   VLIM = 0d0
-
   allocate(VHZ(size2,size2))
   allocate(RotatedVsrHZ(size2,size2,Nsr),RotatedVlrHZ(size2,size2,Nlr))
   allocate(Rsr(Nsr),Rlr(Nlr),wSR(Nsr),wLR(Nlr),VsrSinglet(Nsr),VlrSinglet(Nlr),VsrTriplet(Nsr),VlrTriplet(Nlr))
@@ -958,7 +956,7 @@ program main
   call SetLogderWeights(wSR,Nsr) ! Set the array of weights needed for the log-der propagator
   call SetLogderWeights(wLR,Nlr) ! These don't depend on the radial points, just the number of points
 
-  goto 11
+  if(CALCTYPE.eq.1) goto 11
   do iRmid = NRmid, NRmid
      Rmid = RmidArray(iRmid)     
      ! prepare some arrays for the log-derivative propagator
@@ -972,16 +970,16 @@ program main
      call SetupPotential(ISTATE,ESTATE,muref,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrTriplet,Cvals)
      call SetupPotential(ISTATE,ESTATE,muref,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrTriplet,Cvals)
 
-     if(iRmid.eq.NRmid) then
+     if((iRmid.eq.NRmid).and.writepot) then
         write(6,'(A)') "See fort.10 and fort.30 for the singlet/triplet potentials"
         do iR=1, Nsr
            write(10,*) Rsr(iR), abs((VsrSinglet(iR) - VLR(mu,lwave,Rsr(iR),Cvals))/VsrSinglet(iR))
            write(30,*) Rsr(iR), abs((VsrTriplet(iR) - VLR(mu,lwave,Rsr(iR),Cvals))/VsrTriplet(iR))
         enddo
-!!$     do iR=1, Nlr
-!!$        write(10,*) Rlr(iR), VlrSinglet(iR)     
-!!$        write(30,*) Rlr(iR), VlrTriplet(iR)
-!!$     enddo
+        do iR=1, Nlr
+           write(10,*) Rlr(iR), VlrSinglet(iR)     
+           write(30,*) Rlr(iR), VlrTriplet(iR)
+        enddo
      endif
 
      EThreshMat(:,:) = 0d0
@@ -1052,8 +1050,8 @@ program main
            !write(6,'(I4,A5,i4,100d14.4)') iB,' / ', NBgrid,EVAL
 !!$           write(6,*) Rmid, EVAL
 !!$           write(52,*) Rmid, EVAL
-           write(6,*) iB, "/", NBgrid, Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw !Rmid, (atan(EVAL(i))/Pi, i=1,size2)
-           !           write(52,*) Rmid, (atan(EVAL(i))/Pi, i=1,size2)!EVAL!,Ksr
+
+!           write(52,*) Rmid, (atan(EVAL(i))/Pi, i=1,size2)!EVAL!,Ksr
 
            Ktemp1 = Ksr(2:size2,2:size2) + CotGammaMat(:,:,iE)
            KQP = Ksr(2:size2,1:1)
@@ -1094,11 +1092,11 @@ program main
      yi(:,:)=ystart(:,:)
      call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
      HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
+
      !Find the asymptotic channel states
      VHZ(:,:) = VlrSinglet(Nlr)*SPmat(:,:) + VlrTriplet(Nlr)*TPmat(:,:) + HHZ2(:,:) 
-     !     call MyDSYEV(VHZ(:,:),size2,EVAL,AsymChannels)
      call MyDSYEV(VHZ(:,:),size2,Eth,AsymChannels)
-     !     Eth(:)=EVAL(:)
+
      do i=1,size2
         EThreshMat(i,i) = Eth(i)
      enddo

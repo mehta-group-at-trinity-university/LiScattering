@@ -8,7 +8,6 @@ MODULE Quadrature
   double precision b21, b31, b32, b41, b42, b43, b51, b52, b53, b54, b61, b62, b63, b64, b65
   double precision c1, c3, c4, c6, c1s, c3s, c4s, c5s, c6s
 
-
 CONTAINS
   SUBROUTINE GetGaussFactors(File,Points,x,w)
     !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
@@ -100,6 +99,5 @@ CONTAINS
 
   end subroutine initbode10
 
-  
-!***********************************************************************
+  !***********************************************************************
 END MODULE Quadrature
