@@ -106,7 +106,8 @@ c ** now specify 20 exponent parameters \beta_i for the 4 states
 c ** Specify up to 10 'adiabatic' BOB parameters for up to 4 states
       DATA U1A/0.194d0,-0.01d0,0.39d0, 3*0.d0, 0.059d0, 5*0.d0,
      1    1.066d0,2.98d0,-0.32d0,2.3d0,-7.5d0,3.3d0,
-     2    1.367d0,2.7d0,-1.3d0,-1.8d0, 2*0.d0/
+     2     1.367d0,2.7d0,-1.3d0,-1.8d0, 2*0.d0/
+      open(unit = 66, file = "LithiumPotentialParameters.dat")
       LNPT= 1
       IAN1= 3
       IAN2= 3
@@ -218,7 +219,7 @@ c ... use Huang/Le Roy form for atom-1 adiabatic potential BOB radial fx.
 c -----------------------------------------------------------------------
 c cc                   READ(5,*) U1INF,(U1(I), I=0,NU1)
 c -----------------------------------------------------------------------
-              WRITE(6,630) 1,MASS1,MN1R,NAME1,IMN1,NAME1,
+              WRITE(66,630) 1,MASS1,MN1R,NAME1,IMN1,NAME1,
      1        1,U1INF,PAD,PAD,PAD,PAD,PAD,PAD,NU1,QAD,QAD,QAD,QAD,QAD,
      2                                         NU1+1,(U1(I),I= 0,NU1)
               FC1= 1.d0 - RMASS1/MASS1
@@ -229,7 +230,7 @@ c ... use Huang/Le Roy form for atom-2 adiabatic potential BOB radial fx.
 c -----------------------------------------------------------------------
 c c                    READ(5,*) U2INF,(U2(I), I=0,NU2)
 c -----------------------------------------------------------------------
-              WRITE(6,630) 2,MASS2,MN2R,NAME2,IMN2,NAME2,
+              WRITE(66,630) 2,MASS2,MN2R,NAME2,IMN2,NAME2,
      1        1,U2INF,PAD,PAD,PAD,PAD,PAD,PAD,NU2,QAD,QAD,QAD,QAD,QAD,
      2                                         NU2+1,(U2(I),I= 0,NU2)
               FC2= 1.d0 - RMASS2/MASS2
@@ -240,7 +241,7 @@ c ... use Huang/Le Roy centrifugal BOB radial function for atom-1 ...
 c -----------------------------------------------------------------------
 c c                    READ(5,*) T1INF,(T1(I), I=0,NT1)
 c -----------------------------------------------------------------------
-              WRITE(6,634) 1,MASS1,MN1R,NAME1,IMN1,NAME1,
+              WRITE(66,634) 1,MASS1,MN1R,NAME1,IMN1,NAME1,
      1 1,T1INF,PNA,PNA,PNA,PNA,PNA,PNA,NT1,PNA,NT1+1,(T1(I),I= 0,NT1)
               FG1= RMASS1/MASS1
               ENDIF
@@ -250,7 +251,7 @@ c ... use Huang/Le Roy centrifugal BOB radial function for atom-2 ...
 c -----------------------------------------------------------------------
 c c                    READ(5,*) T2INF,(T2(I), I=0,NT2)
 c -----------------------------------------------------------------------
-              WRITE(6,634) 2,MASS2,MN2R,NAME2,IMN2,NAME2,
+              WRITE(66,634) 2,MASS2,MN2R,NAME2,IMN2,NAME2,
      1 2,T2INF,PNA,PNA,PNA,PNA,PNA,PNA,NT2,PNA,NT2+1,(T2(I),I= 0,NT2)
               FG2= RMASS2/MASS2
               ENDIF
@@ -326,41 +327,41 @@ c *** for 'ordinary' NCMM-term MLR uLR(r) ...  with damping [if rhoAB > 0]
                       ENDDO
                 ENDIF
               BINF= DLOG(2.d0*DSCM/ULRe)
-              WRITE(6,602) NCN,PPAR,QPAR,DSCM,REQ
+              WRITE(66,602) NCN,PPAR,QPAR,DSCM,REQ
 c ... use THEOCHEM/Huang form:  \beta(yp)= Binf*yp + [1-yp]*{power series in yq}
-              WRITE(6,607) PPAR,PPAR,QPAR,NSR,NLR,IORD+1,
+              WRITE(66,607) PPAR,PPAR,QPAR,NSR,NLR,IORD+1,
      1                                       (PARM(J),J= 1,IORD+1)
               IF(Rref.GT.0) THEN
-                  WRITE(6,613) Rref
+                  WRITE(66,613) Rref
                 ELSE
-                  WRITE(6,615) REQ
+                  WRITE(66,615) REQ
                   Rref= REQ
                 ENDIF
               IF(rhoAB.GT.0.d0) THEN
                   PVSR= 0.5d0*IVSR
                   IF(IDSTT.GT.0) THEN
                       PVSR= 0.5d0*IVSR
-                      WRITE(6,664) rhoAB,PVSR,bDS(IVSR),cDS(IVSR),PVSR
+                      WRITE(66,664) rhoAB,PVSR,bDS(IVSR),cDS(IVSR),PVSR
                     ELSE
                       LVSR= IVSR/2
-                      WRITE(6,666) rhoAB,LVSR,bTT(LVSR)
+                      WRITE(66,666) rhoAB,LVSR,bTT(LVSR)
                     ENDIF
                 ELSE
-                  WRITE(6,668)
+                  WRITE(66,668)
                 ENDIF
-              WRITE(6,617) BINF,MMLR(1),CMM(1),MMLR(1)
+              WRITE(66,617) BINF,MMLR(1),CMM(1),MMLR(1)
               IF(NCMM.GT.1) THEN
                   MM1= 2
                   IF(MMLR(2).LE.0) THEN
                       MM1= 3
                       IF(MMLR(2).EQ.0)
-     1                         WRITE(6,623) MMLR(2),CMM(2),MMLR(2)
-                      IF(MMLR(2).LT.0) WRITE(6,625) MMLR(2),CMM(2),0
+     1                         WRITE(66,623) MMLR(2),CMM(2),MMLR(2)
+                      IF(MMLR(2).LT.0) WRITE(66,625) MMLR(2),CMM(2),0
                       ENDIF
                   DO  I= MM1,NCMM
-                      IF(MMLR(I).LE.9) WRITE(6,619) MMLR(I),CMM(I)
+                      IF(MMLR(I).LE.9) WRITE(66,619) MMLR(I),CMM(I)
      1                    ,MMLR(I)
-                      IF(MMLR(I).GT.9) WRITE(6,621) MMLR(I),CMM(I)
+                      IF(MMLR(I).GT.9) WRITE(66,621) MMLR(I),CMM(I)
      1                                                    ,MMLR(I)
                       ENDDO
                   ENDIF
@@ -565,7 +566,7 @@ c ------------------------------------------------------------------------
        SAVE FIRST, bpm, cpm
 c ------------------------------------------------------------------------
       IF(RHOab.LE.0) THEN
-          WRITE(6,602) RHOab
+          WRITE(66,602) RHOab
           STOP
           ENDIF
       IF(IDSTT.LE.0) THEN
@@ -573,7 +574,7 @@ c ===========================================
 c ** For Tang-Toennies type damping functions
 c ===========================================
           IF((IDF.LT.-4).OR.(IDF.GT.4)) THEN
-                WRITE(6,600) IDSTT,IDF
+                WRITE(66,600) IDSTT,IDF
                 STOP
                 ENDIF
           Lsr= IDF/2
@@ -629,7 +630,7 @@ c =======================================================================
 c ** For Douketis-Scoles-Marchetti-Zen-Thakkar type damping function ...
 c =======================================================================
           IF((IDF.LT.-4).OR.(IDF.GT.0)) THEN
-              WRITE(6,600) IDSTT,IDF
+              WRITE(66,600) IDSTT,IDF
               STOP
               ENDIF
           IF(FIRST.EQ.1) THEN
@@ -1526,7 +1527,7 @@ c
           MASS= 0.d0
           NAME= 'XX'
           IMN= 0
-          WRITE(6,601) IAN
+          WRITE(66,601) IAN
           RETURN
         ELSE
           NAME= AT(IAN)
@@ -1544,7 +1545,7 @@ c ** Special case: insert common name for deuterium or tritium
       GNS= -1
       ABUND = -1.d0
       DO  I= 1,NMN(IAN)
-          if(i.gt.10)  write(6,606) ian,imn,nmn(ian)
+          if(i.gt.10)  write(66,606) ian,imn,nmn(ian)
   606  format(3i9)
           IF(IMN.EQ.MN(IAN,I)) THEN
               MASS= ZM(IAN,I)
@@ -1554,7 +1555,7 @@ c ** Special case: insert common name for deuterium or tritium
           ENDDO
       IF(MASS.LT.0.d0) THEN
           MASS= ZM(IAN,0)
-          IF(IMN.NE.0) WRITE(6,602) AT(IAN),IMN
+          IF(IMN.NE.0) WRITE(66,602) AT(IAN),IMN
           IMN= 0
           ENDIF
       RETURN
