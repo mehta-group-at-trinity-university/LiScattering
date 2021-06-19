@@ -454,7 +454,7 @@ contains
 !    allocate(cotgammaknots(NHFEnergyGrid+InterpOrder))
 !    allocate(cotgammabcoef(NHFEnergyGrid))
 
-    write(6,'(A66)')  "Calculating the phase standard for the reference functions for..."
+    write(6,'(A)') "Calculating the phase standard for the reference functions for..."
     !    write(6,'(A60)')  "----------------------------------------------------------"
     write(6,'(A7,A12, A12)') "    L  ", "       phi  ", "      C6-phi    "
     write(6,'(A7,A12, A12)') "-------", "--------------","----------------"
@@ -986,8 +986,10 @@ program main
   Rdum(2) = Rmidmax
   call SetupPotential(ISTATE,1,muref,muref,2,VLIM,Rdum*BohrPerAngstrom,Vdum,Cvals)
   call VdWLength(Cvals,betavdw,mu)
+  write(6,'(A,f12.4)') "The van der Waals length is rvdw = ", betavdw
   RX = RX*betavdw
   call initMQDT(RX,Rmax,mu,betavdw,Cvals)
+!  stop
   !------------------------------------------------------------------
   ! Determine the size of the one-atom hyperfine/zeeman hamiltonian.
   ! Call once with size1 = 0 to determine the size of the basis.
@@ -1118,14 +1120,9 @@ program main
      endif
 
      EThreshMat(:,:) = 0d0
-     ! CALCULATE THE QUANTUM DEFECTS AT ZERO ENERGY TO CONSTRUCT THE SIMPLE FRAME TRANSFORMATION
-!     call NumerovQD(lwave,mu,energy,Nsr,VsrSinglet,VsrTriplet,Rsr,TripletQD,SingletQD,phistandard(lwave+1),betavdw,RX,Cvals)
+
      call logderQD(lwave,mu,energy,Nsr,wsr,VsrSinglet,VsrTriplet,Rsr,TripletQD,SingletQD,phistandard(lwave+1),betavdw,RX,Cvals)
-     
-     ! END THE SECTION TO CALCULATE THE SINGLE-CHANNEL QDT PARAMETERS
-     !----------------------------------------------------------------------------------------------------
-     ! The MQDT calculation requires that we calculate a short-range K-matrix on a coarse energy and B-field grid
-     ! For the Feshbach resonance calculation, we do this at E = 0 (lowest threshold) on a coarse B-field grid
+
      write(6,*) "See Thresholds.dat for the field dependence of the scattering thresholds."
      write(6,*) "See file EnergyDependence.dat for the energy-dependent cross section"
      write(6,*) "See file FieldDependence.dat for the field-dependent scattering length at threshold"
@@ -2233,6 +2230,7 @@ subroutine VdWLength(Cvals,beta,mu)
 
   beta = beta4**(0.25d0)
 
+  
 end subroutine VdWLength
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 SUBROUTINE polint(xa,ya,n,x,y,dy)

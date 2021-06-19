@@ -19,9 +19,6 @@ AlkaliScattering.x: ${OBJS}
 AlkaliScattering.o: AlkaliScattering.f90 units.o
 	${CMP} ${STND} ${DEBUG} ${FORCEDP} ${FREEFORM} ${OPTFLAG} -c AlkaliScattering.f90
 
-#RMATPROP2016.o: RMATPROP2016.f90 quadrature.o
-#	${CMP} ${STND} ${DEBUG} ${FORCEDP} ${FREEFORM} ${OPTFLAG} -c RMATPROP2016.f90
-
 matrix_stuff.o: matrix_stuff.f 
 	${CMP} ${STND} ${FORCEDP} ${F132FORM} ${INCLUDE} ${LAPACK} ${ARPACK} ${OPTFLAG} -c matrix_stuff.f
 
@@ -57,8 +54,6 @@ threejsixj.o: threejsixj.f
 
 units.o: units.f90
 	${CMP} ${STND} ${FORCEDP} ${OPTFLAG} -c units.f90
-
-
 
 clean:
 	rm -f *.mod *.o *.x
