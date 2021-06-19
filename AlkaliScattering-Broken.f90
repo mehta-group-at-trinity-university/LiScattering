@@ -1241,7 +1241,10 @@ program main
      enddo
   enddo
   stop
-11 Rmid = RmidArray(NRmid)     
+  
+11 continue
+
+  Rmid = RmidArray(NRmid)     
   
   ! prepare some arrays for the log-derivative propagator
   call GridMaker(Rsr,Nsr,Rmin,Rmid,'linear')  ! Make the radial grids
@@ -1260,15 +1263,15 @@ program main
   write(6,*) "See Thresholds for the field dependence of the scattering thresholds."
   write(6,*) "See file EnergyDependence.dat for the energy-dependent cross section"
   write(6,*) "See file FieldDependence.dat for the field-dependent scattering length at threshold"
-  do iB = 1, NBgrid 
-     yi(:,:)=ystart(:,:)
+  do iB = 1, NBgrid
+          yi(:,:)=ystart(:,:)
      call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
      HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
-
      !Find the asymptotic channel states
      VHZ(:,:) = VlrSinglet(Nlr)*SPmat(:,:) + VlrTriplet(Nlr)*TPmat(:,:) + HHZ2(:,:) 
+     !     call MyDSYEV(VHZ(:,:),size2,EVAL,AsymChannels)
      call MyDSYEV(VHZ(:,:),size2,Eth,AsymChannels)
-
+!     Eth(:)=EVAL(:)
      do i=1,size2
         EThreshMat(i,i) = Eth(i)
      enddo
@@ -1278,6 +1281,10 @@ program main
      !Rotate the singlet projection operator
      call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,SPmat,size2,0d0,TEMP,size2)
      call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Sdressed,size2)
+
+     !Rotate the triplet projection operator
+     call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,TPmat,size2,0d0,TEMP,size2)
+     call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Tdressed,size2)
 
      !Rotate the triplet projection operator
      call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,TPmat,size2,0d0,TEMP,size2)
