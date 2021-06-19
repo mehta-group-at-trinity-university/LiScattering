@@ -551,7 +551,7 @@ program main
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2
   double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw
   integer iE, NA,iRmid,NRmid
-  double precision RX, Rmid, rmidmax, RF, Cvals(3), Ktilde
+  double precision RX, Rmid, rmidmax, RF, Cvals(3), Ktilde,Rdum(2),Vdum(2)
 
   double precision, external :: VLR, rint, abar
   type(hf1atom) a1, a2
@@ -585,18 +585,19 @@ program main
   Emin = Emin/HartreePermK
   Emax = Emax/HartreePermK
 
+  RF = Rmax!4.0d0*betavdw ! Final radius for phase standard
+
   
   !make the magnetic field grid and energy grid
   allocate(Egrid(NEgrid),Bgrid(NBgrid))
   call GridMaker(Bgrid,NBgrid,Bmin,Bmax,'linear')
   call GridMaker(Egrid,NEgrid,Emin,Emax,'linear') ! measure the collision energy in Hartree
-
   !--------------------------------------------------!
   
-  ISTATE = 6  !select atomic species (see AtomData for documentation)
-  sym = -1 ! set to +1 for bosonic K-39, Rb-85, Rb-87, Cs-133, Li-7 and Na-23; -1 for fermionic K-40 and Li-6; 0 for any mixed collision
-  lwave = 0 ! s wave collisions
-  mtot = 0  ! really mtot (total two-atom F projection) multiplied by 2
+!!$  ISTATE = 6  !select atomic species (see AtomData for documentation)
+!!$  sym = -1 ! set to +1 for bosonic K-39, Rb-85, Rb-87, Cs-133, Li-7 and Na-23; -1 for fermionic K-40 and Li-6; 0 for any mixed collision
+!!$  lwave = 0 ! s wave collisions
+!!$  mtot = 0  ! really mtot (total two-atom F projection) multiplied by 2
 
 
   call AtomData(ISTATE, AHf1, nspin1, espin1, gi1, MU, MUREF, mass1)  !atom 1 data (and atom 2 for identical particles)
@@ -692,6 +693,14 @@ program main
 !  Nsr = 200000
 !  Nlr = 200000
   VLIM = 0d0
+
+  Rdum(1) = Rmin
+  Rdum(2) = Rmidmax
+  call SetupPotential(ISTATE,1,muref,muref,2,VLIM,Rdum*BohrPerAngstrom,Vdum,Cvals)
+  call VdWLength(Cvals,betavdw,mu)
+  write(6,'(A,f12.4)') "The van der Waals length is rvdw = ", betavdw
+  RX = RX*betavdw
+
   allocate(VHZ(size2,size2))
   !  allocate(RotatedVHZ(size2,size2,NPP))
   allocate(RotatedVsrHZ(size2,size2,Nsr),RotatedVlrHZ(size2,size2,Nlr))
@@ -748,8 +757,8 @@ program main
 !!$     enddo
      endif
        ! Find the van der Waals length
-     call VdWLength(Cvals,betavdw,MU)
-     write(6,'(A,F6.2,A)') "The van der Waals length is: ", betavdw, " bohr"
+!     call VdWLength(Cvals,betavdw,MU)
+!     write(6,'(A,F6.2,A)') "The van der Waals length is: ", betavdw, " bohr"
 
      EThreshMat(:,:) = 0d0
      
@@ -760,8 +769,8 @@ program main
      ! so this code uses the triplet values by default.  "Cvals" is initalized by the triplet call above
 !     NA = 100000 ! Number of points for the single-channel QDT calculations.  Make this a multiple of 10.
 
-     RX = 0.1d0*betavdw ! this is the starting radius for the Milne solutions used to calculate the MQDT phase standard for the reference functions
-     RF = Rlr(Nlr)!4.0d0*betavdw ! Final radius for phase standard
+!     RX = 0.1d0*betavdw ! this is the starting radius for the Milne solutions used to calculate the MQDT phase standard for the reference functions
+!!$     RF = Rlr(Nlr)!4.0d0*betavdw ! Final radius for phase standard
      
      call CalcPhaseStandard(RX,RF,lwave,mu,betavdw,Cvals,phiL) ! calculate the phase standardization for lwave = 0
      !  call CalcPhaseStandard(RX,RF,1,mu,betavdw,Cvals,phiL) ! lwave = 1
