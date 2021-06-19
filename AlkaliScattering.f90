@@ -936,7 +936,7 @@ program main
   double precision, allocatable :: VSinglet(:), VTriplet(:), R(:)
   double precision, allocatable :: weights(:),ystart(:,:),yi(:,:),ym(:,:),yf(:,:),Kmat(:,:),identity(:,:)
   double precision, allocatable :: HHZ(:,:), Bgrid(:),Egrid(:), EVAL(:), EVEC(:,:),RotatedVHZ(:,:,:),TEMP(:,:),EThreshMat(:,:)
-  double precision, allocatable :: CotGammaMat(:,:,:),Ktemp1(:,:),Ktemp2(:,:),KPQ(:,:),KQP(:,:)
+  double precision, allocatable :: CotGammaMat(:,:),Ktemp1(:,:),Ktemp2(:,:),KPQ(:,:),KQP(:,:)
   double precision, allocatable :: SPmat(:,:), Sdressed(:,:), Tdressed(:,:), TPmat(:,:)
   double precision, allocatable :: VHZ(:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:),Ksr(:,:),RmidArray(:)
   double precision VLIM,Rmin,Rmax,dR,phiL
@@ -1050,7 +1050,7 @@ program main
   allocate(EVEC(size2,size2),EVAL(size2))
   call AllocateScat(SD,size2)
   allocate(identity(size2,size2),ystart(size2,size2),yi(size2,size2),ym(size2,size2),yf(size2,size2),Eth(size2))
-  allocate(CotGammaMat(size2-1,size2-1,NEgrid))
+  allocate(CotGammaMat(size2-1,size2-1))
   allocate(Ktemp1(size2-1,size2-1),Ktemp2(1,1))
   allocate(KPQ(1,size2-1),KQP(size2-1,1))
 
@@ -1159,6 +1159,9 @@ program main
 
         ! Start the energy loop
         do iE = 1, 1!NEgrid
+
+
+
            NumOpen=0        
            Energy = Eth(1) + Egrid(iE)!*nKPerHartree
            !write(6,*) "energy = ", energy
@@ -1169,34 +1172,69 @@ program main
               write(6,*) "More than one open channel -- must modify the algorithm.  Stopping"
               stop
            endif
-
-           if(CALCTYPE.eq.2) then
-              if(iE.eq.1) then
-                 call logderprop(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,RotatedVsrHZ,size2)
-              endif
-!!$           do i = 1, size2-1
-!!$!              write(6,*) Egrid(iE)-Eth(i)+Eth
-!!$              CotGammaMat(i,i,iE) = dbsval(Egrid(iE)-Eth(i+1)+Eth(1),InterpOrder,cotgammaknots,NHFEnergyGrid,cotgammabcoef)
-!!$           enddo
-              call CalcKsr(ym, Ksr, size2, RX, Rsr(Nsr), energy, Eth, lwave, mu, Cvals, betavdw, phistandard(lwave+1))
-           else if(CALCTYPE.eq.3) then
-              Ksr(:,:) = tan(pi*TripletQD) * Tdressed(:,:) + tan(pi*SingletQD) * Sdressed(:,:)
-           endif
-           call CalcTanGamma(RX,Rmax,size2,lwave,mu,betavdw,Cvals,phistandard(lwave+1),Egrid,NEgrid,Eth,iE,CotGammaMat)
+           call CalcTanGamma(RX,RF,size2,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,iE,CotGammaMat(:,:))
+           call logderprop(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,RotatedVsrHZ,size2)
+           call CalcKsr(ym, Ksr, size2, RX, Rsr(Nsr), energy, Eth, lwave, mu, Cvals, betavdw, phiL)
            call MyDSYEV(Ksr,size2,EVAL,EVEC)
-           ! THIS NEXT PART DOES THE CHANNEL CLOSING
-           Ktemp1 = Ksr(2:size2,2:size2) + CotGammaMat(:,:,iE)
+           !write(6,'(I4,A5,i4,100d14.4)') iB,' / ', NBgrid,EVAL
+!!$           write(6,*) Rmid, EVAL
+!!$           write(52,*) Rmid, EVAL
+           write(6,*) Bgrid(iB), Ktilde!(1d0-Ktilde)*abar(lwave) !Rmid, (atan(EVAL(i))/Pi, i=1,size2)
+!           write(52,*) Rmid, (atan(EVAL(i))/Pi, i=1,size2)!EVAL!,Ksr
+
+           Ktemp1 = Ksr(2:size2,2:size2) + CotGammaMat(:,:)
            KQP = Ksr(2:size2,1:1)
            KPQ = Ksr(1:1,2:size2)
-
+           
            call sqrmatinv(Ktemp1,size2-1)
            Ktemp2 = MATMUL(KPQ,MATMUL(Ktemp1,KQP))
-           !           write(6,*) "Ktemp2:"
-           !           call printmatrix(Ktemp2,1,1,6)
+           write(6,*) "Ktemp2:"
+           call printmatrix(Ktemp2,1,1,6)
            Ktilde = Ksr(1,1) - Ktemp2(1,1)
            write(51,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw
-           write(6,*) iB,"/",NBgrid, Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw
-           write(53,*) Bgrid(iB), (atan(EVAL(i))/Pi, i = 1, size2)
+           
+           
+
+
+!!$           
+!!$           NumOpen=0        
+!!$           Energy = Eth(1) + Egrid(iE)!*nKPerHartree
+!!$           !write(6,*) "energy = ", energy
+!!$           do j = 1, size2
+!!$              if(energy.gt.Eth(j)) NumOpen = NumOpen+1
+!!$           enddo
+!!$           if(NumOpen.gt.1) then
+!!$              write(6,*) "More than one open channel -- must modify the algorithm.  Stopping"
+!!$              stop
+!!$           endif
+!!$
+!!$           if(CALCTYPE.eq.2) then
+!!$              if(iE.eq.1) then
+!!$                 call logderprop(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,RotatedVsrHZ,size2)
+!!$              endif
+!!$!           do i = 1, size2-1
+!!$!              write(6,*) Egrid(iE)-Eth(i)+Eth
+!!$!              CotGammaMat(i,i,iE) = dbsval(Egrid(iE)-Eth(i+1)+Eth(1),InterpOrder,cotgammaknots,NHFEnergyGrid,cotgammabcoef)
+!!$!           enddo
+!!$              call CalcKsr(ym, Ksr, size2, RX, Rsr(Nsr), energy, Eth, lwave, mu, Cvals, betavdw, phistandard(lwave+1))
+!!$           else if(CALCTYPE.eq.3) then
+!!$              Ksr(:,:) = tan(pi*TripletQD) * Tdressed(:,:) + tan(pi*SingletQD) * Sdressed(:,:)
+!!$           endif
+!!$           call CalcTanGamma(RX,Rmax,size2,lwave,mu,betavdw,Cvals,phistandard(lwave+1),Egrid,NEgrid,Eth,iE,CotGammaMat)
+!!$           call MyDSYEV(Ksr,size2,EVAL,EVEC)
+!!$           ! THIS NEXT PART DOES THE CHANNEL CLOSING
+!!$           Ktemp1 = Ksr(2:size2,2:size2) + CotGammaMat(:,:,iE)
+!!$           KQP = Ksr(2:size2,1:1)
+!!$           KPQ = Ksr(1:1,2:size2)
+!!$
+!!$           call sqrmatinv(Ktemp1,size2-1)
+!!$           Ktemp2 = MATMUL(KPQ,MATMUL(Ktemp1,KQP))
+!!$           !           write(6,*) "Ktemp2:"
+!!$           !           call printmatrix(Ktemp2,1,1,6)
+!!$           Ktilde = Ksr(1,1) - Ktemp2(1,1)
+!!$           write(51,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw
+!!$           write(6,*) iB,"/",NBgrid, Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw
+!!$           write(53,*) Bgrid(iB), (atan(EVAL(i))/Pi, i = 1, size2)
         enddo
      enddo
   enddo
@@ -1620,7 +1658,7 @@ subroutine CalcTanGamma(RX,RF,size,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,
   use MQDT
   implicit none
   integer lwave, NEgrid, iE, ix, Nx,size,ith
-  double precision RX, RF, mu, betavdw, Cvals(3), phiL, Egrid(NEgrid), CotGammaMat(size-1,size-1,NEgrid),EvdW
+  double precision RX, RF, mu, betavdw, Cvals(3), phiL, Egrid(NEgrid), CotGammaMat(size-1,size-1),EvdW
   double precision x, xscale, si, sk, sip, skp, ldk, ldi, kappa, f0, f0p, g0, g0p,Eth(size)
   double precision alpha0(2),alphaf(2),energy, tangamma, gamlocal
   double precision, allocatable :: xgrid(:), Rgrid(:)
@@ -1650,7 +1688,7 @@ subroutine CalcTanGamma(RX,RF,size,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,
      x = kappa*RF
      call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
      tangamma = -(g0p - kappa*ldk*g0)/(f0p - kappa*ldk*f0)
-     CotGammaMat(ith-1,ith-1,iE) = 1d0/tangamma
+     CotGammaMat(ith-1,ith-1) = 1d0/tangamma
      gamlocal = atan(tangamma)
      !     write(400,*) xgrid(ix), ldk
      !write(400,*) energy/EvdW, gam(iE)
