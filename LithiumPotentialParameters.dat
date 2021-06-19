@@ -58,34 +58,6 @@
  BOB adiabatic potential correction for atom-1  of mass   6.01512279500
    consists of mass factor  [1- MASS(  7Li)/MASS(  6Li)]  multiplying all of:
      u1INF=   0.000000  times  y6= [(r**6 - Re**6)/(r**6 + Re**6)]
-     plus  [1 - y6]  times an order  2 polynomial in
-       y6=[(r**6 - Re**6)/(r**6 + Re**6)]  with the   3 coefficients:
-     0.194000000     -0.100000000E-01  0.390000000    
-
- BOB adiabatic potential correction for atom-2  of mass   6.01512279500
-   consists of mass factor  [1- MASS(  7Li)/MASS(  6Li)]  multiplying all of:
-     u1INF=   0.000000  times  y6= [(r**6 - Re**6)/(r**6 + Re**6)]
-     plus  [1 - y6]  times an order  2 polynomial in
-       y6=[(r**6 - Re**6)/(r**6 + Re**6)]  with the   3 coefficients:
-     0.194000000     -0.100000000E-01  0.390000000    
-
- MLR(n=6; p=5, q=3) Potential with:   De=  8516.709[cm-1]    Re=  2.67299300[A]
-   with exponent coefficient   beta(r)= beta{INF}*y5 + [1-y5]*Sum{beta_i*y3^i}
-      exponent coefft. power series orders  16 for  R < Re  and  16 for  R > Re
-      and 17 coefficients: -2.89828701D+00 -1.30926500D+00 -2.01850700D+00
-           -1.38162000D+00 -1.21933000D+00  3.46300000D-01  1.06100000D-01
-           -1.88600000D-01  1.67100000D+00  1.09430000D+01  3.94400000D+00
-           -2.72300000D+01 -1.14900000D+01  5.67000000D+01  3.89000000D+01
-           -3.74000000D+01 -3.30000000D+01
-      with radial variables  y_p & y_q  defined w.r.t.  Rref= 3.8500000
-    uLR inverse-power terms incorporate NO damping functions
-      betaINF= -2.517818895081  & uLR defined by  C6 = 6.715270D+06[cm-1 Ang^6]
-                                                  C8 = 1.125880D+08[cm-1 Ang^8]
-                                                  C10= 2.786040D+09[cm-1 Ang^10]
-
- BOB adiabatic potential correction for atom-1  of mass   6.01512279500
-   consists of mass factor  [1- MASS(  7Li)/MASS(  6Li)]  multiplying all of:
-     u1INF=   0.000000  times  y6= [(r**6 - Re**6)/(r**6 + Re**6)]
      plus  [1 - y6]  times an order  0 polynomial in
        y6=[(r**6 - Re**6)/(r**6 + Re**6)]  with the   1 coefficients:
      0.590000000E-01

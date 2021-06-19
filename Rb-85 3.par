@@ -1,0 +1,8 @@
+# This is a parameter file for input into AlkaliScattering.x
+# ISTATE (for Rb-87)  SYM (+1 for boson)
+  1	      	      1
+# L (partial wave)    2*MFtot (twice total F projection)
+  0 	     	      4
+# Rmin		      Rmid		Rmax  (all in bohr)
+  0.03d0	      40d0		2000d0
+
