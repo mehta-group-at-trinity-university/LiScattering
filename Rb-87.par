@@ -1,12 +1,12 @@
 # This is a parameter file for input into AlkaliScattering.x
-# ISTATE (for Li-6)  SYM (+1 for boson)	  CALCTYPE (1 for logder, 2 for MQDT, 3 for FT) 
-  6	      	      -1     	 	  2	   
+# ISTATE (for Rb-87)  SYM (+1 for boson)	  CALCTYPE (1 for logder, 2 for MQDT, 3 for FT) 
+  1	      	      1	           	 	  2	   
 # L (partial wave)    2*MFtot (twice total F projection) writepot
-  0 	     	      0	      	     	     		 .true.
+  0 	     	      4	      	     	     		 .false.
 # Rmin		      Rmidmax		Rmax  		 RX     (all in bohr except RX which is in vdw units.  Converted to bohr in the code.)
-  0.03d0	      40d0		500d0		 0.1d0
+  0.03d0	      40d0		1000d0		 0.1d0
 # Nsr		      Nlr
-  200000	      200000
+  200000	      400000
 # NEgrid	      Emin		Emax (enter energy range in mK)
   10		      1d-6		50d0
 # NBgrid	      Bmin		Bmax (enter B-field range in gauss)

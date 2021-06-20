@@ -807,7 +807,7 @@ program main
            endif
 
            call CalcTanGamma(RX,RF,size2,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,iE,cotgamma)
-           if(CALCTYPE.eq.2) then
+           if((CALCTYPE.eq.2).and.(iE.eq.1)) then
               call logderprop(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,RotatedVsrHZ,size2)
               call CalcKsr(ym, Ksr, size2, RX, Rsr(Nsr), energy, Eth, lwave, mu, Cvals, betavdw, phiL)
            else if (CALCTYPE.eq.3) then
@@ -817,7 +817,7 @@ program main
            call MyDSYEV(Ksr,size2,EVAL,EVEC)
 
 
-           write(6,*) Bgrid(iB), Ktilde!(1d0-Ktilde)*abar(lwave) !Rmid, (atan(EVAL(i))/Pi, i=1,size2)
+!           write(6,*) Bgrid(iB), Ktilde!(1d0-Ktilde)*abar(lwave) !Rmid, (atan(EVAL(i))/Pi, i=1,size2)
 !           write(52,*) Rmid, (atan(EVAL(i))/Pi, i=1,size2)!EVAL!,Ksr
 
            Ktemp1 = Ksr(2:size2,2:size2) + cotgamma(:,:,iE)
@@ -826,8 +826,9 @@ program main
            
            call sqrmatinv(Ktemp1,size2-1)
            Ktemp2 = MATMUL(KPQ,MATMUL(Ktemp1,KQP))
-           write(6,*) "Ktemp2:"
-           call printmatrix(Ktemp2,1,1,6)
+!           write(6,*) "Ktemp2:"
+           !           call printmatrix(Ktemp2,1,1,6)
+           write(6,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw
            Ktilde = Ksr(1,1) - Ktemp2(1,1)
            write(51,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw
         enddo
