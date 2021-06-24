@@ -171,7 +171,7 @@ contains
     implicit none
     ! Gives the size of the (unsymmetrized) hyperfine basis (dimension of the 1-atom hyperfine + zeeman Hamiltonian) for one atom
     integer i, s, size ! size is (in/out) if size = 0 on input -- determine the size.  Else, use it to calculate the basis stored in hf1
-    integer f, m, count
+    integer f, m, count, n
     type(hf1atom) hf1(:)
 
     if(size.eq.0) then
@@ -189,7 +189,17 @@ contains
              hf1(count)%m = m
           enddo
        enddo
+       write(6,'(A)') "   #   |  f   mf  >"
+       write(6,'(A)') "-------------------" 
+       do n = 1, size
+          write(6,'(I4,A4,I3,A1,I3,A4)') n, '   |', hf1(n)%f,' ', hf1(n)%m, '  >'
+       enddo
     endif
+
+
+
+    
+    !    stop
     !    write(6,*) "size = ", size
   end subroutine MakeHF1Basis
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -301,6 +311,7 @@ contains
     allocate(hf2symTempGlobal(symsize))
     write(6,'(A,I3)') "(+1/0/-1) = (boson/dist/fermion) Symmetry case: ", sym
     write(6,'(A,I2)') "partial wave = ", lwave
+    write(6,'(A)') "The symmetrized basis in term of unsymmetrized states | f1 m1 f2 m2 >:"
     do n1 = 1, symsize
        hf2symTempGlobal(n1)=symstates(n1)
        ! record the normalization and relative phase into the state
@@ -312,8 +323,8 @@ contains
        if(sym.lt.0) hf2symTempGlobal(n1)%phase = -1
        hf2symTempGlobal(n1)%phase = hf2symTempGlobal(n1)%phase*(-1)**lwave
 
-       write(6,'(I4,A,f5.2,A,4I2,A,I3,A,4I2,A)') n1,"  symmetrized basis:", hf2symTempGlobal(n1)%norm, &
-            " ( |", hf2symTempGlobal(n1)%state1,"> +", hf2symTempGlobal(n1)%phase,"|", hf2symTempGlobal(n1)%state2,"> )"
+       write(6,'(I4,A,f5.2,A,4I3,A,I3,A,4I3,A)') n1," : ", hf2symTempGlobal(n1)%norm, &
+            " ( |", hf2symTempGlobal(n1)%state1," > +", hf2symTempGlobal(n1)%phase,"|", hf2symTempGlobal(n1)%state2," > )"
     enddo
     size=symsize
     deallocate(symstates,tempstates)
@@ -629,12 +640,21 @@ program main
      call MyDSYEV(HHZ,size1,EVAL,EVEC)
      write(90,*) Bgrid(iB), EVAL - CGhf
   enddo
+  write(6,'(A)') '-----------------------------------'
+  write(6,'(A,f6.1,A)') "Bmax = ", Bgrid(NBgrid), " gauss"
+  write(6,'(A,f10.3,A)') "The one atom ground state has E = ", EVAL(1), " MHz"
+  write(6,'(A)') "In the | f mf > basis, the ground state Eigenvector is: "
+  do i = 1, size1
+     write(6,'(f12.6, A4,I3,A1,I3,A4)') EVEC(i,1),'   |', hf1(i)%f,' ', hf1(i)%m, '  >'
+  enddo
+  write(6,'(A)') '-----------------------------------'
 
   deallocate(EVEC,EVAL,HHZ)
   !____________________________________________________________________
   call MakeHF2Basis(nspin1, espin1, nspin1, espin1, sym, lwave, mtot, size2)
   write(6,'(A,I3)') "size of the symmetrized 2-atom hyperfine basis = ", size2
   write(6,*)
+!  stop
   allocate(SPmat(size2,size2), TPmat(size2,size2))
   allocate(Sdressed(size2,size2), Tdressed(size2,size2))
   allocate(EThreshMat(size2,size2),Ksr(size2,size2))
