@@ -9,14 +9,12 @@ FORCEDP = #-fdefault-real-8 -fdefault-double-
 LAPACK =   -framework accelerate
 ARPACK =  -L/usr/local/lib/ -larpack
 INCLUDE =  -I/usr/local/include
-#OBJS  = besselnew.o threejsixj.o Bsplines.o modules_qd.o bspline_22.o quadrature.o POTGENLI2.o AlkaliScattering.o units.o matrix_stuff.o
-#OBJS  = besselnew.o threejsixj.o Bsplines.o bspline_22.o quadrature.o POTGENLI2.o AlkaliScattering.o units.o matrix_stuff.o
-OBJS  = besselnew.o threejsixj.o Bsplines.o bspline90_22.o quadrature.o POTGENLI2.o AlkaliScattering.o units.o matrix_stuff.o 
+OBJS  = bspline90_22.o besselnew.o threejsixj.o Bsplines.o quadrature.o POTGENLI2.o AlkaliScattering.o units.o matrix_stuff.o 
 
 AlkaliScattering.x: ${OBJS} 
 	${CMP} ${STND} ${DEBUG} ${OBJS} ${INCLUDE} ${LAPACK}  ${ARPACK} ${OPTFLAG} ${FORCEDP} -o AlkaliScattering.x
 
-AlkaliScattering.o: AlkaliScattering.f90 units.o
+AlkaliScattering.o: AlkaliScattering.f90 units.o bspline90_22.o
 	${CMP} ${STND} ${DEBUG} ${FORCEDP} ${FREEFORM} ${OPTFLAG} -c AlkaliScattering.f90
 
 matrix_stuff.o: matrix_stuff.f 
@@ -30,9 +28,6 @@ nrtype.mod: modules_qd.o
 
 modules_qd.o:	modules_qd.f90
 	${CMP} ${STND} ${FORCEDP} ${OPTFLAG} -c modules_qd.f90
-
-#bspline_22.o: bspline_22.f
-#	${CMP} ${STND} ${FORCEDP} ${OPTFLAG} -c bspline_22.f
 
 bspline90_22.o: bspline90_22.f90
 	${CMP} ${STND} ${FORCEDP} ${OPTFLAG} -c bspline90_22.f90

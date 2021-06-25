@@ -36,6 +36,7 @@ CONTAINS
   END SUBROUTINE DeAllocateScat
 
 END MODULE DataStructures
+
 module scattering
   use datastructures
   !****************************************************************************************************
@@ -534,15 +535,16 @@ contains
 
   end subroutine MakeSTHFProj
 end module hyperfine
-
-
 !****************************************************************************************************
 program main
+  use bspline
+  use InterpType
   use units
   use hyperfine
   use datastructures
   use scattering
   use quadrature
+
   implicit none
   integer NPP, iR, iB, ihf, n, i, j, A, nc, nr, ESTATE, ISTATE, IMN1
   integer nspin1, nspin2, espin1, espin2 !nspin is the nuclear spin and espin is the electronic spin
@@ -552,7 +554,7 @@ program main
   double precision, allocatable :: Rsr(:), Rlr(:),VsrSinglet(:),VsrTriplet(:),VlrSinglet(:),VlrTriplet(:)
   double precision, allocatable :: RotatedVsrHZ(:,:,:),RotatedVlrHZ(:,:,:)
   double precision, allocatable :: wSR(:),wLR(:)
-  double precision, allocatable :: VSinglet(:), VTriplet(:), R(:)
+!  double precision, allocatable :: VSinglet(:), VTriplet(:), R(:)
   double precision, allocatable :: weights(:),ystart(:,:),yi(:,:),ym(:,:),yf(:,:),Kmat(:,:),identity(:,:)
   double precision, allocatable :: HHZ(:,:), Bgrid(:),Egrid(:), EVAL(:), EVEC(:,:),RotatedVHZ(:,:,:),TEMP(:,:),EThreshMat(:,:)
   double precision, allocatable :: cotgamma(:,:,:),Ktemp1(:,:),Ktemp2(:,:),KPQ(:,:),KQP(:,:)
@@ -569,16 +571,7 @@ program main
   type(hf2atom) mstate1, mstate2
   type(hf1atom), allocatable :: hf1(:) 
   TYPE(ScatData) :: SD
-
-  !-----------------------------------------------------!
-  ! Set the energy and B-field grid
-!!$  NBgrid = 200
-!!$  NEgrid = 100
-!!$  
-!!$  Bmin = 1d-3
-!!$  Bmax = 1200d0
-!!$  Emin = 1d-6/HartreePermK !25d0/HartreePermK
-!!$  Emax = 0.5d0/HartreePermK !35d0/HartreePermK
+  type(InterpolatingFunction) :: InterpCotGamma
 
   read(5,*)
   read(5,*)
@@ -602,6 +595,7 @@ program main
   call GridMaker(Egrid,NEgrid,Emin,Emax,'linear') ! measure the collision energy in Hartree
   !--------------------------------------------------!
 
+  
   call AtomData(ISTATE, AHf1, nspin1, espin1, gi1, MU, MUREF, mass1)  !atom 1 data (and atom 2 for identical particles)
   !write(6,*) AHf1, nspin1, espin1, gi1, MU, MUREF, mass1
   ! initialize the angular momentum routines
@@ -717,7 +711,7 @@ program main
   allocate(RotatedVsrHZ(size2,size2,Nsr),RotatedVlrHZ(size2,size2,Nlr))
   
 
-     !  allocate(R(NPP),weights(NPP),VSinglet(NPP),VTriplet(NPP))
+
   allocate(Rsr(Nsr),Rlr(Nlr),wSR(Nsr),wLR(Nlr),VsrSinglet(Nsr),VlrSinglet(Nlr),VsrTriplet(Nsr),VlrTriplet(Nlr))
 
   if(CALCTYPE.eq.1) goto 11

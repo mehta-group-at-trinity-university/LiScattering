@@ -62,10 +62,20 @@ end module numeric
 
 
 ! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
+module InterpType
+  
+  TYPE InterpolatingFunction
+     
+     DOUBLE PRECISION, ALLOCATABLE :: x(:),y(:),knots(:),b(:)
+     integer nx, kx
+     
+  END TYPE InterpolatingFunction
+  
+  
+end module InterpType
 
 module bspline
-
+use InterpType
 !
 !  ------------------------------------------------------------------
 !
@@ -92,18 +102,74 @@ module bspline
 !  ------------------------------------------------------------------
 !
 
+  
+  ! ----------------------------------------------------------------------------------
+  ! Entry by NPM 6/24/2021
+  ! The three critical subroutine/function calls for interpolation are in this order:
+  
+  !  subroutine dbsnak(nx,xvec,kxord,xknot)
+  !  subroutine dbsint(nx,xvec,xdata,kx,xknot,bcoef)
+  !  function dbsval(x,kx,xknot,nx,bcoef)
+
+  ! nx is the length of the interpolated data.
+  ! kx, kxord is the order of the bsplines used for interpolation
+  ! xvec and xdata are the x,y points to be interpolated (each of length nx)
+  ! xknot is output of dbsnak.  It is an array of length nx+kx
+  ! bcoef is output of dbsint. It is an array of length nx
+  ! dbsval is the actual function call that requires bcoef and xknot
+
+  ! We will therefore define a datatype that contains all the necessary
+  ! information for constructing an interpolating function
+ 
+  ! ----------------------------------------------------------------------------------
+
   private
 
   public dbsnak
   public dbsint, dbsval, dbsder, dbs1gd
   public dbs2in, dbs2dr, dbs2vl, dbs2gd
   public dbs3in, dbs3vl, dbs3dr, dbs3gd
-
-
+  public AllocateInterpolatingFunction
+  public SetupInterpolatingFunction
+  
 contains
 
+  ! NPM: The following routine allocates memory for the arrays in the interpolant
+  subroutine AllocateInterpolatingFunction(nx,kx,interpolant)
+    implicit none
+    integer nx, kx   
+    type(InterpolatingFunction) :: interpolant
+    
+    interpolant%nx=nx
+    interpolant%kx=kx
+    allocate(interpolant%x(nx),interpolant%y(nx),interpolant%knots(nx+kx),interpolant%b(nx))
+    
+    
+  end subroutine AllocateInterpolatingFunction
+  
+  ! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  
+  ! NPM: This routine calls dbsnak and dbsint to setup the interpolant
+  subroutine SetupInterpolatingFunction(interpolant)
+    implicit none
+    type(InterpolatingFunction) :: interpolant
 
-! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    call dbsnak(interpolant%nx,interpolant%x,interpolant%kx,interpolant%knots)
+    call dbsint(interpolant%nx,interpolant%x,interpolant%y,interpolant%kx,interpolant%knots,interpolant%b)
+    
+  end subroutine SetupInterpolatingFunction
+  
+  ! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  
+  double precision function Interpolated(x,interpolant)
+    implicit none
+    double precision x
+    type(InterpolatingFunction) :: interpolant
+    double precision, external :: dbsval
+    Interpolated = dbsval(x,interpolant%kx,interpolant%knots,interpolant%nx,interpolant%b)
+    
+  end function Interpolated
+  ! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
   subroutine dbsnak(nx,xvec,kxord,xknot)
@@ -233,7 +299,8 @@ contains
        if (leftx .lt. ilp1mx) go to 30
        leftx = leftx - 1
        ! The following conditional changed by NP Mehta to allow for machine-precision differences.
-       if ((xveci - xknot(leftx+1)).gt.(abs(xveci)*1d-12)) then  
+       if ((xveci - xknot(leftx+1)).gt.0d0) then  
+!       if ((xveci - xknot(leftx+1)).gt.(abs(xveci)*1d-12)) then  
           write(6,*) "subroutine dbsint: error xveci.gt.xknot(leftx+1)"
           write(6,*) leftx+1, xveci- xknot(leftx+1),(xveci*1d-12)
           goto 998
