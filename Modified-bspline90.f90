@@ -63,8 +63,10 @@ end module numeric
 
 ! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-
 module bspline
+
+!  use InterpType
+  implicit none
 
 !
 !  ------------------------------------------------------------------
@@ -92,6 +94,8 @@ module bspline
 !  ------------------------------------------------------------------
 !
 
+  
+
   private
 
   public dbsnak
@@ -99,11 +103,9 @@ module bspline
   public dbs2in, dbs2dr, dbs2vl, dbs2gd
   public dbs3in, dbs3vl, dbs3dr, dbs3gd
 
-
+  
 contains
 
-
-! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
   subroutine dbsnak(nx,xvec,kxord,xknot)
@@ -156,27 +158,35 @@ contains
 
     if(mod(kxord,2) .eq. 0) then
        do ix = kxord+1, nx
-          xknot(ix) = xvec(ix-kxord/2)
+          ! this assigns xknot(kx+1) = xvec(kx/2+1);  xknot(5) = xvec(3)
+          !          ... xknot(kx+2) = xvec(kx/2+2)
+          !          ... xknot(nx) = xvec(nx-kx/2) xknot(nx) = xvec(nx-2)
+          ! which is fine since kx is even here.  (Imagine above teh kx = 4)
+          xknot(ix) = xvec(ix-kxord/2) 
        end do
     else
        do ix = kxord+1, nx
+          ! this assigns xknot(kx+1) = 0.5_dbl * (xvec(kx/2+1) + xvec(kx/2)) ; xknot(2) = 0.5_dbl * (xvec(2) + xvec(1)) ; 
+          !          ... xknot(kx+2) = 0.5_dbl * (xvec(kx/2+2) + xvec(kx/2+1)) ; xknot(3) = 0.5_dbl * (xvec(3) + xvec(2)) ; 
+          !          ... xknot(nx) = 0.5_dbl * (xvec(nx-kxord/2) + xvec(nx-kxord/2-1))
+          ! which is fine since kx is odd here. (Imagine above that kx = 3, and 3/2 -> 1 for integer division)
           xknot(ix) = 0.5_dbl * (xvec(ix-kxord/2) + xvec(ix-kxord/2-1))
        end do
     endif
-
+    ! The final kxord knot points are effectively equal, but the next loop ensures
+    ! that they remain ordered.  But note that this will fail for a grid of negative numbers
+    ! since multiplying a negative number (-|xlast|) by (1+eps) gives a slightly MORE negative number, not a slightly less negative one.
+    ! SOLUTION: NPM added the sign(xvec(nx)) below.
     do ix = nx+1, nx+kxord
        !xknot(ix) = xvec(nx) * (1.0_dbl + eps)
-!       xknot(ix) = xvec(nx)  !Modified from previous line by NPM
-       xknot(ix) = xvec(nx) * sign(1.0_dbl + eps,xvec(nx))  !Modified from previous line by NPM
+       xknot(ix) = xvec(nx) * (1.0_dbl + sign(1d0,xvec(nx))*eps) 
     end do
-
+    ! Not sure why the code needs to do this at the right boundary but not the left boundary.
   end subroutine dbsnak
 
 
 ! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-
-  subroutine dbsint(nx,xvec,xdata,kx,xknot,bcoef)
+subroutine dbsint(nx,xvec,xdata,kx,xknot,bcoef)
 
 !
 !  Computes the spline interpolant, returning the B-spline coefficients.
@@ -263,10 +273,7 @@ contains
 
   end subroutine dbsint
 
-
 ! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-
   function dbsval(x,kx,xknot,nx,bcoef)
 
 !
@@ -303,7 +310,7 @@ contains
 !
 
     leftx = 0
-!    write(6,*) "begin dbsval"
+
     do ix = 1,nx+kx-1
        if (xknot(ix) .gt. xknot(ix+1)) then
           write(6,*) "subroutine dbsval:"
@@ -317,7 +324,7 @@ contains
     if(leftx .eq. 0) then
        write(6,*) "subroutine dbsval:"
        write(6,*) "ix with xknot(ix) <= x < xknot(ix+1) required."
-       write(6,*)  "ix=",ix, "ineq:", xknot(ix), x, xknot(ix+1)
+       write(6,*) "x = ", x
        stop
     endif
 
@@ -334,17 +341,15 @@ contains
        save2 = work(ik)
        do il = ik+1, kx
           save1 = work(il)
-          work(il) = (dl(il) * work(il) + dr(il-ik) * save2) &
-                          / (dl(il) + dr(il - ik))
+          work(il) = (dl(il) * work(il) + dr(il-ik) * save2)                  &
+               &           / (dl(il) + dr(il - ik))
           save2 = save1
        end do
     end do
 
     dbsval = work(kx)
-!    write(6,*) "end dbsval"
+
   end function dbsval
-
-
 ! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 
@@ -2354,85 +2359,3 @@ contains
   
 end module InterpType
 
-module MyCubicSpline
-  implicit none
-  
-contains
-  subroutine CubicSpline(x,y,N,ypp)
-    implicit none
-    integer N
-    double precision x(*),y(*),ypp(*)
-    
-    integer NMax,i,k
-    double precision Sig,qN,uN,p
-    double precision, allocatable :: u(:)
-    
-    allocate(u(N))
-    
-    ypp(1) = 0.0d0
-    u(1) = 0.0d0
-    do i = 2,N-1
-       Sig = (x(i)-x(i-1))/(x(i+1)-x(i-1))
-       p = Sig * ypp(i-1)+2.0d0
-       ypp(i) = (Sig-1.0d0)/p
-       u(i) = (6.0d0*((y(i+1)-y(i))/(x(i+1)-x(i))-(y(i)-y(i-1)) &
-            /(x(i)-x(i-1)))/(x(i+1)-x(i-1))-Sig*u(i-1))/p
-    enddo
-    qN=0.0d0
-    uN=0.0d0
-    ypp(N)=(uN-qN*u(N-1))/(qN*ypp(N-1)+1.0d0)
-    do k = N-1,1,-1
-       ypp(k)= ypp(k)*ypp(k+1)+u(k)
-    enddo
-    
-    deallocate(u)
-    
-    return
-  end subroutine CubicSpline
-  
-  subroutine CubicSplineDerivInterp(N,x,y,ypp,xInterp,ypInterp,NumPoints)
-    
-    integer N,NumPoints
-    double precision x(*),y(*),ypp(*),xInterp(*),ypInterp(*)
-    
-    integer i,j
-    double precision xDelt,yDelt,a,b,c,d
-    
-    j = 1
-    do i = 1,NumPoints
-       do while ((x(j+1) .lt. xInterp(i)) .AND. (j .lt. N))
-          j = j + 1
-       enddo
-       xDelt = x(j+1)-x(j)
-       yDelt = y(j+1)-y(j)
-       a = (x(j+1)-xInterp(i))/xDelt
-       b = 1.0d0-a
-       ypInterp(i) = yDelt/xDelt+((3.0d0*b*b-1.0d0)*ypp(j+1)-(3.0d0*a*a-1.0d0)*ypp(j))*xDelt/6.0d0
-    enddo
-    
-    return
-  end subroutine CubicSplineDerivInterp
-  
-  subroutine CubicSplineInterp(N,x,y,ypp,xInterp,yInterp,NumPoints)
-    
-    integer N,NumPoints
-    double precision x(*),y(*),ypp(*),xInterp(*),yInterp(*)
-    
-    integer i,j
-    double precision Delt,c,d
-    
-    j = 1
-    do i = 1,NumPoints
-       do while ((x(j+1) .lt. xInterp(i)) .AND. (j .lt. N))
-          j = j + 1
-       enddo
-       Delt = x(j+1)-x(j)
-       c = (x(j+1)-xInterp(i))/Delt
-       d = (xInterp(i)-x(j))/Delt
-       yInterp(i) = c*y(j)+d*y(j+1)+((c**3-c)*ypp(j)+(d**3-d)*ypp(j+1))*Delt**2/6.0d0
-    enddo
-    
-    return
-  end subroutine CubicSplineInterp
-  
-end module MyCubicSpline
