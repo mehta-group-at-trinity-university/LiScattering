@@ -682,6 +682,7 @@ program main
      ystart(i,i)=1d20
   enddo
 
+  open(unit = 20, file = "CollisionThresholds.dat")
   open(unit = 50, file = "EnergyDependence.dat")
   open(unit = 51, file = "FieldDependence.dat")
   open(unit = 52, file = "RDependenceKsr.dat")
@@ -755,7 +756,7 @@ program main
        call CalcPhaseStandard(RX,RF,lwave,mu,betavdw,Cvals,phiL) ! calculate the phase standardization for lwave = 0
   !  call CalcPhaseStandard(RX,RF,1,mu,betavdw,Cvals,phiL) ! lwave = 1
   !  call CalcPhaseStandard(RX,RF,2,mu,betavdw,Cvals,phiL) ! lwave = 2
-
+       
        call CalcCotGammaFunction(RX,RF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,Emin, Emax,InterpCotGamma)
 
 !  x= - (Eth(size2) - Eth(1)) + 1d0*nkPerHartree
@@ -766,7 +767,7 @@ program main
 
      EThreshMat(:,:) = 0d0
      call logderQD(lwave,mu,energy,Nsr,wsr,VsrSinglet,VsrTriplet,Rsr,TripletQD,SingletQD,phiL,betavdw,RX,Cvals)
-     write(6,*) "See fort.20 for the field dependence of the scattering thresholds."
+     write(6,*) "See file CollisionThresholds.dat for the field dependence of the scattering thresholds."
      write(6,*) "See file EnergyDependence.dat for the energy-dependent cross section"
      write(6,*) "See file FieldDependence.dat for the field-dependent scattering length at threshold"
      
@@ -866,7 +867,7 @@ program main
   call SetupPotential(ISTATE,ESTATE,muref,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrTriplet,Cvals)
   
   write(51,*)
-  write(6,*) "See fort.20 for the field dependence of the scattering thresholds."
+  write(6,*) "See file CollisionThresholds.dat for the field dependence of the scattering thresholds."
   write(6,*) "See file EnergyDependence.dat for the energy-dependent cross section"
   write(6,*) "See file FieldDependence.dat for the field-dependent scattering length at threshold"
   do iB = 1, NBgrid
@@ -1475,10 +1476,10 @@ subroutine CalcCotGammaFunction(RX,RF,size,lwave,mu,betavdw,Cvals,phiL,Eth,Emin,
   write(6,*) "E1, E2 = ",E1, E2
   call AllocateInterpolatingFunction(NE,kx,InterpCotGamma)
   call GridMaker(InterpCotGamma%x, nE, E1, E2, "sqrroot")
-     
+  write(6,'(A)',ADVANCE='NO') "Calculating the MQDT parameter cot(gamma) as a function of energy"
   do iE = 1, NE
      ! For gamma, the energy represents a binding, so
-     
+     write(6,'(A)',ADVANCE='NO') "."
      energy = InterpCotGamma%x(iE)
 
      kappa = sqrt(2*mu*abs(energy))
@@ -1492,7 +1493,7 @@ subroutine CalcCotGammaFunction(RX,RF,size,lwave,mu,betavdw,Cvals,phiL,Eth,Emin,
      InterpCotGamma%y(iE) = 1d0/tangamma
      write(13,*) energy, atan(tangamma)
   enddo
-
+  write(6,*) "done."
   call SetupInterpolatingFunction(InterpCotGamma)
 
 !  do iE = 1, NE+kx
