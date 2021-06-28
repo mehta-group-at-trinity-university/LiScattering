@@ -608,8 +608,9 @@ CU    USES beschb
      *gam1,gam2,gammi,gampl,h,p,pimu,q,q1,q2,qnew,ril,ril1,rimu,rip1,
      *ripl,ritemp,rk1,rkmu,rkmup,rktemp,s,sum,sum1,x2,xi,xi2,xmu,xmu2
       if(x.le.0..or.xnu.lt.0.) then
-         read(*,*)
          write(6,*)  'bad arguments in bessik'
+         write(6,*) x, xnu
+         read(*,*)
       endif
       nl=int(xnu+.5d0)
       xmu=xnu-nl

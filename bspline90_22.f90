@@ -165,7 +165,9 @@ contains
     endif
 
     do ix = nx+1, nx+kxord
-       xknot(ix) = xvec(nx) * (1.0_dbl + eps)
+       !xknot(ix) = xvec(nx) * (1.0_dbl + eps)
+!       xknot(ix) = xvec(nx)  !Modified from previous line by NPM
+       xknot(ix) = xvec(nx) * sign(1.0_dbl + eps,xvec(nx))  !Modified from previous line by NPM
     end do
 
   end subroutine dbsnak
@@ -301,7 +303,7 @@ contains
 !
 
     leftx = 0
-
+!    write(6,*) "begin dbsval"
     do ix = 1,nx+kx-1
        if (xknot(ix) .gt. xknot(ix+1)) then
           write(6,*) "subroutine dbsval:"
@@ -315,7 +317,7 @@ contains
     if(leftx .eq. 0) then
        write(6,*) "subroutine dbsval:"
        write(6,*) "ix with xknot(ix) <= x < xknot(ix+1) required."
-       write(6,*) "x = ", x
+       write(6,*)  "ix=",ix, "ineq:", xknot(ix), x, xknot(ix+1)
        stop
     endif
 
@@ -332,14 +334,14 @@ contains
        save2 = work(ik)
        do il = ik+1, kx
           save1 = work(il)
-          work(il) = (dl(il) * work(il) + dr(il-ik) * save2)                  &
-               &           / (dl(il) + dr(il - ik))
+          work(il) = (dl(il) * work(il) + dr(il-ik) * save2) &
+                          / (dl(il) + dr(il - ik))
           save2 = save1
        end do
     end do
 
     dbsval = work(kx)
-
+!    write(6,*) "end dbsval"
   end function dbsval
 
 
@@ -2277,3 +2279,160 @@ contains
 
 
 end module bspline
+
+
+  ! ----------------------------------------------------------------------------------
+  ! Entry by NPM 6/24/2021
+  ! The three critical subroutine/function calls for interpolation are in this order:
+  
+  !  subroutine dbsnak(nx,xvec,kxord,xknot)
+  !  subroutine dbsint(nx,xvec,xdata,kx,xknot,bcoef)
+  !  function dbsval(x,kx,xknot,nx,bcoef)
+
+  ! nx is the length of the interpolated data.
+  ! kx, kxord is the order of the bsplines used for interpolation
+  ! xvec and xdata are the x,y points to be interpolated (each of length nx)
+  ! xknot is output of dbsnak.  It is an array of length nx+kx
+  ! bcoef is output of dbsint. It is an array of length nx
+  ! dbsval is the actual function call that requires bcoef and xknot
+
+  ! We will therefore define a datatype that contains all the necessary
+  ! information for constructing an interpolating function
+ 
+  ! ----------------------------------------------------------------------------------
+
+module InterpType
+  use bspline
+  implicit none
+  TYPE InterpolatingFunction
+     
+     DOUBLE PRECISION, ALLOCATABLE :: x(:),y(:),knots(:),b(:)
+     integer nx, kx
+     
+  END TYPE InterpolatingFunction
+  
+contains
+  ! NPM: The following routine allocates memory for the arrays in the interpolant
+  subroutine AllocateInterpolatingFunction(nx,kx,interpolant)
+    implicit none
+    integer nx, kx   
+    type(InterpolatingFunction) :: interpolant
+    
+    interpolant%nx=nx
+    interpolant%kx=kx
+    allocate(interpolant%x(nx),interpolant%y(nx),interpolant%knots(nx+kx),interpolant%b(nx))
+    interpolant%y=0d0
+    interpolant%x=0d0
+    interpolant%knots=0d0
+    interpolant%b=0d0
+    
+  end subroutine AllocateInterpolatingFunction
+  
+  ! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  
+  ! NPM: This routine calls dbsnak and dbsint to setup the interpolant
+  subroutine SetupInterpolatingFunction(interpolant)
+    implicit none
+    type(InterpolatingFunction) :: interpolant
+    
+    call dbsnak(interpolant%nx,interpolant%x,interpolant%kx,interpolant%knots)
+    call dbsint(interpolant%nx,interpolant%x,interpolant%y,interpolant%kx,interpolant%knots,interpolant%b)
+    
+  end subroutine SetupInterpolatingFunction
+  
+  ! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  
+  double precision function Interpolated(x,interpolant)
+    implicit none
+    double precision x
+    type(InterpolatingFunction) :: interpolant
+!    write(6,*) "here"
+    Interpolated = dbsval(x,interpolant%kx,interpolant%knots,interpolant%nx,interpolant%b)
+ !   write(6,*) "here"
+  end function Interpolated
+  ! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  
+end module InterpType
+
+module MyCubicSpline
+  implicit none
+  
+contains
+  subroutine CubicSpline(x,y,N,ypp)
+    implicit none
+    integer N
+    double precision x(*),y(*),ypp(*)
+    
+    integer NMax,i,k
+    double precision Sig,qN,uN,p
+    double precision, allocatable :: u(:)
+    
+    allocate(u(N))
+    
+    ypp(1) = 0.0d0
+    u(1) = 0.0d0
+    do i = 2,N-1
+       Sig = (x(i)-x(i-1))/(x(i+1)-x(i-1))
+       p = Sig * ypp(i-1)+2.0d0
+       ypp(i) = (Sig-1.0d0)/p
+       u(i) = (6.0d0*((y(i+1)-y(i))/(x(i+1)-x(i))-(y(i)-y(i-1)) &
+            /(x(i)-x(i-1)))/(x(i+1)-x(i-1))-Sig*u(i-1))/p
+    enddo
+    qN=0.0d0
+    uN=0.0d0
+    ypp(N)=(uN-qN*u(N-1))/(qN*ypp(N-1)+1.0d0)
+    do k = N-1,1,-1
+       ypp(k)= ypp(k)*ypp(k+1)+u(k)
+    enddo
+    
+    deallocate(u)
+    
+    return
+  end subroutine CubicSpline
+  
+  subroutine CubicSplineDerivInterp(N,x,y,ypp,xInterp,ypInterp,NumPoints)
+    
+    integer N,NumPoints
+    double precision x(*),y(*),ypp(*),xInterp(*),ypInterp(*)
+    
+    integer i,j
+    double precision xDelt,yDelt,a,b,c,d
+    
+    j = 1
+    do i = 1,NumPoints
+       do while ((x(j+1) .lt. xInterp(i)) .AND. (j .lt. N))
+          j = j + 1
+       enddo
+       xDelt = x(j+1)-x(j)
+       yDelt = y(j+1)-y(j)
+       a = (x(j+1)-xInterp(i))/xDelt
+       b = 1.0d0-a
+       ypInterp(i) = yDelt/xDelt+((3.0d0*b*b-1.0d0)*ypp(j+1)-(3.0d0*a*a-1.0d0)*ypp(j))*xDelt/6.0d0
+    enddo
+    
+    return
+  end subroutine CubicSplineDerivInterp
+  
+  subroutine CubicSplineInterp(N,x,y,ypp,xInterp,yInterp,NumPoints)
+    
+    integer N,NumPoints
+    double precision x(*),y(*),ypp(*),xInterp(*),yInterp(*)
+    
+    integer i,j
+    double precision Delt,c,d
+    
+    j = 1
+    do i = 1,NumPoints
+       do while ((x(j+1) .lt. xInterp(i)) .AND. (j .lt. N))
+          j = j + 1
+       enddo
+       Delt = x(j+1)-x(j)
+       c = (x(j+1)-xInterp(i))/Delt
+       d = (xInterp(i)-x(j))/Delt
+       yInterp(i) = c*y(j)+d*y(j+1)+((c**3-c)*ypp(j)+(d**3-d)*ypp(j+1))*Delt**2/6.0d0
+    enddo
+    
+    return
+  end subroutine CubicSplineInterp
+  
+end module MyCubicSpline
