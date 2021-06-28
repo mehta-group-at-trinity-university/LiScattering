@@ -553,18 +553,18 @@ program main
   logical writepot
   double precision, allocatable :: Rsr(:), Rlr(:),VsrSinglet(:),VsrTriplet(:),VlrSinglet(:),VlrTriplet(:)
   double precision, allocatable :: RotatedVsrHZ(:,:,:),RotatedVlrHZ(:,:,:)
-  double precision, allocatable :: wSR(:),wLR(:)
+  double precision, allocatable :: wSR(:),wLR(:),Vdum(:),Rdum(:)
 !  double precision, allocatable :: VSinglet(:), VTriplet(:), R(:)
   double precision, allocatable :: weights(:),ystart(:,:),yi(:,:),ym(:,:),yf(:,:),Kmat(:,:),identity(:,:)
   double precision, allocatable :: HHZ(:,:), Bgrid(:),Egrid(:), EVAL(:), EVEC(:,:),RotatedVHZ(:,:,:),TEMP(:,:),EThreshMat(:,:)
   double precision, allocatable :: cotgamma(:,:,:),Ktemp1(:,:),Ktemp2(:,:),KPQ(:,:),KQP(:,:)
   double precision, allocatable :: SPmat(:,:), Sdressed(:,:), Tdressed(:,:), TPmat(:,:)
   double precision, allocatable :: VHZ(:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:),Ksr(:,:),RmidArray(:)
-  double precision VLIM,Rmin,Rmax,dR,phiL
+  double precision VLIM,Rmin,Rmax,dR,phiL,stepsize,Vmin
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2
   double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw
-  integer iE, NA,iRmid,NRmid
-  double precision RX, Rmid, rmidmax, RF, Cvals(3), Ktilde,Rdum(2),Vdum(2)
+  integer iE, NA,iRmid,NRmid,Ndum
+  double precision RX, Rmid, rmidmax, RF, Cvals(3), Ktilde
   double precision SingletQD, TripletQD, x
   double precision, external :: VLR, rint, abar
   type(hf1atom) a1, a2
@@ -696,9 +696,17 @@ program main
   ! This is just a "dummy" call to SetupPotential to obtain the discpersion C6/C8/C10 coefficients
   ! and to calculate the van der waals length.
   VLIM = 0d0
-  Rdum(1) = Rmin
-  Rdum(2) = Rmidmax
-  call SetupPotential(ISTATE,1,muref,muref,2,VLIM,Rdum*BohrPerAngstrom,Vdum,Cvals)
+  !Rdum(1) = Rmin
+  !Rdum(2) = Rmidmax
+  Ndum = 100
+  allocate(Vdum(Ndum),Rdum(Ndum))
+  call GridMaker(Rdum,Ndum,3d0,20d0,'linear')
+  call SetupPotential(ISTATE,1,muref,muref,Ndum,VLIM,Rdum*BohrPerAngstrom,Vdum,Cvals)
+  Vmin = MINVAL(Vdum,1)
+  write(6,*) "Vmin = ", Vmin
+  stepsize = 2d0*pi*0.1d0*(2d0*mu*(Emax - Vmin))**(-0.5d0)
+  write(6,*) "The suggested maximum step size is ", stepsize
+  write(6,*) "The minimum value of Nsr = ", (Rmidmax - Rmin)/stepsize
   call VdWLength(Cvals,betavdw,mu)
   write(6,'(A,f12.4)') "The van der Waals length is rvdw = ", betavdw
   
@@ -873,7 +881,7 @@ program main
   write(6,*) "See file EnergyDependence.dat for the energy-dependent cross section"
   write(6,*) "See file FieldDependence.dat for the field-dependent scattering length at threshold"
   do iB = 1, NBgrid
-     write(6,*) "iB = ", iB
+
      yi(:,:)=ystart(:,:)
      call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
      HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
@@ -927,10 +935,11 @@ program main
         !write(6,'(A12,I4,A1,I4,A5,A29,100d14.5)') "iE/NEgrid = ",iE,'/',NEgrid,"   | ", "(energy (mK), sigma (cm^2)) = ", &
         !     Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)!(-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
 
-        write(6,'(A12, I4, A1, I4, A3, A12,I4,A1,I4,A5,A29,100d14.5)') "iB/NBGrid = ", iB,'/',NBgrid, &
-             " | ", "iE/NEgrid = ",iE,'/',NEgrid,"   | ", "(energy (mK), sigma (cm^2)) = ", &
-             Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)
+!        write(6,'(A12, I4, A1, I4, A3, A12,I4,A1,I4,A5,A29,100d14.5)') "iB/NBGrid = ", iB,'/',NBgrid, &
+!             " | ", "iE/NEgrid = ",iE,'/',NEgrid,"   | ", "(energy (mK), sigma (cm^2)) = ", &
+!             Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)
 
+        write(6,*) Bgrid(iB), -SD%K(1,1)/dsqrt(2d0*mu*(Energy-Eth(1)))
         !        write(6,'(A12,I4,A1,I4,A5,A20,100d14.5)') "iE/NEgrid = ",iB,'/',NBgrid,"   | ", "(energy, sigma) = ", &
         !             Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)!(-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
 
