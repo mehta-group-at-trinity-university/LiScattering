@@ -904,7 +904,7 @@ program main
      ! Start the energy loop
      do iE = 1, 1!NEgrid
         NumOpen=0        
-!        Energy = Eth(1) + Egrid(iE)!*nKPerHartree
+        Energy = Eth(1) + Egrid(iE)!*nKPerHartree
 !        write(6,*) "energy = ", energy
         do j = 1, size2
            if(energy.gt.Eth(j)) NumOpen = NumOpen+1
