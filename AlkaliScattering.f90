@@ -701,6 +701,7 @@ program main
   call SetupPotential(ISTATE,1,muref,muref,2,VLIM,Rdum*BohrPerAngstrom,Vdum,Cvals)
   call VdWLength(Cvals,betavdw,mu)
   write(6,'(A,f12.4)') "The van der Waals length is rvdw = ", betavdw
+  
   RX = RX*betavdw
 
   ! Diagonalize the HF-Zeeman Hamiltonian for the largest field values so we know the range
@@ -840,8 +841,9 @@ program main
            Ktemp2 = MATMUL(KPQ,MATMUL(Ktemp1,KQP))
 !           write(6,*) "Ktemp2:"
            !           call printmatrix(Ktemp2,1,1,6)
-           write(6,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw
+
            Ktilde = Ksr(1,1) - Ktemp2(1,1)
+           write(6,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw
            write(51,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw
         enddo
      enddo
