@@ -567,6 +567,7 @@ program main
   double precision RX, Rmid, rmidmax, RF, Cvals(3), Ktilde
   double precision SingletQD, TripletQD, x
   double precision, external :: VLR, rint, abar
+  character(len=20), external :: str
   type(hf1atom) a1, a2
   type(hf2atom) mstate1, mstate2
   type(hf1atom), allocatable :: hf1(:) 
@@ -681,11 +682,15 @@ program main
      ystart(i,i)=1d20
   enddo
 
-  open(unit = 20, file = "CollisionThresholds.dat")
-  open(unit = 50, file = "EnergyDependence.dat")
-  open(unit = 51, file = "FieldDependence.dat")
-  open(unit = 52, file = "RDependenceKsr.dat")
-  
+  open(unit = 20, file = "CollisionThresholds-"//trim(str(CALCTYPE))//"-"//trim(str(ISTATE))//".dat")
+  open(unit = 50, file = "SigmaEnergyDependence-"//trim(str(CALCTYPE))//"-"//trim(str(ISTATE))//".dat")
+  open(unit = 51, file = "ScatLenFieldDependence-"//trim(str(CALCTYPE))//"-"//trim(str(ISTATE))//".dat")
+  open(unit = 52, file = "QDFieldDependence-"//trim(str(CALCTYPE))//"-"//trim(str(ISTATE))//".dat")
+  write(6,'(A)') "See file CollisionThresholds.dat for the field dependence of the scattering thresholds."
+  write(6,'(A)') "See file SigmaEnergyDependence.dat for the energy-dependent cross section"
+  write(6,'(A)') "See file ScatLenFieldDependence.dat for the field-dependent scattering length at threshold"
+  write(6,'(A)') "See file QDFieldDependence.dat for the field-dependent scattering length at threshold"
+
   ! None of the code above this line depends on the radial grid.
   !----------------------------------------------------------------------------------------------------
   NRmid = 10
@@ -708,9 +713,9 @@ program main
   write(6,'(A,f12.4)') "The van der Waals length is rvdw = ", betavdw
 
   RX = RX*betavdw
-  RF = 20*betavdw
-  Nsr = 20*int(int((Rmidmax - Rmin)/stepsize))
-  Nlr = 6*Nsr * int(RF/Rmidmax)
+  RF = 10*betavdw
+  Nsr = 10*int((Rmidmax - Rmin)/stepsize)
+  Nlr = Nsr * int(RF/Rmidmax)
   write(6,*) "resetting Nsr and Nrl = ", Nsr, Nlr
   
   ! Diagonalize the HF-Zeeman Hamiltonian for the largest field values so we know the range
@@ -775,9 +780,6 @@ program main
 
      EThreshMat(:,:) = 0d0
      call logderQD(lwave,mu,energy,NXM,Nsr,wsr,VsrSinglet,VsrTriplet,Rsr,TripletQD,SingletQD,phiL,betavdw,RX,Cvals)
-     write(6,*) "See file CollisionThresholds.dat for the field dependence of the scattering thresholds."
-     write(6,*) "See file EnergyDependence.dat for the energy-dependent cross section"
-     write(6,*) "See file FieldDependence.dat for the field-dependent scattering length at threshold"
      
      do iB = 1, NBgrid
 !        write(6,*) "phiL = ", phiL
@@ -838,7 +840,7 @@ program main
 
 
 !           write(6,*) Bgrid(iB), Ktilde!(1d0-Ktilde)*abar(lwave) !Rmid, (atan(EVAL(i))/Pi, i=1,size2)
-!           write(52,*) Rmid, (atan(EVAL(i))/Pi, i=1,size2)!EVAL!,Ksr
+           write(52,*) Bgrid(iB), (atan(EVAL(i))/Pi, i=1,size2)!EVAL!,Ksr
 
            Ktemp1 = Ksr(2:size2,2:size2) + cotgamma(:,:,iE)
            KQP = Ksr(2:size2,1:1)
@@ -876,9 +878,7 @@ program main
   call SetupPotential(ISTATE,ESTATE,muref,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrTriplet,Cvals)
   
   write(51,*)
-  write(6,*) "See file CollisionThresholds.dat for the field dependence of the scattering thresholds."
-  write(6,*) "See file EnergyDependence.dat for the energy-dependent cross section"
-  write(6,*) "See file FieldDependence.dat for the field-dependent scattering length at threshold"
+
   do iB = 1, NBgrid
 
      yi(:,:)=ystart(:,:)
@@ -1295,9 +1295,9 @@ subroutine MQDTfunctions(R1, R2, NA, scale, Cvals, mu, lwave, energy, betavdw, p
      g0 = -Pi**(-0.5d0)*alpha(i,1)*cos(phaseint(i)+phiL)
      f0p = alpha(i,2)/alpha(i,1) * f0 - g0/alpha(i,1)**2
      g0p = alpha(i,2)/alpha(i,1) * g0 + f0/alpha(i,1)**2
-!     write(101,*) R(i), alpha(i,1), alpha(i,2), phaseint(i), f0, g0
+     write(101,*) R(i), alpha(i,1), alpha(i,2), phaseint(i), f0, g0
   enddo
-
+  stop
 
 end subroutine MQDTfunctions
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1337,7 +1337,7 @@ subroutine CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,Cvals,phiL)
        /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
 
   xnu = 0d0
-  call GridMaker(X,NXF,RX,RF,'quadratic')
+  call GridMaker(X,NXF,RX,RF,'log')
   call CalcMilne2step(X,alpha,NXF,energy,lwave,mu,Cvals,phaseint)
   !  write(6,*) "betavdw = ", betavdw
 
@@ -1379,7 +1379,7 @@ subroutine CalcKsr(ym, Ksr, size2,NXM, RX, RM, energy, Eth, lwave, mu, Cvals, be
   !NXM = 1000000
   ! Construct the diagonal reference function matrices
   do i = 1, size2
-     call MQDTfunctions(RX, RM, NXM,'quadratic', Cvals, mu, lwave, energy-Eth(i), betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
+     call MQDTfunctions(RX, RM, NXM,'log', Cvals, mu, lwave, energy-Eth(i), betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
      f0mat(i,i) = f0
      f0pmat(i,i) = f0p
      g0mat(i,i) = g0
@@ -1427,7 +1427,7 @@ subroutine CalcTanGamma(RX,RF,size,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,
 !!$     alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
 !!$     alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
 !!$          /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
-!!$     call MQDTfunctions(RX, RF, Nx,'quadratic', Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
+!!$     call MQDTfunctions(RX, RF, Nx,'log', Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
 !!$     
 !!$     x = kappa*RF
 !!$     call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
@@ -1459,7 +1459,7 @@ subroutine CalcCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Eth,E
   use bspline
   use units
   implicit none
-  integer lwave, NEgrid, iE, NE,ix, NXF,size,ith,kx
+  integer lwave, iE, NE,ix, NXF,size, kx
   double precision RX, RF, mu, betavdw, Cvals(3), phiL,Emin,Emax,EvdW,E1,E2
   double precision x, xscale, si, sk, sip, skp, ldk, ldi, kappa, f0, f0p, g0, g0p,Eth(size)
   double precision alpha0(2),alphaf(2),energy, tangamma, gam
@@ -1472,7 +1472,8 @@ subroutine CalcCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Eth,E
   alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
   alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
        /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
-  
+
+  write(6,*) "alpha0 = ", alpha0
   xscale=0d0
   NE = 100
   kx=2
@@ -1483,25 +1484,29 @@ subroutine CalcCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Eth,E
   write(6,*) "E1, E2 = ",E1, E2
   call AllocateInterpolatingFunction(NE,kx,InterpCotGamma)
   call GridMaker(InterpCotGamma%x, nE, E1, E2, "sqrroot")
-  write(6,'(A)',ADVANCE='NO') "Calculating the MQDT parameter cot(gamma) as a function of energy"
+  write(6,'(A)') "Calculating the MQDT parameter cot(gamma) as a function of energy"
+
   do iE = 1, NE
-     write(6,'(A)',ADVANCE='NO') "."
+
      energy = InterpCotGamma%x(iE)
 
      kappa = sqrt(2*mu*abs(energy))
      alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
      alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
           /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
-     call MQDTfunctions(RX, RF, NXF,'quadratic', Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)     
+     call MQDTfunctions(RX, RF, NXF,'log', Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)     
      x = kappa*RF
+     write(6,*) "alphaf = ", alphaf
      call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
      tangamma = -(g0p - kappa*ldk*g0)/(f0p - kappa*ldk*f0)
      InterpCotGamma%y(iE) = 1d0/tangamma
+!     write(6,'(A)',ADVANCE='NO') "."
+     write(6,'(10f12.5)') energy, ldk, g0, g0p, f0, f0p, kappa, atan(tangamma)
      write(13,*) energy, atan(tangamma)
   enddo
   write(6,*) "done."
   call SetupInterpolatingFunction(InterpCotGamma)  
-  
+  stop  
 end subroutine CalcCotGammaFunction
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !Subroutine to setup the effect adiabatic potential energy function for any
@@ -2202,7 +2207,7 @@ subroutine logderQD(lwave,mu,energy,NXM,Nsr,wsr,VSINGLET,VTRIPLET,R,TripletQD,Si
 
   RM = R(Nsr)
 
-  call MQDTfunctions(RX, RM, NXM,'quadratic', Cvals, mu, lwave, energy, betavdw, phiL, alphax, alpham1, f1, g1, f1p, g1p)
+  call MQDTfunctions(RX, RM, NXM,'log', Cvals, mu, lwave, energy, betavdw, phiL, alphax, alpham1, f1, g1, f1p, g1p)
   write(6,*) f1, g1, f1p, g1p
 
   identity = 0d0
@@ -2254,3 +2259,10 @@ subroutine testinterpolation
   enddo
   
 end subroutine testinterpolation
+
+character(len=20) function str(k)
+!   "Convert an integer to string."
+    integer, intent(in) :: k
+    write (str, *) k
+    str = adjustl(str)
+end function str
