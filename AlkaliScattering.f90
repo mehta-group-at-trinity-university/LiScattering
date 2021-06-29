@@ -709,8 +709,8 @@ program main
 
   RX = RX*betavdw
   RF = 20*betavdw
-  Nsr = 80*int(int((Rmidmax - Rmin)/stepsize))
-  Nlr = Nsr * int(RF/Rmidmax)
+  Nsr = 20*int(int((Rmidmax - Rmin)/stepsize))
+  Nlr = 6*Nsr * int(RF/Rmidmax)
   write(6,*) "resetting Nsr and Nrl = ", Nsr, Nlr
   
   ! Diagonalize the HF-Zeeman Hamiltonian for the largest field values so we know the range
@@ -1337,7 +1337,7 @@ subroutine CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,Cvals,phiL)
        /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
 
   xnu = 0d0
-  call GridMaker(X,NXF,RX,RF,'cubic')
+  call GridMaker(X,NXF,RX,RF,'quadratic')
   call CalcMilne2step(X,alpha,NXF,energy,lwave,mu,Cvals,phaseint)
   !  write(6,*) "betavdw = ", betavdw
 
@@ -1379,7 +1379,7 @@ subroutine CalcKsr(ym, Ksr, size2,NXM, RX, RM, energy, Eth, lwave, mu, Cvals, be
   !NXM = 1000000
   ! Construct the diagonal reference function matrices
   do i = 1, size2
-     call MQDTfunctions(RX, RM, NXM,'cubic', Cvals, mu, lwave, energy-Eth(i), betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
+     call MQDTfunctions(RX, RM, NXM,'quadratic', Cvals, mu, lwave, energy-Eth(i), betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
      f0mat(i,i) = f0
      f0pmat(i,i) = f0p
      g0mat(i,i) = g0
@@ -1427,7 +1427,7 @@ subroutine CalcTanGamma(RX,RF,size,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,
 !!$     alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
 !!$     alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
 !!$          /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
-!!$     call MQDTfunctions(RX, RF, Nx,'cubic', Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
+!!$     call MQDTfunctions(RX, RF, Nx,'quadratic', Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
 !!$     
 !!$     x = kappa*RF
 !!$     call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
@@ -1492,7 +1492,7 @@ subroutine CalcCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Eth,E
      alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
      alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
           /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
-     call MQDTfunctions(RX, RF, NXF,'cubic', Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)     
+     call MQDTfunctions(RX, RF, NXF,'quadratic', Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)     
      x = kappa*RF
      call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
      tangamma = -(g0p - kappa*ldk*g0)/(f0p - kappa*ldk*f0)
@@ -2202,7 +2202,7 @@ subroutine logderQD(lwave,mu,energy,NXM,Nsr,wsr,VSINGLET,VTRIPLET,R,TripletQD,Si
 
   RM = R(Nsr)
 
-  call MQDTfunctions(RX, RM, NXM,'cubic', Cvals, mu, lwave, energy, betavdw, phiL, alphax, alpham1, f1, g1, f1p, g1p)
+  call MQDTfunctions(RX, RM, NXM,'quadratic', Cvals, mu, lwave, energy, betavdw, phiL, alphax, alpham1, f1, g1, f1p, g1p)
   write(6,*) f1, g1, f1p, g1p
 
   identity = 0d0
