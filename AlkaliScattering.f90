@@ -714,8 +714,8 @@ program main
 
   RX = RX*betavdw
   RF = 10*betavdw
-  Nsr = 10*int((Rmidmax - Rmin)/stepsize)
-  Nlr = Nsr * int(RF/Rmidmax)
+  Nsr = 40*int((Rmidmax - Rmin)/stepsize)
+  Nlr = 4*Nsr * int(RF/Rmidmax)
   write(6,*) "resetting Nsr and Nrl = ", Nsr, Nlr
   
   ! Diagonalize the HF-Zeeman Hamiltonian for the largest field values so we know the range
@@ -1145,6 +1145,23 @@ subroutine RK4StepMilne(y,mu,lwave,energy,h,R,Cvals)
   y = y + k1/6.0d0 + k2/3.0d0 + k3/3.0d0 + k4/6.0d0
 end subroutine RK4StepMilne
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine RK4StepNewMilne(y,mu,lwave,energy,h,R,Cvals)
+  implicit none
+  double precision h,y(2),mu,energy,f(2),k1(2),k2(2),k3(2),k4(2),R,Cvals(3)
+  integer lwave
+
+  call dydR_NewMilne(R,y,mu,lwave,energy,f,Cvals)
+  k1 = h * f
+  call dydR_NewMilne(R + 0.5d0*h,y,mu,lwave,energy,f,Cvals)
+  k2 = h * f
+  call dydR_NewMilne(R + 0.5d0*h,y,mu,lwave,energy,f,Cvals)
+  k3 = h * f
+  call dydR_NewMilne(R + h,y,mu,lwave,energy,f,Cvals)
+  k4 = h * f
+
+  y = y + k1/6.0d0 + k2/3.0d0 + k3/3.0d0 + k4/6.0d0
+end subroutine RK4StepNewMilne
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine RK5CashKarpStepMilne(y,mu,lwave,energy,h,R,Cvals,Delta)
   use quadrature
   implicit none
@@ -1222,6 +1239,19 @@ subroutine dydR_Milne(R,y,mu,lwave,energy,f,Cvals)
   f(2) = y(1)**(-3) - ksqrLR(energy,mu,lwave,R,Cvals)*y(1)
 
 end subroutine dydR_Milne
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine dydR_NewMilne(R,y,mu,lwave,energy,f,Cvals)
+  ! For this routine the Milne phase alpha = exp(x) and x is propogated by the RK-4 routine
+  implicit none
+  integer lwave
+  double precision R,y(2),mu,energy,f(2),Cvals(3)
+  double precision, external :: ksqrLR
+
+  f(1) = y(2)
+  f(2) = exp(-4*y(1)) - ksqrLR(energy,mu,lwave,R,Cvals) - y(2)**2
+
+end subroutine dydR_NewMilne
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine CalcMilne(R,alpha,NA,energy,lwave,mu,Cvals)
   implicit none
@@ -1238,6 +1268,7 @@ subroutine CalcMilne(R,alpha,NA,energy,lwave,mu,Cvals)
 
 
 end subroutine CalcMilne
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine CalcMilne2step(R,alpha,NA,energy,lwave,mu,Cvals,phaseint)
   implicit none
@@ -1266,12 +1297,46 @@ subroutine CalcMilne2step(R,alpha,NA,energy,lwave,mu,Cvals,phaseint)
      call RK4StepMilne(y3,mu,lwave,energy,hhalf, Rmid, Cvals)
      !call RK5CashKarpStepMilne(y3,mu,lwave,energy,hhalf,Rmid,Cvals,Delta)
      alpha(iR+1,:) = y3
-     phaseint(iR+1) = phaseint(iR) + OneThird*hhalf*(y1(1)**(-2) + 4d0*y1(1)**(-2) + y2(1)**(-2))
+     phaseint(iR+1) = phaseint(iR) + OneThird*hhalf*(y1(1)**(-2) + 4d0*y2(1)**(-2) + y3(1)**(-2))
      y1 = y3
   enddo
 
 
 end subroutine CalcMilne2step
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine CalcNewMilne2step(R,alpha,NA,energy,lwave,mu,Cvals,phaseint)
+  implicit none
+  double precision h, energy, y(2), mu,Cvals(3),y1(2),y2(2),y3(2),hhalf
+  integer NA, iR, lwave
+  double precision alpha(NA,2), R(NA),Delta(2),Delta0(2),eps, phaseint(NA),Rmid,OneThird
+  OneThird = 0.333333333333333333333333d0
+  eps = 1d-10
+  ! make a radial grid
+
+  y1 = alpha(1,:)
+  Delta0= eps*y1
+  phaseint(1) = 0d0
+
+  do iR = 1, NA-1
+     h = R(iR+1)-R(iR)
+     hhalf = 0.5d0*h
+     ! do two half-steps and use the 3-point Simpson integration rule to calculate the phase integral
+     !step from R(i) to R(i)+h/2
+     y2=y1
+     call RK4StepNewMilne(y2,mu,lwave,energy,hhalf,R(iR),Cvals)
+     !call RK5CashKarpStepMilne(y2,mu,lwave,energy,hhalf,R(iR),Cvals,Delta)
+     y3=y2
+     !step from R(i)+h/2 to R(i+1)
+     Rmid = R(iR) + hhalf
+     call RK4StepNewMilne(y3,mu,lwave,energy,hhalf, Rmid, Cvals)
+     !call RK5CashKarpStepMilne(y3,mu,lwave,energy,hhalf,Rmid,Cvals,Delta)
+     alpha(iR+1,:) = y3
+     phaseint(iR+1) = phaseint(iR) + OneThird*hhalf*(y1(1)**(-2) + 4d0*y2(1)**(-2) + y3(1)**(-2))
+     y1 = y3
+  enddo
+
+
+end subroutine CalcNewMilne2step
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine MQDTfunctions(R1, R2, NA, scale, Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf,f0, g0, f0p, g0p)
   use units
@@ -1297,7 +1362,7 @@ subroutine MQDTfunctions(R1, R2, NA, scale, Cvals, mu, lwave, energy, betavdw, p
      g0p = alpha(i,2)/alpha(i,1) * g0 + f0/alpha(i,1)**2
      write(101,*) R(i), alpha(i,1), alpha(i,2), phaseint(i), f0, g0
   enddo
-  stop
+!  stop
 
 end subroutine MQDTfunctions
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1473,7 +1538,7 @@ subroutine CalcCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Eth,E
   alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
        /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
 
-  write(6,*) "alpha0 = ", alpha0
+!  write(6,*) "alpha0 = ", alpha0
   xscale=0d0
   NE = 100
   kx=2
@@ -1496,17 +1561,17 @@ subroutine CalcCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Eth,E
           /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
      call MQDTfunctions(RX, RF, NXF,'log', Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)     
      x = kappa*RF
-     write(6,*) "alphaf = ", alphaf
+!     write(6,*) "alphaf = ", alphaf
      call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
      tangamma = -(g0p - kappa*ldk*g0)/(f0p - kappa*ldk*f0)
      InterpCotGamma%y(iE) = 1d0/tangamma
-!     write(6,'(A)',ADVANCE='NO') "."
-     write(6,'(10f12.5)') energy, ldk, g0, g0p, f0, f0p, kappa, atan(tangamma)
-     write(13,*) energy, atan(tangamma)
+     write(6,'(A)',ADVANCE='NO') "."
+ !    write(6,'(10f12.5)') energy, ldk, g0, g0p, f0, f0p, kappa, atan(tangamma)
+  !   write(13,*) energy, atan(tangamma)
   enddo
   write(6,*) "done."
   call SetupInterpolatingFunction(InterpCotGamma)  
-  stop  
+!  stop  
 end subroutine CalcCotGammaFunction
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !Subroutine to setup the effect adiabatic potential energy function for any
