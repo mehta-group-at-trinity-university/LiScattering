@@ -713,9 +713,9 @@ program main
   write(6,'(A,f12.4)') "The van der Waals length is rvdw = ", betavdw
 
   RX = RX*betavdw
-  RF = 20*betavdw
-  Nsr = 20*int((Rmidmax - Rmin)/stepsize)
-  Nlr = 2*Nsr * int(RF/Rmidmax)
+  RF = 10*betavdw
+  Nsr = 10*int((Rmidmax - Rmin)/stepsize)
+  Nlr = Nsr * int(RF/Rmidmax)
   write(6,*) "resetting Nsr and Nrl = ", Nsr, Nlr
   
   ! Diagonalize the HF-Zeeman Hamiltonian for the largest field values so we know the range
