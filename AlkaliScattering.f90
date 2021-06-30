@@ -682,10 +682,10 @@ program main
      ystart(i,i)=1d20
   enddo
 
-  open(unit = 20, file = "CollisionThresholds-"//trim(str(CALCTYPE))//"-"//trim(str(ISTATE))//".dat")
-  open(unit = 50, file = "SigmaEnergyDependence-"//trim(str(CALCTYPE))//"-"//trim(str(ISTATE))//".dat")
-  open(unit = 51, file = "ScatLenFieldDependence-"//trim(str(CALCTYPE))//"-"//trim(str(ISTATE))//".dat")
-  open(unit = 52, file = "QDFieldDependence-"//trim(str(CALCTYPE))//"-"//trim(str(ISTATE))//".dat")
+  open(unit = 20, file = "CollisionThresholds-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))//".dat")
+  open(unit = 50, file = "SigmaEnergyDependence-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))//".dat")
+  open(unit = 51, file = "ScatLenFieldDependence-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))//".dat")
+  open(unit = 52, file = "QDFieldDependence-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))//".dat")
   write(6,'(A)') "See file CollisionThresholds.dat for the field dependence of the scattering thresholds."
   write(6,'(A)') "See file SigmaEnergyDependence.dat for the energy-dependent cross section"
   write(6,'(A)') "See file ScatLenFieldDependence.dat for the field-dependent scattering length at threshold"
@@ -713,8 +713,8 @@ program main
   write(6,'(A,f12.4)') "The van der Waals length is rvdw = ", betavdw
 
   RX = RX*betavdw
-  RF = 10*betavdw
-  Nsr = 50*int((Rmidmax - Rmin)/stepsize)
+  RF = 20*betavdw
+  Nsr = 20*int((Rmidmax - Rmin)/stepsize)
   Nlr = 2*Nsr * int(RF/Rmidmax)
   write(6,*) "resetting Nsr and Nrl = ", Nsr, Nlr
   
@@ -1407,14 +1407,11 @@ end subroutine MQDTNewfunctions
 subroutine CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,Cvals,phiL)
   use units
   implicit none
-  double precision xnu, rj, ry, rjp, ryp
+!  double precision rj, ry, rjp, ryp
   double precision, intent(in) :: RX, RF, betavdw, mu, Cvals(3)
   double precision, intent(out) :: phiL
-  double precision chim, chimp, energy
-  double precision   f0, g0, f0p, g0p, tanphi, phi
-  double precision, allocatable :: X(:)
-  double precision, allocatable :: phaseint(:)
-  double precision, allocatable :: alpha(:,:)
+  double precision chim, chimp, energy, phir, ldg0, ldf0, ldchim
+  double precision   f0, g0, f0p, g0p, tanphi, alpha0(2), alphaf(2)
   integer, intent(in) :: lwave
   integer i, NXF
   double precision, external :: ksqrLR, VLR, VLRPrime
@@ -1430,42 +1427,33 @@ subroutine CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,Cvals,phiL)
 !!$  RX=0.1d0*betavdw
 !!$  RF=4.0d0*betavdw
   !--------------------------------------------------------
-!  NXF = 2000000
   energy = 0d0
-  ! first just test the bessel function
-  allocate(x(NXF), alpha(NXF,2),phaseint(NXF))
-  alpha(1,1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
-  alpha(1,2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
+
+  alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
+  alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
        /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
 
-  xnu = 0d0
-  call GridMaker(X,NXF,RX,RF,'log')
-  call CalcMilne2step(X,alpha,NXF,energy,lwave,mu,Cvals,phaseint)
-  !  write(6,*) "betavdw = ", betavdw
+  call MQDTNewfunctions(RX, RF, NXF, "quadratic", Cvals, mu, lwave, energy, &
+     betavdw, 0d0, phir, alpha0, alphaf,f0, g0, f0p, g0p, ldf0,ldg0)
 
-  do i = NXF, NXF
-     f0 = Pi**(-0.5d0)*alpha(i,1)*sin(phaseint(i))
-     g0 = -Pi**(-0.5d0)*alpha(i,1)*cos(phaseint(i))
-     f0p = alpha(i,2)/alpha(i,1) * f0 - g0/alpha(i,1)**2
-     g0p = alpha(i,2)/alpha(i,1) * g0 + f0/alpha(i,1)**2
+  call chiminus(lwave,RF/betavdw,chim,chimp) !this requires van der Waals units, so divide by betavdw since x(i) is in bohr
+  chimp = chimp/betavdw ! d(chi)/dR comes out in van der Waals units so this converts length to bohr
+  ldchim = chimp/chim
+  tanphi = (ldg0-ldchim)/(ldf0-ldchim)/tan(phir)
+  !     write(100,*) X(i), tanphi- tan(-1d0/(2d0*RX**2) + dble(lwave)*Pi/4d0 -5d0*Pi/8d0)!, atan(tanphi)  
 
-     call chiminus(lwave,x(i)/betavdw,chim,chimp) !this requires van der Waals units, so divide by betavdw since x(i) is in bohr
-     chimp = chimp/betavdw ! d(chi)/dR comes out in van der Waals units so this converts length to bohr
-     tanphi = -(chim*g0p - chimp*g0)/(chim*f0p - chimp*f0)
-     !     write(100,*) X(i), tanphi- tan(-1d0/(2d0*RX**2) + dble(lwave)*Pi/4d0 -5d0*Pi/8d0)!, atan(tanphi)  
-  enddo
   write(6,*) "lwave = ", lwave, "tanphi = ", tanphi, "analytical result = ", &
-         tan(-1d0/(2d0*RX**2) + dble(lwave)*Pi/4d0 -5d0*Pi/8d0), &
-         "difference = ", tanphi- tan(-1d0/(2d0*RX**2) + dble(lwave)*Pi/4d0 -5d0*Pi/8d0)
+       tan(-1d0/(2d0*RX**2) + dble(lwave)*Pi/4d0 -5d0*Pi/8d0), &
+       "difference = ", tanphi- tan(-1d0/(2d0*RX**2) + dble(lwave)*Pi/4d0 -5d0*Pi/8d0)
   phiL = atan(tanphi)
-!stop
+
 end subroutine CalcPhaseStandard
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine CalcKsr(ym, Ksr, size2,NXM, RX, RM, energy, Eth, lwave, mu, Cvals, betavdw, phiL)
   implicit none
   integer size2, lwave, i, NXM
   double precision mu, betavdw, phiL, RX, RM, energy,alpha0(2),alpham(2),alphaf(2),f0,g0,f0p,g0p
-  double precision ym(size2,size2), Eth(size2), Cvals(3)
+  double precision ym(size2,size2), Eth(size2), Cvals(3),phir,ldg0,ldf0
   double precision f0mat(size2,size2), g0mat(size2,size2), f0pmat(size2,size2),g0pmat(size2,size2), Ksr(size2,size2)
   double precision temp1(size2,size2), temp2(size2,size2)
   double precision, external :: ksqrLR, VLR, VLRPrime
@@ -1481,7 +1469,9 @@ subroutine CalcKsr(ym, Ksr, size2,NXM, RX, RM, energy, Eth, lwave, mu, Cvals, be
   !NXM = 1000000
   ! Construct the diagonal reference function matrices
   do i = 1, size2
-     call MQDTfunctions(RX, RM, NXM,'log', Cvals, mu, lwave, energy-Eth(i), betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
+!     call MQDTfunctions(RX, RM, NXM,'quadratic', Cvals, mu, lwave, energy-Eth(i), betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
+     call MQDTNewfunctions(RX, RM, NXM, 'quadratic', Cvals, mu, lwave, energy-Eth(i), &
+          betavdw,phiL,phir, alpha0, alphaf,f0, g0, f0p, g0p,ldf0,ldg0)
      f0mat(i,i) = f0
      f0pmat(i,i) = f0p
      g0mat(i,i) = g0
@@ -1529,7 +1519,7 @@ subroutine CalcTanGamma(RX,RF,size,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,
 !!$     alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
 !!$     alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
 !!$          /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
-!!$     call MQDTfunctions(RX, RF, Nx,'log', Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
+!!$     call MQDTfunctions(RX, RF, Nx,'quadratic', Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
 !!$     
 !!$     x = kappa*RF
 !!$     call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
@@ -1564,7 +1554,7 @@ subroutine CalcCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Eth,E
   integer lwave, iE, NE,ix, NXF,size, kx
   double precision RX, RF, mu, betavdw, Cvals(3), phiL,Emin,Emax,EvdW,E1,E2
   double precision x, xscale, si, sk, sip, skp, ldk, ldi, kappa, f0, f0p, g0, g0p,Eth(size)
-  double precision alpha0(2),alphaf(2),energy, tangamma, gam
+  double precision alpha0(2),alphaf(2),energy, tangamma, gam,phir,ldg0,ldf0
   double precision, allocatable :: xgrid(:), Rgrid(:)
   double precision, allocatable :: phaseint(:)
   double precision, external :: ksqrLR, VLR, VLRPrime
@@ -1596,7 +1586,8 @@ subroutine CalcCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Eth,E
      alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
      alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
           /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
-     call MQDTfunctions(RX, RF, NXF,'log', Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)     
+     call MQDTfunctions(RX, RF, NXF,'quadratic', Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
+     
      x = kappa*RF
 !     write(6,*) "alphaf = ", alphaf
      call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
@@ -1649,9 +1640,9 @@ subroutine CalcNewCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Et
      alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
      alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
           /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
-     call MQDTNewfunctions(RX, RF, NXF, 'log', Cvals, mu, lwave, energy, &
+     call MQDTNewfunctions(RX, RF, NXF, 'quadratic', Cvals, mu, lwave, energy, &
           betavdw,phiL,phir, alpha0, alphaf,f0, g0, f0p, g0p,ldf0,ldg0)
-!     call MQDTfunctions(RX, RF, NXF,'log', Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)     
+!     call MQDTfunctions(RX, RF, NXF,'quadratic', Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)     
      x = kappa*RF
 !     write(6,*) "alphaf = ", alphaf
      call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
@@ -2366,8 +2357,8 @@ subroutine logderQD(lwave,mu,energy,NXM,Nsr,wsr,VSINGLET,VTRIPLET,R,TripletQD,Si
 
   RM = R(Nsr)
 
-  !call MQDTfunctions(RX, RM, NXM,'log', Cvals, mu, lwave, energy, betavdw, phiL, alphax, alpham1, f1, g1, f1p, g1p)
-  call MQDTNewfunctions(RX, RM, NXM, 'log', Cvals, mu, lwave, energy, betavdw, phiL, phir, alphax, alpham1, &
+  !call MQDTfunctions(RX, RM, NXM,'quadratic', Cvals, mu, lwave, energy, betavdw, phiL, alphax, alpham1, f1, g1, f1p, g1p)
+  call MQDTNewfunctions(RX, RM, NXM, 'quadratic', Cvals, mu, lwave, energy, betavdw, phiL, phir, alphax, alpham1, &
        f1, g1, f1p, g1p, ldf1, ldg1)
   write(6,*) f1, g1, f1p, g1p
 

@@ -6,8 +6,8 @@
 # Rmin		      Rmidmax  		 RX     (all in bohr except RX which is in vdw units.  Converted to bohr in the code.)
   0.03d0	      40d0  		 0.1d0
 # NXM		      NXF 
-  400000  	      2000000
+  800000  	      2000000
 # NEgrid	      Emin		Emax (enter energy range in mK)
   10		      1d-6		50d0
 # NBgrid	      Bmin		Bmax (enter B-field range in gauss)
-  1000		      1d0		1200d0
+  20		      900d0		1100d0
