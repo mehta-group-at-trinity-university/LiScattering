@@ -52,6 +52,7 @@ c =======================================================================
      1  PAD,QAD,PNA,NU1,NU2,NT1,NT2,NCMAX,PPAR,QPAR,NCN,NSR,NLR,NVARB,
      2  NPP,LNPT,GNS,GEL, NCMM,IVSR,LVSR,IDSTT,KDER,MM1, MMLR(9)
       CHARACTER*2 NAME1,NAME2
+
       REAL*8  A0,A1,A2,A3,ALFA,Asw,Rsw,BETA,BINF,B1,B2,BT,CSAV,U1INF,
      1 U2INF,T1INF,T2INF,YPAD,YQAD,YQADSM,YPNA,YPNASM,ABUND,CNN,
      2 DSCM,DX,DX1,FCT,FC1,FC2,FG1,FG2,MASS1,MASS2,RMASS1,RMASS2,REQ,
@@ -472,7 +473,8 @@ c ** For special case of A and c states of Li2, add BOB centrifugal term
                   VV(I)= VV(I) + BFCT2/XO(I)**2
                   ENDDO
               ENDIF
-          ENDIF
+           ENDIF
+
       RETURN
   602 FORMAT(/' MLR(n=',i1,'; p=',I1,', q=',I1,') Potential with:   De='
      1 ,F10.3,'[cm-1]    Re=',F12.8,'[A]')
