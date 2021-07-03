@@ -718,8 +718,8 @@ program main
 
   RX = RX*betavdw
   RF = RF*betavdw
-  Nsr = multnsr*int((Rmidmax - Rmin)/stepsize)
-  Nlr = multnlr*Nsr * int(RF/Rmidmax)
+  Nsr = multnsr!*int(Rmidmax/stepsize)
+  Nlr = multnlr!Nsr*(int(RF/Rmidmax))
   write(6,*) "resetting Nsr and Nrl = ", Nsr, Nlr
   
   ! Diagonalize the HF-Zeeman Hamiltonian for the largest field values so we know the range
@@ -733,8 +733,7 @@ program main
   write(6,*) "RX = ", RX
   write(6,*) "RMid = ", Rmidmax
   write(6,*) "RF = ", RF
-  
-  
+    
   allocate(VHZ(size2,size2))
   allocate(RotatedVsrHZ(size2,size2,Nsr),RotatedVlrHZ(size2,size2,Nlr))
   allocate(Rsr(Nsr),Rlr(Nlr),wSR(Nsr),wLR(Nlr),VsrSinglet(Nsr),VlrSinglet(Nlr),VsrTriplet(Nsr),VlrTriplet(Nlr))
@@ -748,7 +747,7 @@ program main
      ! prepare some arrays for the log-derivative propagator
      call GridMaker(Rsr,Nsr,Rmin,Rmid,'linear')
      call GridMaker(Rlr,Nlr,Rmid,RF,'linear')
-     !  call SetLogderWeights(weights,NPP)
+
      call SetLogderWeights(wSR,Nsr)
      call SetLogderWeights(wLR,Nlr)
      
@@ -773,7 +772,7 @@ program main
      endif
      call CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,Cvals,phiL,scale) ! calculate the phase standardization for lwave = 0
      !call CalcCotGammaFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,Emin, Emax,InterpCotGamma)
-     call CalcNewCotGammaFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,Emin,Emax,InterpCotGamma,scale)
+!     call CalcNewCotGammaFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,Emin,Emax,InterpCotGamma,scale)
 !  x= - (Eth(size2) - Eth(1)) + 1d0*nkPerHartree
 !  do while (x.lt.-1d0*nkPerHartree)
 !     write(12,*) x, Interpolated(x,InterpCotGamma)
@@ -831,7 +830,7 @@ program main
               stop
            endif
 
-           call CalcTanGamma(RX,RF,size2,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,iE,cotgamma,InterpCotGamma)
+           call CalcTanGamma(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,iE,cotgamma,InterpCotGamma,scale)
 !           write(6,*) "done."
            if((CALCTYPE.eq.2).and.(iE.eq.1)) then
               call logderprop(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,RotatedVsrHZ,size2)
@@ -856,8 +855,9 @@ program main
            !           call printmatrix(Ktemp2,1,1,6)
 
            Ktilde = Ksr(1,1) - Ktemp2(1,1)
-           write(6,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw
-           write(51,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw
+
+           write(6,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw, 8d0*pi*((1d0-Ktilde)*abar(lwave)*betavdw)**2
+           write(51,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw, 8d0*pi*((1d0-Ktilde)*abar(lwave)*betavdw)**2
 !           write(6,*) Bgrid(iB),  (1d0-Ktilde)*abar(lwave)*betavdw/(1d0 + (abar(lwave)*betavdw*wavek)**2 * Ktilde)
 !           write(51,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw/(1d0 + (abar(lwave)*betavdw*wavek)**2 * Ktilde)
         enddo
@@ -936,20 +936,10 @@ program main
            write(51,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
         endif
 
-        write(50,'(100d20.10)') Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)!(-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-        !write(6,'(A12,I4,A1,I4,A5,A29,100d14.5)') "iE/NEgrid = ",iE,'/',NEgrid,"   | ", "(energy (mK), sigma (cm^2)) = ", &
-        !     Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)!(-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+        write(50,'(100d20.10)') Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)
+        
+        write(6,*) Bgrid(iB), -SD%K(1,1)/dsqrt(2d0*mu*(Energy-Eth(1))), 2d0*SD%sigma*(Bohrpercm**2)
 
-!        write(6,'(A12, I4, A1, I4, A3, A12,I4,A1,I4,A5,A29,100d14.5)') "iB/NBGrid = ", iB,'/',NBgrid, &
-!             " | ", "iE/NEgrid = ",iE,'/',NEgrid,"   | ", "(energy (mK), sigma (cm^2)) = ", &
-!             Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)
-
-        write(6,*) Bgrid(iB), -SD%K(1,1)/dsqrt(2d0*mu*(Energy-Eth(1)))
-        !        write(6,'(A12,I4,A1,I4,A5,A20,100d14.5)') "iE/NEgrid = ",iB,'/',NBgrid,"   | ", "(energy, sigma) = ", &
-        !             Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)!(-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-
-        !        write(6,'(100d20.10)') Egrid(iE), (-SD%K(j,j)/dsqrt(2d0*mured*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-        !write(6,'(100d16.6)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
      enddo
   enddo
   
@@ -1493,21 +1483,22 @@ subroutine CalcKsr(ym, Ksr, size2,NXM, RX, RM, energy, Eth, lwave, mu, Cvals, be
   
 end subroutine CalcKsr
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine CalcTanGamma(RX,RF,size,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,iE,cotgamma,InterpCotGamma)
+subroutine CalcTanGamma(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,iE,cotgamma,InterpCotGamma,scale)
   !This calculates the tan(gamma) MQDT parameter.  See Ruzic's PRA for details
   ! While in principle this can be calculated once as a function of energy, interpolated and
   ! evaluated at the relative energy for each channel, here I'm doing it the "brute force" way
   ! I simply re-calculate tan(gamma) and setup the cot(gamma) matrix for each channel at each needed energy
   use InterpType
   implicit none
-  integer lwave, NEgrid, iE, ix, Nx,size,ith
+  integer lwave, NEgrid, iE, ix, Nx,size,ith,NXF
   double precision RX, RF, mu, betavdw, Cvals(3), phiL, Egrid(NEgrid), cotgamma(size-1,size-1,NEgrid),EvdW
   double precision x, xscale, si, sk, sip, skp, ldk, ldi, kappa, f0, f0p, g0, g0p,Eth(size)
-  double precision alpha0(2),alphaf(2),energy, tangamma, gam
+  double precision alpha0(2),alphaf(2),energy, tangamma, gam, phir, ldg0, ldf0 ,tp
   double precision, allocatable :: xgrid(:), Rgrid(:)
   double precision, allocatable :: phaseint(:)
   double precision, external :: ksqrLR, VLR, VLRPrime
   type(InterpolatingFunction) :: InterpCotGamma
+  CHARACTER(LEN=*), INTENT(IN) :: scale
   
   EvdW = 1d0/(2d0*mu*betavdw**2)
   alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
@@ -1523,20 +1514,21 @@ subroutine CalcTanGamma(RX,RF,size,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,
      energy = Egrid(iE) - (Eth(ith) - Eth(1))
      !------------------------------------------
      ! This part does the calculation of cot(gamma) from scratch
-!!$     kappa = sqrt(2*mu*abs(energy))
-!!$     alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
-!!$     alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
-!!$          /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
-!!$     call MQDTfunctions(RX, RF, Nx,'quadratic', Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
-!!$     
-!!$     x = kappa*RF
-!!$     call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
-!!$     tangamma = -(g0p - kappa*ldk*g0)/(f0p - kappa*ldk*f0)
-!!$     cotgamma(ith-1,ith-1,iE) = 1d0/tangamma
-!!$     gam = atan(tangamma)
+     kappa = sqrt(2*mu*abs(energy))
+     alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
+     alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
+          /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
+     call MQDTNewfunctions(RX, RF, NXF, scale, Cvals, mu, lwave, energy, &
+          betavdw,phiL,phir, alpha0, alphaf,f0, g0, f0p, g0p,ldf0,ldg0)
+     x = kappa*RF
+     
+     tp = tan(phir+phiL)
+     call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
+     cotgamma(ith-1,ith-1,iE) =tan(phir+phiL) * (ldf0 - kappa*ldk)/(ldg0 - kappa*ldk)! 1d0/tangamma
+
      !-----------------------------------------
      ! This part uses the interpolated function
-     cotgamma(ith-1,ith-1,iE) = Interpolated(energy, InterpCotGamma)
+!     cotgamma(ith-1,ith-1,iE) = Interpolated(energy, InterpCotGamma)
 !     write(6,*) "Compare full: ", energy, cotgamma(ith-1,ith-1,iE)!,
 !     write(6,*) "Compare interp: ", ith, Interpolated(energy, InterpCotGamma)
 !     write(6,*) "Compare: ", ith, energy, cotgamma(ith-1, ith-1, iE), Interpolated(energy, InterpCotGamma)
