@@ -586,7 +586,7 @@ program main
   read(5,*)
   read(5,*) Rmin, Rmidmax, RX, RF
   read(5,*)
-  read(5,*) NXM, NXF, multnsr, multnlr
+  read(5,*) NXM, NXF, Nsr, Nlr
   read(5,*)
   read(5,*) NEgrid, Emin, Emax  ! enter in mK
   read(5,*)
@@ -710,17 +710,17 @@ program main
   call SetupPotential(ISTATE,1,muref,muref,Ndum,VLIM,Rdum*BohrPerAngstrom,Vdum,Cvals)
   Vmin = MINVAL(Vdum,1)
   write(6,'(A,f12.5)') "Vmin = ", Vmin
-  stepsize = 2d0*pi*0.1d0*(2d0*mu*(Emax - Vmin))**(-0.5d0)
-  write(6,'(A,f12.5)') "The suggested maximum step size is ", stepsize
-  write(6,'(A,I10)') "The minimum value of Nsr = ", int((Rmidmax - Rmin)/stepsize)
+  !stepsize = 2d0*pi*0.1d0*(2d0*mu*(Emax - Vmin))**(-0.5d0)
+  !write(6,'(A,f12.5)') "The suggested maximum step size is ", stepsize
+!  write(6,'(A,I10)') "The minimum value of Nsr = ", int((Rmidmax - Rmin)/stepsize)
   call VdWLength(Cvals,betavdw,mu)
   write(6,'(A,f12.4)') "The van der Waals length is rvdw = ", betavdw
 
   RX = RX*betavdw
   RF = RF*betavdw
-  Nsr = multnsr!*int(Rmidmax/stepsize)
-  Nlr = multnlr!Nsr*(int(RF/Rmidmax))
-  write(6,*) "resetting Nsr and Nrl = ", Nsr, Nlr
+  !Nsr = multnsr!*int(Rmidmax/stepsize)
+  !Nlr = multnlr!Nsr*(int(RF/Rmidmax))
+  write(6,*) "Nsr and Nrl = ", Nsr, Nlr
   
   ! Diagonalize the HF-Zeeman Hamiltonian for the largest field values so we know the range
   ! of energies needed for the closed channel MQDT parameter cot(gamma)
@@ -933,12 +933,13 @@ program main
         ! Various output statements:
         if(iE.eq.1) then ! Write the field dependence at the lowest energy (close to threshold)
            !write(51,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*muref*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-           write(51,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*mu*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+           write(51,*) Bgrid(iB), -SD%K(1,1)/dsqrt(2d0*mu*(Energy-Eth(1))), 2d0*SD%sigma!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
         endif
 
         write(50,'(100d20.10)') Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)
-        
-        write(6,*) Bgrid(iB), -SD%K(1,1)/dsqrt(2d0*mu*(Energy-Eth(1))), 2d0*SD%sigma*(Bohrpercm**2)
+
+!        write(6,*) Bgrid(iB), -SD%K(1,1)/dsqrt(2d0*mu*(Energy-Eth(1))), 2d0*SD%sigma*(Bohrpercm**2)
+        write(6,*) Bgrid(iB), -SD%K(1,1)/dsqrt(2d0*mu*(Energy-Eth(1))), 2d0*SD%sigma
 
      enddo
   enddo
