@@ -11,3 +11,19 @@
   10		      1d-6		50d0
 # NBgrid	      Bmin		Bmax (enter B-field range in gauss)
   1000		      1d0		1200d0
+
+
+#COMMENT:
+#Inouye et al., Nature 392, 151-154 (1998):
+#Inouye et al. located two Feshbach resonances in an optically trapped BEC of
+#Na-23 atoms in the lowest hyperfine state (i.e., f1 = f2 = 1 and m_f1 = m_f2 =
+#1) at 907 and 853 G. Figure 2 shows the normalized scattering length as a
+#function of magnetic field around the 907 G resonance. No resonances were
+#observed when the atoms were prepared in the (f1 = f2 = 1, m_f1 = m_f2 = -1)
+#state at any field up to 1000 G. 
+#Stenger et al., (1999):
+#Using the same experimental technique as Inouye et al. (1998), Stenger et al.,
+#identified one Feshbach resonance in the (f1 = f2 = 1, m_f1 = m_f2 = -1)
+#hyperfine state near 1195 G. Figure 1 shows the experimental results (i.e.,
+#number of atoms, normalized scattering length, and density as functions of
+#field) for this resonance. 
