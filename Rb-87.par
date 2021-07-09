@@ -11,3 +11,15 @@
   10		      1d-6		50d0
 # NBgrid	      Bmin		Bmax (enter B-field range in gauss)
   1000		      1d0		1200d0
+
+#COMMENT:
+#Marte et al., Phys. Rev. Lett. 89, 283202 (2002):
+#Marte et al. performed a comprehensive search for resonances in Rb-87, locating more than 40 resonances for
+#various spin mixtures in the lower hyperfine ground state. The positions of the resonances were found by monitoring
+#the atom loss and were determined within an accurancy of 30 mG. Table 1 lists the Feshbach resonances in the (1 1) + (1 1)
+#entrance channel, and Table 2 lists the Feshbach resonances in other entrance channels (1 m_f1) + (1 m_f2).
+#Erhard et al., Phys. Rev. A 69, 032705 (2004):
+#Erhard et al. identified a narrow Feshbach resonance at 9.09 +/- 0.01 G for a mixture of the (2 -1) and (1 1) states. 
+#Widera et al., Phys. Rev. Lett. 100, 160406 (2004):
+#Erhard et al. identified a Feshbach resonance at 9.128(5) G for a mixture of the (2 -1) and (1 1) states with a width of
+#15(4) mG. Figure 5 shows the scattering length as a function of magnetic field around the resonance. 
