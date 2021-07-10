@@ -552,18 +552,19 @@ program main
   integer Nsr, Nlr, CALCTYPE
   logical writepot
   double precision, allocatable :: Rsr(:), Rlr(:),VsrSinglet(:),VsrTriplet(:),VlrSinglet(:),VlrTriplet(:)
-  double precision, allocatable :: RotatedVsrHZ(:,:,:),RotatedVlrHZ(:,:,:)
+!  double precision, allocatable :: RotatedVsrHZ(:,:,:),RotatedVlrHZ(:,:,:)
   double precision, allocatable :: wSR(:),wLR(:),Vdum(:),Rdum(:)
 !  double precision, allocatable :: VSinglet(:), VTriplet(:), R(:)
   double precision, allocatable :: weights(:),ystart(:,:),yi(:,:),ym(:,:),yf(:,:),Kmat(:,:),identity(:,:)
-  double precision, allocatable :: HHZ(:,:), Bgrid(:),Egrid(:), EVAL(:), EVEC(:,:),RotatedVHZ(:,:,:),TEMP(:,:),EThreshMat(:,:)
+  double precision, allocatable :: HHZ(:,:), Bgrid(:),Egrid(:), EVAL(:), EVEC(:,:)
+  double precision, allocatable :: EThreshMat(:,:),TEMP(:,:)
   double precision, allocatable :: cotgamma(:,:,:),Ktemp1(:,:),Ktemp2(:,:),KPQ(:,:),KQP(:,:)
   double precision, allocatable :: SPmat(:,:), Sdressed(:,:), Tdressed(:,:), TPmat(:,:)
   double precision, allocatable :: VHZ(:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:),Ksr(:,:),RmidArray(:)
   double precision VLIM,Rmin,dR,phiL,stepsize,Vmin
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2
   double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw,wavek
-  integer iE, iRmid,NRmid,Ndum,NXM,NXF,multnsr, multnlr
+  integer iE, iRmid,NRmid,Ndum,NXM,NXF,multnsr, multnlr,ith
   double precision RX, Rmid, rmidmax, RF, Cvals(3), Ktilde
   double precision SingletQD, TripletQD, x
   double precision, external :: VLR, rint, abar
@@ -735,7 +736,7 @@ program main
   write(6,*) "RF = ", RF
     
   allocate(VHZ(size2,size2))
-  allocate(RotatedVsrHZ(size2,size2,Nsr),RotatedVlrHZ(size2,size2,Nlr))
+!  allocate(RotatedVsrHZ(size2,size2,Nsr),RotatedVlrHZ(size2,size2,Nlr))
   allocate(Rsr(Nsr),Rlr(Nlr),wSR(Nsr),wLR(Nlr),VsrSinglet(Nsr),VlrSinglet(Nlr),VsrTriplet(Nsr),VlrTriplet(Nlr))
 
   
@@ -763,13 +764,12 @@ program main
         do iR=1, Nsr
            write(10,*) Rsr(iR), abs((VsrSinglet(iR) - VLR(mu,lwave,Rsr(iR),Cvals))/VsrSinglet(iR))
            write(30,*) Rsr(iR), abs((VsrTriplet(iR) - VLR(mu,lwave,Rsr(iR),Cvals))/VsrTriplet(iR))
+           !           write(100,*) Rsr(iR), (VLR(mu,lwave,Rsr(iR),Cvals)+Eth(ith), ith=1,size2)
+           write(100,*) Rsr(iR), (VsrSinglet(iR)+Eth(ith), ith=1,size2)
+           write(101,*) Rsr(iR), (VsrTriplet(iR)+Eth(ith), ith=1,size2)
         enddo
-        
-!!$     do iR=1, Nlr
-!!$        write(10,*) Rlr(iR), VlrSinglet(iR)     
-!!$        write(30,*) Rlr(iR), VlrTriplet(iR)
-!!$     enddo
      endif
+
      call CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,Cvals,phiL,scale) ! calculate the phase standardization for lwave = 0
      !call CalcCotGammaFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,Emin, Emax,InterpCotGamma)
 !     call CalcNewCotGammaFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,Emin,Emax,InterpCotGamma,scale)
@@ -782,7 +782,8 @@ program main
      EThreshMat(:,:) = 0d0
      energy = 0d0 ! Calculate the zero-energy quantum defects
      call logderQD(lwave,mu,energy,NXM,Nsr,wsr,VsrSinglet,VsrTriplet,Rsr,TripletQD,SingletQD,phiL,betavdw,RX,Cvals,scale)
-     
+!     SingletQD = -0.12d0
+!     TripletQD = -0.08d0
      do iB = 1, NBgrid
 !        write(6,*) "phiL = ", phiL
         yi = ystart
@@ -809,12 +810,12 @@ program main
         call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,TPmat,size2,0d0,TEMP,size2)
         call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Tdressed,size2)
         
-        do iR = 1, Nsr
-           RotatedVsrHZ(:,:,iR) = VsrSinglet(iR)*Sdressed(:,:) + VsrTriplet(iR)*Tdressed(:,:) + EThreshMat(:,:)
-        enddo
-        do iR = 1, Nlr
-           RotatedVlrHZ(:,:,iR) = VlrSinglet(iR)*Sdressed(:,:) + VlrTriplet(iR)*Tdressed(:,:) + EThreshMat(:,:)
-        enddo
+!        do iR = 1, Nsr
+!           RotatedVsrHZ(:,:,iR) = VsrSinglet(iR)*Sdressed(:,:) + VsrTriplet(iR)*Tdressed(:,:) + EThreshMat(:,:)
+!        enddo
+!        do iR = 1, Nlr
+!           RotatedVlrHZ(:,:,iR) = VlrSinglet(iR)*Sdressed(:,:) + VlrTriplet(iR)*Tdressed(:,:) + EThreshMat(:,:)
+!        enddo
         
         ! Start the energy loop
         do iE = 1, 1!NEgrid
@@ -833,7 +834,8 @@ program main
            call CalcTanGamma(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,iE,cotgamma,InterpCotGamma,scale)
 !           write(6,*) "done."
            if((CALCTYPE.eq.2).and.(iE.eq.1)) then
-              call logderprop(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,RotatedVsrHZ,size2)
+              !call logderprop(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,RotatedVsrHZ,size2)
+              call logderpropB(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,Sdressed,Tdressed,EthreshMat,VsrSinglet,VsrTriplet,size2)
               call CalcKsr(ym, Ksr, size2, NXM,RX, Rsr(Nsr), energy, Eth, lwave, mu, Cvals, betavdw, phiL,scale)
            else if (CALCTYPE.eq.3) then
               Ksr(:,:) = tan(pi*TripletQD) * Tdressed(:,:) + tan(pi*SingletQD) * Sdressed(:,:)
@@ -886,10 +888,10 @@ program main
   write(51,*)
 
   do iB = 1, NBgrid
+     yi = ystart
 
-     yi(:,:)=ystart(:,:)
      call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
-     HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
+     HHZ2 = HHZ2*MHzPerHartree
 
      !Find the asymptotic channel states
      VHZ(:,:) = VlrSinglet(Nlr)*SPmat(:,:) + VlrTriplet(Nlr)*TPmat(:,:) + HHZ2(:,:) 
@@ -909,12 +911,12 @@ program main
      call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,TPmat,size2,0d0,TEMP,size2)
      call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Tdressed,size2)
 
-     do iR = 1, Nsr
-        RotatedVsrHZ(:,:,iR) = VsrSinglet(iR)*Sdressed(:,:) + VsrTriplet(iR)*Tdressed(:,:) + EThreshMat(:,:)
-     enddo
-     do iR = 1, Nlr
-        RotatedVlrHZ(:,:,iR) = VlrSinglet(iR)*Sdressed(:,:) + VlrTriplet(iR)*Tdressed(:,:) + EThreshMat(:,:)
-     enddo
+!     do iR = 1, Nsr
+!        RotatedVsrHZ(:,:,iR) = VsrSinglet(iR)*Sdressed(:,:) + VsrTriplet(iR)*Tdressed(:,:) + EThreshMat(:,:)
+!     enddo
+!     do iR = 1, Nlr
+!        RotatedVlrHZ(:,:,iR) = VlrSinglet(iR)*Sdressed(:,:) + VlrTriplet(iR)*Tdressed(:,:) + EThreshMat(:,:)
+!     enddo
 
      ! Start the energy loop
      do iE = 1, 1!NEgrid
@@ -925,10 +927,12 @@ program main
            if(energy.gt.Eth(j)) NumOpen = NumOpen+1
         enddo
 
-        call logderprop(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,RotatedVsrHZ,size2)
-        call logderprop(mu,Energy,identity,wLR,Nlr,ym,yf,Rlr,RotatedVlrHZ,size2)
+        !call logderpropA(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,RotatedVsrHZ,size2)
+        call logderpropB(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,Sdressed,Tdressed,EthreshMat,VsrSinglet,VsrTriplet, size2) 
+        !call logderpropA(mu,Energy,identity,wLR,Nlr,ym,yf,Rlr,RotatedVlrHZ,size2)
+        call logderpropB(mu,Energy,identity,wLR,Nlr,ym,yf,Rlr,Sdressed,Tdressed,EthreshMat,VlrSinglet, VlrTriplet, size2)
         call CalcK(yf,RF,SD,mu,3d0,1d0,Energy,Eth,size2,NumOpen)
-        !        call CalcK(ym,Rsr(Nsr),SD,mu,3d0,1d0,Energy,Eth,size2,NumOpen)
+
 
         ! Various output statements:
         if(iE.eq.1) then ! Write the field dependence at the lowest energy (close to threshold)
@@ -1009,7 +1013,48 @@ end subroutine SetLogderWeights
 !!$
 !!$end subroutine NumerovMC
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine logderprop(mu,Energy,identity,weights,NPP,yi,yf,XO,Pot,size)
+!subroutine logderprop(mu,Energy,identity,weights,NPP,yi,yf,XO,Pot,size)
+subroutine logderpropB(mu,Energy,identity,weights,NPP,yi,yf,XO,Sdressed,Tdressed,EthreshMat,Vsinglet,Vtriplet,size)
+  implicit none
+  integer i,j,step,NPP,size
+  double precision h,Energy,mu
+  double precision xx(NPP),weights(NPP),XO(NPP)
+  double precision yi(size,size),yf(size,size)
+  double precision Tdressed(size,size), Sdressed(size,size), Ethreshmat(size,size)
+  double precision Vtriplet(NPP), Vsinglet(NPP)
+  double precision pottemp(size,size)
+!  double precision Pot(size,size,NPP) !make sure Pot includes the threshold offsets
+  double precision tempy(size,size),ycurrent(size,size),yprevious(size,size),identity(size,size)
+  double precision vtemp1(size,size), vtemp2(size,size), un(size,size)
+  double precision, parameter :: onesixth = 0.166666666666666666666d0
+  double precision, parameter :: onethird = 0.333333333333333333333d0
+
+  h=XO(2)-XO(1)
+  yprevious = yi
+  do step = 1, NPP
+     pottemp = Vsinglet(step)*Sdressed + Vtriplet(step)*Tdressed + EthreshMat
+     !vtemp1 = 2d0*mu*(identity*Energy-Pot(:,:,step))
+     vtemp1 = 2d0*mu*(identity*Energy-pottemp)
+     if (mod(step,2).eq.0) then
+        un = vtemp1
+     else
+        vtemp2 = identity + h*h*onesixth*vtemp1
+        call sqrmatinv(vtemp2,size)
+        un = matmul(vtemp2,vtemp1)
+     endif
+     tempy = identity + h*yprevious
+     call sqrmatinv(tempy,size)
+     ycurrent = MATMUL(tempy,yprevious) - onethird*h*weights(step)*un
+     yprevious = ycurrent
+  enddo
+
+  yf(:,:) = ycurrent(:,:)
+
+end subroutine logderpropB
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine logderpropA(mu,Energy,identity,weights,NPP,yi,yf,XO,Pot,size)
+!subroutine logderprop(mu,Energy,identity,weights,NPP,yi,yf,XO,Sdressed,Tdressed,EthreshMat,size)
   implicit none
   integer i,j,step,NPP,size
   double precision h,Energy,mu
@@ -1040,7 +1085,7 @@ subroutine logderprop(mu,Energy,identity,weights,NPP,yi,yf,XO,Pot,size)
 
   yf(:,:) = ycurrent(:,:)
 
-end subroutine logderprop
+end subroutine logderpropA
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 SUBROUTINE printmatrix(M,nr,nc,file)
   IMPLICIT NONE
@@ -1312,10 +1357,11 @@ subroutine CalcNewMilne2step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
 
   y1(1) = log(alpha(1,1))
   y1(2) = alpha(1,2)/alpha(1,1)
+  
 !  write(6,*) "y1 = ", y1
   Delta0= eps*y1
   phaseint(1) = 0d0
-
+  !write(6,*) R(1), phaseint(iR+1),y1(1), y1(2)
   do iR = 1, NA-1
      h = R(iR+1)-R(iR)
      hhalf = 0.5d0*h
@@ -1335,11 +1381,58 @@ subroutine CalcNewMilne2step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
      y=y3
      alpha(iR+1,1) = exp(y(1))
      alpha(iR+1,2) = y(2)*exp(y(1))
-     !write(6,*) R(iR+1), y3(1), y3(2)
+     !write(6,*) R(iR+1), phaseint(iR+1),y(1), y(2)
+     !write(102,*) R(iR+1), phaseint(iR+1)
   enddo
 !stop
 
 end subroutine CalcNewMilne2step
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine CalcNewMilne4step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
+  implicit none
+  double precision h, energy, y(2), mu,Cvals(3),y1(2),y2(2),y3(2),y4(2),y5(2),h4,R1,R2,R3,R4
+  integer NA, iR, lwave
+  double precision alpha(NA,2), R(NA),Delta(2),Delta0(2),eps, phaseint(NA)
+  double precision TwoOnFortyFive
+
+  TwoOnFortyFive = 0.04444444444444444444444444d0
+  
+  y1(1) = log(alpha(1,1))
+  y1(2) = alpha(1,2)/alpha(1,1)
+
+  phaseint = 0d0
+  phaseint(1) = 0d0
+  !write(6,*) R(1), phaseint(1), y1(1), y1(2)
+  do iR = 1, NA-1
+     h = R(iR+1)-R(iR)
+     h4 = 0.25d0*h
+     R1=R(iR)
+     R2=R1+h4
+     R3=R2+h4
+     R4=R3+h4
+
+     ! do 4 quarter-steps and use Bode's 5-point integration rule to calculate the phase integral
+     y2=y1
+     call RK4StepNewMilne(y2,mu,lwave,energy,h4,R1,Cvals)
+     y3=y2
+     call RK4StepNewMilne(y3,mu,lwave,energy,h4,R2,Cvals)
+     y4=y3
+     call RK4StepNewMilne(y4,mu,lwave,energy,h4,R3,Cvals)
+     y5=y4
+     call RK4StepNewMilne(y5,mu,lwave,energy,h4,R4,Cvals)
+
+     phaseint(iR+1) = phaseint(iR) + TwoOnFortyFive*h4* &
+          (7d0*exp(-2*y1(1)) + 32d0*exp(-2*y2(1)) + 12d0*exp(-2*y3(1)) + 32d0*exp(-2*y4(1)) + 7d0*exp(-2*y5(1)))
+     y1=y5
+     y=y5
+     alpha(iR+1,1) = exp(y(1))
+     alpha(iR+1,2) = y(2)*exp(y(1))
+     !write(102,*) R(iR+1), phaseint(iR+1)
+     !write(6,*) R(iR+1), phaseint(iR+1), y(1), y(2)
+  enddo
+!stop
+
+end subroutine CalcNewMilne4step
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine MQDTfunctions(R1, R2, NA, scale, Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf,f0, g0, f0p, g0p)
   use units
@@ -1363,7 +1456,7 @@ subroutine MQDTfunctions(R1, R2, NA, scale, Cvals, mu, lwave, energy, betavdw, p
      g0 = -Pi**(-0.5d0)*alpha(i,1)*cos(phaseint(i)+phiL)
      f0p = alpha(i,2)/alpha(i,1) * f0 - g0/alpha(i,1)**2
      g0p = alpha(i,2)/alpha(i,1) * g0 + f0/alpha(i,1)**2
-!     write(101,*) R(i), alpha(i,1), alpha(i,2), phaseint(i), f0, g0
+
   enddo
 !  stop
 
@@ -1385,7 +1478,8 @@ subroutine MQDTNewfunctions(R1, R2, NA, scale, Cvals, mu, lwave, energy, &
   call GridMaker(R,NA,R1,R2,scale)
   alpha(1,:) = alpha0
   
-  call CalcNewMilne2step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
+  !call CalcNewMilne2step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
+  call CalcNewMilne4step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
 !  write(6,*) "y = ", y
   alphaf = alpha(NA,:)
   phir = phaseint(NA)
@@ -1438,7 +1532,7 @@ subroutine CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,Cvals,phiL,scale)
   chimp = chimp/betavdw ! d(chi)/dR comes out in van der Waals units so this converts length to bohr
   ldchim = chimp/chim
   tanphi = (ldg0-ldchim)/(ldf0-ldchim)/tan(phir)
-  !     write(100,*) X(i), tanphi- tan(-1d0/(2d0*RX**2) + dble(lwave)*Pi/4d0 -5d0*Pi/8d0)!, atan(tanphi)  
+  !     write(200,*) X(i), tanphi- tan(-1d0/(2d0*RX**2) + dble(lwave)*Pi/4d0 -5d0*Pi/8d0)!, atan(tanphi)  
 
   write(6,*) "lwave = ", lwave, "tanphi = ", tanphi, "analytical result = ", &
        tan(-1d0/(2d0*RX**2) + dble(lwave)*Pi/4d0 -5d0*Pi/8d0), &
@@ -2377,7 +2471,7 @@ subroutine logderQD(lwave,mu,energy,NXM,Nsr,wsr,VSINGLET,VTRIPLET,R,TripletQD,Si
      VMAT(2,2,n) = VTRIPLET(n)
   enddo
 
-  call logderprop(mu,energy,identity,wSR,Nsr,ystart,yf,R,VMAT,2)
+  call logderpropA(mu,energy,identity,wSR,Nsr,ystart,yf,R,VMAT,2)
 
   td1 = (f1p - yf(1,1)*f1) / (g1p - yf(1,1)*g1)
   td2 = (f1p - yf(2,2)*f1) / (g1p - yf(2,2)*g1)
