@@ -561,7 +561,7 @@ program main
   double precision, allocatable :: cotgamma(:,:,:),Ktemp1(:,:),Ktemp2(:,:),KPQ(:,:),KQP(:,:)
   double precision, allocatable :: SPmat(:,:), Sdressed(:,:), Tdressed(:,:), TPmat(:,:)
   double precision, allocatable :: VHZ(:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:),Ksr(:,:),RmidArray(:)
-  double precision VLIM,Rmin,dR,phiL,stepsize,Vmin
+  double precision VLIM,Rmin,dR,phiL,stepsize,Vmin,ascat
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2
   double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw,wavek
   integer iE, iRmid,NRmid,Ndum,NXM,NXF,multnsr, multnlr,ith
@@ -772,7 +772,7 @@ program main
 
      call CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,Cvals,phiL,scale) ! calculate the phase standardization for lwave = 0
      !call CalcCotGammaFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,Emin, Emax,InterpCotGamma)
-!     call CalcNewCotGammaFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,Emin,Emax,InterpCotGamma,scale)
+     !call CalcNewCotGammaFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,Emin,Emax,InterpCotGamma,scale)
 !  x= - (Eth(size2) - Eth(1)) + 1d0*nkPerHartree
 !  do while (x.lt.-1d0*nkPerHartree)
 !     write(12,*) x, Interpolated(x,InterpCotGamma)
@@ -857,9 +857,9 @@ program main
            !           call printmatrix(Ktemp2,1,1,6)
 
            Ktilde = Ksr(1,1) - Ktemp2(1,1)
-
-           write(6,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw, 8d0*pi*((1d0-Ktilde)*abar(lwave)*betavdw)**2
-           write(51,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw, 8d0*pi*((1d0-Ktilde)*abar(lwave)*betavdw)**2
+           ascat = (1d0-Ktilde)*abar(lwave)*betavdw
+           write(6,*) Bgrid(iB), ascat , 8d0*pi*ascat**2
+           write(51,*) Bgrid(iB), ascat , 8d0*pi*ascat**2
 !           write(6,*) Bgrid(iB),  (1d0-Ktilde)*abar(lwave)*betavdw/(1d0 + (abar(lwave)*betavdw*wavek)**2 * Ktilde)
 !           write(51,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw/(1d0 + (abar(lwave)*betavdw*wavek)**2 * Ktilde)
         enddo
@@ -937,13 +937,15 @@ program main
         ! Various output statements:
         if(iE.eq.1) then ! Write the field dependence at the lowest energy (close to threshold)
            !write(51,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*muref*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
-           write(51,*) Bgrid(iB), -SD%K(1,1)/dsqrt(2d0*mu*(Energy-Eth(1))), 2d0*SD%sigma!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+           ascat = -SD%K(1,1)/dsqrt(2d0*mu*(Energy-Eth(1)))
+           write(51,*) Bgrid(iB), ascat, 8d0*pi*ascat**2 
+           write(6,*) Bgrid(iB),  ascat, 8d0*pi*ascat**2,  2d0*SD%sigma
         endif
 
         write(50,'(100d20.10)') Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)
 
-!        write(6,*) Bgrid(iB), -SD%K(1,1)/dsqrt(2d0*mu*(Energy-Eth(1))), 2d0*SD%sigma*(Bohrpercm**2)
-        write(6,*) Bgrid(iB), -SD%K(1,1)/dsqrt(2d0*mu*(Energy-Eth(1))), 2d0*SD%sigma
+
+
 
      enddo
   enddo
@@ -1619,6 +1621,7 @@ subroutine CalcTanGamma(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,
      
      tp = tan(phir+phiL)
      call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
+
      cotgamma(ith-1,ith-1,iE) =tan(phir+phiL) * (ldf0 - kappa*ldk)/(ldg0 - kappa*ldk)! 1d0/tangamma
 
      !-----------------------------------------
