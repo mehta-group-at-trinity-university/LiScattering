@@ -772,7 +772,7 @@ program main
 
      call CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,Cvals,phiL,scale) ! calculate the phase standardization for lwave = 0
      !call CalcCotGammaFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,Emin, Emax,InterpCotGamma)
-     !call CalcNewCotGammaFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,Emin,Emax,InterpCotGamma,scale)
+     call CalcNewCotGammaFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,Emin,Emax,InterpCotGamma,scale)
 !  x= - (Eth(size2) - Eth(1)) + 1d0*nkPerHartree
 !  do while (x.lt.-1d0*nkPerHartree)
 !     write(12,*) x, Interpolated(x,InterpCotGamma)
@@ -1611,22 +1611,22 @@ subroutine CalcTanGamma(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,
      energy = Egrid(iE) - (Eth(ith) - Eth(1))
      !------------------------------------------
      ! This part does the calculation of cot(gamma) from scratch
-     kappa = sqrt(2*mu*abs(energy))
-     alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
-     alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
-          /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
-     call MQDTNewfunctions(RX, RF, NXF, scale, Cvals, mu, lwave, energy, &
-          betavdw,phiL,phir, alpha0, alphaf,f0, g0, f0p, g0p,ldf0,ldg0)
-     x = kappa*RF
-     
-     tp = tan(phir+phiL)
-     call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
-
-     cotgamma(ith-1,ith-1,iE) =tan(phir+phiL) * (ldf0 - kappa*ldk)/(ldg0 - kappa*ldk)! 1d0/tangamma
+!!$     kappa = sqrt(2*mu*abs(energy))
+!!$     alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
+!!$     alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
+!!$          /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
+!!$     call MQDTNewfunctions(RX, RF, NXF, scale, Cvals, mu, lwave, energy, &
+!!$          betavdw,phiL,phir, alpha0, alphaf,f0, g0, f0p, g0p,ldf0,ldg0)
+!!$     x = kappa*RF
+!!$     
+!!$     tp = tan(phir+phiL)
+!!$     call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
+!!$
+!!$     cotgamma(ith-1,ith-1,iE) =tan(phir+phiL) * (ldf0 - kappa*ldk)/(ldg0 - kappa*ldk)! 1d0/tangamma
 
      !-----------------------------------------
      ! This part uses the interpolated function
-!     cotgamma(ith-1,ith-1,iE) = Interpolated(energy, InterpCotGamma)
+     cotgamma(ith-1,ith-1,iE) = Interpolated(energy, InterpCotGamma)
 !     write(6,*) "Compare full: ", energy, cotgamma(ith-1,ith-1,iE)!,
 !     write(6,*) "Compare interp: ", ith, Interpolated(energy, InterpCotGamma)
 !     write(6,*) "Compare: ", ith, energy, cotgamma(ith-1, ith-1, iE), Interpolated(energy, InterpCotGamma)

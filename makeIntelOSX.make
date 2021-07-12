@@ -1,24 +1,24 @@
-CMP     = gfortran
-F132FORM = -ffixed-line-length-132
-OPTFLAG = -O4 -floop-nest-optimize
-FREEFORM = -ffree-form
+CMP     = ifort
+F132FORM = -extend-source #-ffixed-line-length-132
+OPTFLAG = -O4  -i8  
+FREEFORM = #-ffree-form
 STND = #-fdec #-std=gnu
 LEGACY = -std=legacy
-DEBUG   = -fcheck=all
+DEBUG   = #-fcheck=all
 FORCEDP = #-fdefault-real-8 -fdefault-double-
-LAPACK =   -framework accelerate
+LAPACK =     -L${MKLROOT}/lib -Wl,-rpath,${MKLROOT}/lib -lmkl_intel_ilp64 -lmkl_tbb_thread -lmkl_core -lpthread -lm -ldl
 ARPACK =  -L/usr/local/lib/ -larpack
-INCLUDE =  -I/usr/local/include
+INCLUDE =  -I/usr/local/include -I"${MKLROOT}/include"
 OBJS  = bspline90_22.o besselnew.o threejsixj.o Bsplines.o quadrature.o POTGENLI2.o AlkaliScattering.o units.o matrix_stuff.o 
 
 AlkaliScattering.x: ${OBJS} 
-	${CMP} ${STND} ${DEBUG} ${OBJS} ${INCLUDE} ${LAPACK}  ${ARPACK} ${OPTFLAG} ${FORCEDP} -o AlkaliScattering.x
+	${CMP} ${STND} ${DEBUG} ${OBJS} ${INCLUDE}  ${OPTFLAG} ${FORCEDP} -o AlkaliScattering.x ${LAPACK}  ${ARPACK}
 
 AlkaliScattering.o: AlkaliScattering.f90 units.o bspline90_22.o
 	${CMP} ${STND} ${DEBUG} ${FORCEDP} ${FREEFORM} ${OPTFLAG} -c AlkaliScattering.f90
 
 matrix_stuff.o: matrix_stuff.f 
-	${CMP} ${STND} ${FORCEDP} ${F132FORM} ${INCLUDE} ${LAPACK} ${ARPACK} ${OPTFLAG} -c matrix_stuff.f
+	${CMP} ${STND} ${FORCEDP} ${F132FORM} ${INCLUDE}  ${OPTFLAG} -c matrix_stuff.f ${LAPACK} ${ARPACK}
 
 Bsplines.o:	Bsplines.f
 	${CMP} ${STND} ${FORCEDP} ${F132FORM} ${OPTFLAG} -c Bsplines.f
