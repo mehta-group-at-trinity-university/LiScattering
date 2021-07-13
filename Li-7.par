@@ -15,4 +15,12 @@
 
 
 #COMMENT:
+#Pollack et al., Phys. Rev. Lett. 102, 090402 (2009):
+#Report on an s-wave resonance with atoms in the spin state (1 1) at 736.8(2) G with width
+#192.3(3) G and background scattering length -24.5 bohr. They also identified a zero in the
+#scattering length at 543.6(1) G. Figure 4 shows the scattering length versus magnetic field.
 #
+#Gross and Khayokovich, Phys. Rev. A 77, 023604 (2008):
+#Observed two resonances with atoms in the (1 0) spin state -- a narrow one at 831(4) G with
+#width 7 G and a wider one at 884 G with width 34 G. They also found a zero crossing occurs
+#between these two resonances near 836 G. 
