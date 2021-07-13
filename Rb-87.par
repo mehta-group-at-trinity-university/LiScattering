@@ -12,6 +12,12 @@
 # NBgrid	      Bmin		Bmax (enter B-field range in gauss)
 <<<<<<< HEAD
   1000		      1d0		1200d0
+=======
+  200		      1d0		1200d0
+# Grid for calculating MQDT functions (must be 'linear', 'quadratic', 'cubic', or 'log')		      
+  'log'
+>>>>>>> d56640e6b3f66f0016213c569a0e858a2c64bd99
+
 
 #COMMENT:
 #Marte et al., Phys. Rev. Lett. 89, 283202 (2002):
@@ -24,8 +30,3 @@
 #Widera et al., Phys. Rev. Lett. 100, 160406 (2004):
 #Erhard et al. identified a Feshbach resonance at 9.128(5) G for a mixture of the (2 -1) and (1 1) states with a width of
 #15(4) mG. Figure 5 shows the scattering length as a function of magnetic field around the resonance. 
-=======
-  200		      1d0		1200d0
-# Grid for calculating MQDT functions (must be 'linear', 'quadratic', 'cubic', or 'log')		      
-  'log'
->>>>>>> d56640e6b3f66f0016213c569a0e858a2c64bd99
