@@ -1,5 +1,5 @@
 # This is a parameter file for input into AlkaliScattering.x
-# ISTATE (for Li-6)  SYM (-1 for fermion)  CALCTYPE (1 for logder, 2 for MQDT, 3 for FT) 
+# ISTATE (for K-40)  SYM (-1 for fermion)  CALCTYPE (1 for logder, 2 for MQDT, 3 for FT) 
   4	      	      -1     	 	   3	   
 # L (partial wave)    2*MFtot (twice total F projection) writepot
   0 	     	      0	      	     	     		 .true.
