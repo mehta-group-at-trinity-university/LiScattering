@@ -5,7 +5,7 @@
   0 	     	      4	      	     	     		 .true.
 # Rmin		      Rmidmax  		 RX     (all in bohr except RX which is in vdw units.  Converted to bohr in the code.)
   0.03d0	      35d0  		 0.1d0
-# NXM		      NXF 
+# NXM		      NXF 		 Nsr		Nlr
   500000  	      5000000
 # NEgrid	      Emin		Emax (enter energy range in mK)
   10		      1d-6		50d0

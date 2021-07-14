@@ -1670,8 +1670,8 @@ subroutine CalcCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Eth,E
 
 !  write(6,*) "alpha0 = ", alpha0
   xscale=0d0
-  NE = 100
-  kx=2
+  NE = 500
+  kx=4
 
   E1 =  - (Eth(size)-Eth(1))
   E2 = -1d-12
@@ -1726,7 +1726,7 @@ subroutine CalcNewCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Et
   EvdW = 1d0/(2d0*mu*betavdw**2)
 
   xscale=0d0
-  NE = 100
+  NE = 500
   kx=4
 
   E1 =  - (Eth(size)-Eth(1))
