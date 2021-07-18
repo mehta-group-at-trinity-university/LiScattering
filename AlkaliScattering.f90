@@ -546,11 +546,11 @@ program main
   use quadrature
 
   implicit none
-  integer NPP, iR, iB, ihf, n, i, j, A, nc, nr, ESTATE, ISTATE, IMN1
+  integer NPP, iR, iB, ihf, n, i, j, A, nc, nr, ESTATE, ISTATE, IMN1,cotgamfile
   integer nspin1, nspin2, espin1, espin2 !nspin is the nuclear spin and espin is the electronic spin
   integer i1,i2,s1,s2,S,sym,size1,size2,NBgrid,NEgrid,mtot, lwave,NumOpen
   integer Nsr, Nlr, CALCTYPE
-  logical writepot
+  logical writepot,CalcGam
   double precision, allocatable :: Rsr(:), Rlr(:),VsrSinglet(:),VsrTriplet(:),VlrSinglet(:),VlrTriplet(:)
 !  double precision, allocatable :: RotatedVsrHZ(:,:,:),RotatedVlrHZ(:,:,:)
   double precision, allocatable :: wSR(:),wLR(:),Vdum(:),Rdum(:)
@@ -581,7 +581,7 @@ program main
   
   read(5,*)
   read(5,*)
-  read(5,*) ISTATE, sym, CALCTYPE
+  read(5,*) ISTATE, sym, CALCTYPE, CalcGam
   read(5,*)
   read(5,*) lwave, mtot, writepot
   read(5,*)
@@ -687,6 +687,8 @@ program main
      ystart(i,i)=1d20
   enddo
 
+  cotgamfile = 49
+  open(unit = cotgamfile, file = "CotGamma-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))//trim(str(NINT(RF)))//"a0.dat")
   open(unit = 20, file = "CollisionThresholds-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))// &
        "-"//trim(str(NINT(Bmin)))//"G-"//trim(str(NINT(Bmax)))//"G.dat")
   open(unit = 50, file = "SigmaEnergyDependence-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))// &
@@ -775,8 +777,8 @@ program main
      endif
 
      call CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,Cvals,phiL,scale) ! calculate the phase standardization for lwave = 0
-     !call CalcCotGammaFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,Emin, Emax,InterpCotGamma)
-     call CalcNewCotGammaFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,Emin,Emax,InterpCotGamma,scale)
+ 
+!     call CalcNewCotGammaFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,Emin,Emax,InterpCotGamma,scale,CalcGam,cotgamfile)
 !  x= - (Eth(size2) - Eth(1)) + 1d0*nkPerHartree
 !  do while (x.lt.-1d0*nkPerHartree)
 !     write(12,*) x, Interpolated(x,InterpCotGamma)
@@ -1547,7 +1549,7 @@ subroutine CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,Cvals,phiL,scale)
 
 end subroutine CalcPhaseStandard
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine CalcKsr(ym, Ksr, size2,NXM, RX, RM, energy, Eth, lwave, mu, Cvals, betavdw, phiL,scale)
+subroutine CalcKsr(ym, Ksr, size2, NXM, RX, RM, energy, Eth, lwave, mu, Cvals, betavdw, phiL,scale)
   implicit none
   integer size2, lwave, i, NXM
   double precision mu, betavdw, phiL, RX, RM, energy,alpha0(2),alpham(2),alphaf(2),f0,g0,f0p,g0p
@@ -1565,7 +1567,7 @@ subroutine CalcKsr(ym, Ksr, size2,NXM, RX, RM, energy, Eth, lwave, mu, Cvals, be
   g0mat = 0d0
   f0pmat = 0d0
   g0pmat = 0d0
-  !NXM = 1000000
+ 
   ! Construct the diagonal reference function matrices
   do i = 1, size2
 !     call MQDTfunctions(RX, RM, NXM,'quadratic', Cvals, mu, lwave, energy-Eth(i), betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
@@ -1615,22 +1617,22 @@ subroutine CalcTanGamma(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,
      energy = Egrid(iE) - (Eth(ith) - Eth(1))
      !------------------------------------------
      ! This part does the calculation of cot(gamma) from scratch
-!!$     kappa = sqrt(2*mu*abs(energy))
-!!$     alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
-!!$     alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
-!!$          /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
-!!$     call MQDTNewfunctions(RX, RF, NXF, scale, Cvals, mu, lwave, energy, &
-!!$          betavdw,phiL,phir, alpha0, alphaf,f0, g0, f0p, g0p,ldf0,ldg0)
-!!$     x = kappa*RF
-!!$     
-!!$     tp = tan(phir+phiL)
-!!$     call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
-!!$
-!!$     cotgamma(ith-1,ith-1,iE) =tan(phir+phiL) * (ldf0 - kappa*ldk)/(ldg0 - kappa*ldk)! 1d0/tangamma
+     kappa = sqrt(2*mu*abs(energy))
+     alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
+     alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
+          /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
+     call MQDTNewfunctions(RX, RF, NXF, scale, Cvals, mu, lwave, energy, &
+          betavdw,phiL,phir, alpha0, alphaf,f0, g0, f0p, g0p,ldf0,ldg0)
+     x = kappa*RF
+     
+     tp = tan(phir+phiL)
+     call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
+
+     cotgamma(ith-1,ith-1,iE) =tan(phir+phiL) * (ldf0 - kappa*ldk)/(ldg0 - kappa*ldk)! 1d0/tangamma
 
      !-----------------------------------------
      ! This part uses the interpolated function
-     cotgamma(ith-1,ith-1,iE) = Interpolated(energy, InterpCotGamma)
+!     cotgamma(ith-1,ith-1,iE) = Interpolated(energy, InterpCotGamma)
 !     write(6,*) "Compare full: ", energy, cotgamma(ith-1,ith-1,iE)!,
 !     write(6,*) "Compare interp: ", ith, Interpolated(energy, InterpCotGamma)
 !     write(6,*) "Compare: ", ith, energy, cotgamma(ith-1, ith-1, iE), Interpolated(energy, InterpCotGamma)
@@ -1684,7 +1686,6 @@ subroutine CalcCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Eth,E
   do iE = 1, NE
 
      energy = InterpCotGamma%x(iE)
-
      kappa = sqrt(2*mu*abs(energy))
      alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
      alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
@@ -1705,7 +1706,7 @@ subroutine CalcCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Eth,E
 !  stop  
 end subroutine CalcCotGammaFunction
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine CalcNewCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Eth,Emin,Emax,InterpCotGamma,scale)
+subroutine CalcNewCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Eth,Emin,Emax,InterpCotGamma,scale,CalcGam,cotgamfile)
   !This calculates the tan(gamma) MQDT parameter.  See Ruzic's PRA for details
   ! While in principle this can be calculated once as a function of energy, interpolated and
   ! evaluated at the relative energy for each channel, here I'm doing it the "brute force" way
@@ -1714,7 +1715,7 @@ subroutine CalcNewCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Et
   use bspline
   use units
   implicit none
-  integer lwave, iE, NE,ix, NXF,size, kx
+  integer lwave, iE, NE,ix, NXF,size, kx, cotgamfile
   double precision RX, RF, mu, betavdw, Cvals(3), phiL,Emin,Emax,EvdW,E1,E2,ldg0,ldf0,phir,tp
   double precision x, xscale, si, sk, sip, skp, ldk, ldi, kappa, f0, f0p, g0, g0p,Eth(size)
   double precision alpha0(2),alphaf(2),energy, tangamma, gam
@@ -1722,7 +1723,7 @@ subroutine CalcNewCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Et
   CHARACTER(LEN=*), INTENT(IN) :: scale
   double precision, external :: ksqrLR, VLR, VLRPrime
   type(InterpolatingFunction) :: InterpCotGamma
-
+  logical CalcGam
   EvdW = 1d0/(2d0*mu*betavdw**2)
 
   xscale=0d0
@@ -1734,30 +1735,29 @@ subroutine CalcNewCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Et
 
   write(6,*) "E1, E2 = ",E1, E2
   call AllocateInterpolatingFunction(NE,kx,InterpCotGamma)
-  call GridMaker(InterpCotGamma%x, nE, E1, E2, "linear")
-  write(6,'(A)') "Calculating the MQDT parameter cot(gamma) as a function of energy"
 
-  do iE = 1, NE
-     energy = InterpCotGamma%x(iE)
-     kappa = sqrt(2*mu*abs(energy))
-     alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
-     alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
-          /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
-     call MQDTNewfunctions(RX, RF, NXF, scale, Cvals, mu, lwave, energy, &
-          betavdw,phiL,phir, alpha0, alphaf,f0, g0, f0p, g0p,ldf0,ldg0)
-!     call MQDTfunctions(RX, RF, NXF,'quadratic', Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)     
-     x = kappa*RF
-!     write(6,*) "alphaf = ", alphaf
-     call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
-!     tangamma = -(g0p - kappa*ldk*g0)/(f0p - kappa*ldk*f0)
-!     InterpCotGamma%y(iE) = 1d0/tangamma
-     tp = tan(phir+phiL)
-     InterpCotGamma%y(iE) = tan(phir+phiL) * (ldf0 - kappa*ldk)/(ldg0 - kappa*ldk)
-     write(6,'(A)',ADVANCE='NO') "."
-     !write(6,'(10d15.5)') energy, ldk, ldf0, ldg0, phir
-  !   write(13,*) energy, atan(tangamma)
-  enddo
-  write(6,*) "done."
+  If(CalcGam) then
+     call GridMaker(InterpCotGamma%x, nE, E1, E2, "sqrroot")
+     write(6,'(A)') "Calculating the MQDT parameter cot(gamma) as a function of energy"
+     do iE = 1, NE
+        energy = InterpCotGamma%x(iE)
+        kappa = sqrt(2*mu*abs(energy))
+        alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
+        alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
+             /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
+        call MQDTNewfunctions(RX, RF, NXF, scale, Cvals, mu, lwave, energy, &
+             betavdw,phiL,phir, alpha0, alphaf,f0, g0, f0p, g0p,ldf0,ldg0)
+        x = kappa*RF
+        call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
+        tp = tan(phir+phiL)
+        InterpCotGamma%y(iE) = tan(phir+phiL) * (ldf0 - kappa*ldk)/(ldg0 - kappa*ldk)
+        write(6,'(A)',ADVANCE='NO') "."
+        write(cotgamfile, *) energy, InterpCotGamma%y(iE)
+     enddo
+     write(6,*) "done."
+  else
+     read(cotgamfile, *) InterpCotGamma%x(iE), InterpCotGamma%y(iE)
+  endif
   call SetupInterpolatingFunction(InterpCotGamma)  
   !stop  
 end subroutine CalcNewCotGammaFunction

@@ -6,9 +6,9 @@ STND = #-fdec #-std=gnu
 LEGACY = -std=legacy
 DEBUG   = #-fcheck=all
 FORCEDP = #-fdefault-real-8 -fdefault-double-
-LAPACK =     -L${MKLROOT}/lib -Wl,-rpath,${MKLROOT}/lib -lmkl_intel_ilp64 -lmkl_tbb_thread -lmkl_core -lpthread -lm -ldl
+LAPACK =   ${MKLROOT}/lib/libmkl_blas95_ilp64.a ${MKLROOT}/lib/libmkl_lapack95_ilp64.a -L${MKLROOT}/lib -Wl,-rpath,${MKLROOT}/lib -lmkl_intel_ilp64 -lmkl_sequential -lmkl_core -lpthread -lm -ldl  -L/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/lib
 ARPACK =  -L/usr/local/lib/ -larpack
-INCLUDE =  -I/usr/local/include -I"${MKLROOT}/include"
+INCLUDE =   -I/usr/local/include  -I${MKLROOT}/include/intel64/ilp64 -i8  -I"${MKLROOT}/include"
 OBJS  = bspline90_22.o besselnew.o threejsixj.o Bsplines.o quadrature.o POTGENLI2.o AlkaliScattering.o units.o matrix_stuff.o 
 
 AlkaliScattering.x: ${OBJS} 
