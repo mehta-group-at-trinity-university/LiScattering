@@ -4,13 +4,13 @@
 # L (partial wave)    2*MFtot (twice total F projection) writepot
   0 	     	      4	      	     	     		 .false.
 # Rmin		      Rmidmax  		 RX    		 RF (all in bohr except RX and RF which is in vdw units.  Converted to bohr in the code.)
-  0.3d0		      45d0  		 0.08d0		 20d0
+  0.3d0		      45d0  		 0.1d0		 20d0
 # NXM		      NXF 		 Nsr		 Nlr
   100000  	      1000000		 1000000	 10000000	
 # NEgrid	      Emin		Emax (enter energy range in mK)
   10		      1d-6		50d0
-# NBgrid	      Bmin		Bmax (enter B-field range in gauss)
-  10		      0d0		1000d0
+# NBgrid	      Bmin		Bmax		 Bhuge (largest possible field)
+  21		      0.1d0		1000d0	    	 1200d0   
 # Grid for calculating MQDT functions (must be 'linear', 'quadratic', 'cubic', or 'log')		      
   'quadratic'
 
@@ -30,4 +30,5 @@
 #number of atoms, normalized scattering length, and density as functions of
 #field) for this resonance.
 
+Potential parameters and additional resonance positions taken from:
 Knoop et al PHYSICAL REVIEW A 83, 042704 (2011)
