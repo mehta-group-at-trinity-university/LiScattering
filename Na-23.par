@@ -1,13 +1,33 @@
 # This is a parameter file for input into AlkaliScattering.x
-# ISTATE (for Na-23)  SYM (+1 for boson)	  CALCTYPE (1 for logder, 2 for MQDT, 3 for FT) 
-  5	      	      1	           	 	  3	   
+# ISTATE (for Na-23)  SYM (+1 for boson)	  CALCTYPE (1 for logder, 2 for MQDT, 3 for FT)		CALCGAM
+  5	      	      1	           	 	  2							.true.
 # L (partial wave)    2*MFtot (twice total F projection) writepot
   0 	     	      4	      	     	     		 .false.
-# Rmin		      Rmidmax		Rmax  		 RX     (all in bohr except RX which is in vdw units.  Converted to bohr in the code.)
-  0.03d0	      40d0		1000d0		 0.1d0
-# Nsr		      Nlr
-  200000	      400000
+# Rmin		      Rmidmax  		 RX    		 RF (all in bohr except RX and RF which is in vdw units.  Converted to bohr in the code.)
+  0.3d0		      45d0  		 0.08d0		 20d0
+# NXM		      NXF 		 Nsr		 Nlr
+  100000  	      1000000		 1000000	 10000000	
 # NEgrid	      Emin		Emax (enter energy range in mK)
   10		      1d-6		50d0
 # NBgrid	      Bmin		Bmax (enter B-field range in gauss)
-  1000		      1d0		1200d0
+  10		      0d0		1000d0
+# Grid for calculating MQDT functions (must be 'linear', 'quadratic', 'cubic', or 'log')		      
+  'quadratic'
+
+
+#COMMENT:
+#Inouye et al., Nature 392, 151-154 (1998):
+#Inouye et al. located two Feshbach resonances in an optically trapped BEC of
+#Na-23 atoms in the lowest hyperfine state (i.e., f1 = f2 = 1 and m_f1 = m_f2 =
+#1) at 907 and 853 G. Figure 2 shows the normalized scattering length as a
+#function of magnetic field around the 907 G resonance. No resonances were
+#observed when the atoms were prepared in the (f1 = f2 = 1, m_f1 = m_f2 = -1)
+#state at any field up to 1000 G. 
+#Stenger et al., (1999):
+#Using the same experimental technique as Inouye et al. (1998), Stenger et al.,
+#identified one Feshbach resonance in the (f1 = f2 = 1, m_f1 = m_f2 = -1)
+#hyperfine state near 1195 G. Figure 1 shows the experimental results (i.e.,
+#number of atoms, normalized scattering length, and density as functions of
+#field) for this resonance.
+
+Knoop et al PHYSICAL REVIEW A 83, 042704 (2011)
