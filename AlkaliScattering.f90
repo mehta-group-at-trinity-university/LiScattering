@@ -560,7 +560,7 @@ program main
   double precision, allocatable :: EThreshMat(:,:),TEMP(:,:)
   double precision, allocatable :: cotgamma(:,:,:),Ktemp1(:,:),Ktemp2(:,:),KPQ(:,:),KQP(:,:)
   double precision, allocatable :: SPmat(:,:), Sdressed(:,:), Tdressed(:,:), TPmat(:,:)
-  double precision, allocatable :: VHZ(:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:),Ksr(:,:),RmidArray(:)
+  double precision, allocatable :: VHZ(:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:),Ksr(:,:)!,RmidArray(:)
   double precision VLIM,Rmin,dR,phiL,stepsize,Vmin,ascat
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2
   double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw,wavek
@@ -585,7 +585,7 @@ program main
   read(5,*)
   read(5,*) lwave, mtot, writepot
   read(5,*)
-  read(5,*) Rmin, Rmidmax, RX, RF
+  read(5,*) Rmin, Rmid, RX, RF
   read(5,*)
   read(5,*) NXM, NXF, Nsr, Nlr
   read(5,*)
@@ -707,9 +707,9 @@ program main
 
   ! None of the code above this line depends on the radial grid.
   !----------------------------------------------------------------------------------------------------
-  NRmid = 10
-  allocate(RmidArray(NRmid))
-  call GridMaker(RmidArray,NRmid,15d0,Rmidmax,'linear')
+!  NRmid = 10
+!  allocate(RmidArray(NRmid))
+!  call GridMaker(RmidArray,NRmid,15d0,Rmidmax,'linear')
 
   ! This is just a "dummy" call to SetupPotential to obtain the discpersion C6/C8/C10 coefficients
   ! and to calculate the van der waals length.
@@ -717,7 +717,7 @@ program main
   Ndum = 100
   allocate(Vdum(Ndum),Rdum(Ndum))
   call GridMaker(Rdum,Ndum,3d0,20d0,'linear')
-  call SetupPotential(ISTATE,1,muref,muref,Ndum,VLIM,Rdum*BohrPerAngstrom,Vdum,Cvals)
+  call SetupPotential(ISTATE,1,mu,muref,Ndum,VLIM,Rdum*BohrPerAngstrom,Vdum,Cvals)
   Vmin = MINVAL(Vdum,1)
   write(6,'(A,f12.5)') "Vmin = ", Vmin
   !stepsize = 2d0*pi*0.1d0*(2d0*mu*(Emax - Vmin))**(-0.5d0)
@@ -753,162 +753,157 @@ program main
   call AllocateInterpolatingFunction(NQD,2,InterpQDTriplet)
   
   if(CALCTYPE.eq.1) goto 11
-  do iRmid = NRmid, NRmid
+  ! do iRmid = NRmid, NRmid
+  
+  !Rmid = RmidArray(iRmid)
+  
+  ! prepare some arrays for the log-derivative propagator
+  call GridMaker(Rsr,Nsr,Rmin,Rmid,'linear')
+  call GridMaker(Rlr,Nlr,Rmid,RF,'linear')
+  
+  call SetLogderWeights(wSR,Nsr)
+  call SetLogderWeights(wLR,Nlr)
+  
+  ESTATE = 1
+  call SetupPotential(ISTATE,ESTATE,mu,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrSinglet,Cvals)
+  call SetupPotential(ISTATE,ESTATE,mu,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrSinglet,Cvals)
+  ESTATE = 3
+  call SetupPotential(ISTATE,ESTATE,mu,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrTriplet,Cvals)
+  call SetupPotential(ISTATE,ESTATE,mu,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrTriplet,Cvals)
+  
+  if((iRmid.eq.NRmid).and.writepot) then
+     write(6,'(A)') "See fort.10 and fort.30 for the singlet/triplet potentials"
+     do iR=1, Nsr
+        write(10,*) Rsr(iR), abs((VsrSinglet(iR) - VLR(mu,lwave,Rsr(iR),Cvals))/VsrSinglet(iR))
+        write(30,*) Rsr(iR), abs((VsrTriplet(iR) - VLR(mu,lwave,Rsr(iR),Cvals))/VsrTriplet(iR))
+        !           write(100,*) Rsr(iR), (VLR(mu,lwave,Rsr(iR),Cvals)+Eth(ith), ith=1,size2)
+        !           write(100,*) Rsr(iR), (VsrSinglet(iR)+Eth(ith), ith=1,size2)
+        !           write(101,*) Rsr(iR), (VsrTriplet(iR)+Eth(ith), ith=1,size2)
+     enddo
+  endif
+  
+  call CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,Cvals,phiL,scale) ! calculate the phase standardization for lwave = 0
+  call CalcNewGammaphaseFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,Emin,Emax,&
+       InterpGammaphase,scale,CalcGam,cotgamfile)
+  
+  EThreshMat(:,:) = 0d0
+  
+  call logderQD(lwave,mu,Eth,size2,NQD,NXM,Nsr,wsr,VsrSinglet,VsrTriplet,Rsr,&
+       InterpQDTriplet,InterpQDSinglet,phiL,betavdw,RX,Cvals,scale)
+  call SetupInterpolatingFunction(InterpQDSinglet)
+  call SetupInterpolatingFunction(InterpQDTriplet)
+  SingletQD = Interpolated(0d0,InterpQDSinglet)
+  TripletQD = Interpolated(0d0,InterpQDTriplet)
+  call plotQDs(InterpQDSinglet,InterpQDTriplet)
+  
+  !     TripletQD = -0.08d0
+  write(53,*) "#NBgrid = ", NBgrid
+  do iB = 1, NBgrid
+     !        write(6,*) "phiL = ", phiL
+     yi = ystart
+     call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
+     HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
+     !Find the asymptotic channel states
+     VHZ(:,:) = VlrSinglet(Nlr)*SPmat(:,:) + VlrTriplet(Nlr)*TPmat(:,:) + HHZ2(:,:) 
+     call MyDSYEV(VHZ,size2,Eth,AsymChannels)
 
-     Rmid = RmidArray(iRmid)
-
-     ! prepare some arrays for the log-derivative propagator
-     call GridMaker(Rsr,Nsr,Rmin,Rmid,'linear')
-     call GridMaker(Rlr,Nlr,Rmid,RF,'linear')
-
-     call SetLogderWeights(wSR,Nsr)
-     call SetLogderWeights(wLR,Nlr)
+     do i=1,size2
+        EThreshMat(i,i) = Eth(i)
+     enddo
      
-     ESTATE = 1
-     call SetupPotential(ISTATE,ESTATE,muref,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrSinglet,Cvals)
-     call SetupPotential(ISTATE,ESTATE,muref,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrSinglet,Cvals)
-     ESTATE = 3
-     call SetupPotential(ISTATE,ESTATE,muref,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrTriplet,Cvals)
-     call SetupPotential(ISTATE,ESTATE,muref,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrTriplet,Cvals)
+     write(20,*) Bgrid(iB), Eth  ! Write the collision thresholds to a file
      
-     if((iRmid.eq.NRmid).and.writepot) then
-        write(6,'(A)') "See fort.10 and fort.30 for the singlet/triplet potentials"
-        do iR=1, Nsr
-           write(10,*) Rsr(iR), abs((VsrSinglet(iR) - VLR(mu,lwave,Rsr(iR),Cvals))/VsrSinglet(iR))
-           write(30,*) Rsr(iR), abs((VsrTriplet(iR) - VLR(mu,lwave,Rsr(iR),Cvals))/VsrTriplet(iR))
-           !           write(100,*) Rsr(iR), (VLR(mu,lwave,Rsr(iR),Cvals)+Eth(ith), ith=1,size2)
-!           write(100,*) Rsr(iR), (VsrSinglet(iR)+Eth(ith), ith=1,size2)
-!           write(101,*) Rsr(iR), (VsrTriplet(iR)+Eth(ith), ith=1,size2)
+     !----- Rotate into the asymptotic eigenstates (Use the B-field dressed states) -------!
+     !Rotate the singlet projection operator
+     call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,SPmat,size2,0d0,TEMP,size2)
+     call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Sdressed,size2)
+     
+     !Rotate the triplet projection operator
+     call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,TPmat,size2,0d0,TEMP,size2)
+     call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Tdressed,size2)
+     
+     ! Start the energy loop
+     do iE = 1, 1!NEgrid
+        NumOpen=0        
+        Energy = Eth(1) + Egrid(iE)!*nKPerHartree
+        wavek = sqrt(2*mu*Egrid(iE))
+        !write(6,*) "energy = ", energy
+        do j = 1, size2
+           if(energy.gt.Eth(j)) NumOpen = NumOpen+1
         enddo
-     endif
-
-     call CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,Cvals,phiL,scale) ! calculate the phase standardization for lwave = 0
-     call CalcNewGammaphaseFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,Emin,Emax,&
-          InterpGammaphase,scale,CalcGam,cotgamfile)
-
-     EThreshMat(:,:) = 0d0
-     
-     call logderQD(lwave,mu,Eth,size2,NQD,NXM,Nsr,wsr,VsrSinglet,VsrTriplet,Rsr,&
-          InterpQDTriplet,InterpQDSinglet,phiL,betavdw,RX,Cvals,scale)
-     call SetupInterpolatingFunction(InterpQDSinglet)
-     call SetupInterpolatingFunction(InterpQDTriplet)
-     SingletQD = Interpolated(0d0,InterpQDSinglet)
-     TripletQD = Interpolated(0d0,InterpQDTriplet)
-     call plotQDs(InterpQDSinglet,InterpQDTriplet)
-
-     !     TripletQD = -0.08d0
-     write(53,*) "#NBgrid = ", NBgrid
-     do iB = 1, NBgrid
-!        write(6,*) "phiL = ", phiL
-        yi = ystart
-        call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
-        HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
-        !Find the asymptotic channel states
-        VHZ(:,:) = VlrSinglet(Nlr)*SPmat(:,:) + VlrTriplet(Nlr)*TPmat(:,:) + HHZ2(:,:) 
-        !     call MyDSYEV(VHZ(:,:),size2,EVAL,AsymChannels)
-        call MyDSYEV(VHZ,size2,Eth,AsymChannels)
-        !     Eth(:)=EVAL(:)
-        do i=1,size2
-           EThreshMat(i,i) = Eth(i)
-        enddo
+        if(NumOpen.gt.1) then
+           write(6,*) "More than one open channel -- must modify the algorithm.  Stopping"
+           stop
+        endif
         
-        Write(20,*) Bgrid(iB), Eth
-        !Calculate the tan(gamma) matrix
-
-        !----- Rotate into the asymptotic eigenstates (Use the B-field dressed states) -------!
-        !Rotate the singlet projection operator
-        call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,SPmat,size2,0d0,TEMP,size2)
-        call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Sdressed,size2)
-        
-        !Rotate the triplet projection operator
-        call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,TPmat,size2,0d0,TEMP,size2)
-        call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Tdressed,size2)
-        
-        ! Start the energy loop
-        do iE = 1, 1!NEgrid
-           NumOpen=0        
-           Energy = Eth(1) + Egrid(iE)!*nKPerHartree
-           wavek = sqrt(2*mu*Egrid(iE))
-           !write(6,*) "energy = ", energy
-           do j = 1, size2
-              if(energy.gt.Eth(j)) NumOpen = NumOpen+1
-           enddo
-           if(NumOpen.gt.1) then
-              write(6,*) "More than one open channel -- must modify the algorithm.  Stopping"
-              stop
-           endif
-
-           call CalcTanGamma(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,iE,cotgamma,InterpGammaphase,scale)
-!           write(6,*) "done."
-           if((CALCTYPE.eq.2).and.(iE.eq.1)) then
-              !call logderprop(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,RotatedVsrHZ,size2)
-              call logderpropB(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,Sdressed,Tdressed,EthreshMat,VsrSinglet,VsrTriplet,size2)
-              call CalcKsr(ym, Ksr, size2, NXM, RX, Rsr(Nsr), energy, Eth, lwave, mu, Cvals, betavdw, phiL,scale)
-              write(503,'(100d15.5)') Bgrid(iB), ((Ksr(i,j), j=1,i), i=1,size2)
-              write(53,40) Bgrid(iB)
-              
-              DO j = 1,size2
-                 WRITE(53,40) (Ksr(j,k), k = 1,size2)
-              ENDDO
-              
-
-           else if (CALCTYPE.eq.3) then
-              Ksr(:,:) = tan(pi*TripletQD) * Tdressed(:,:) + tan(pi*SingletQD) * Sdressed(:,:)
-           endif
+        call CalcTanGamma(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,iE,cotgamma,InterpGammaphase,scale)
+        !           write(6,*) "done."
+        if((CALCTYPE.eq.2).and.(iE.eq.1)) then
+           !call logderprop(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,RotatedVsrHZ,size2)
+           call logderpropB(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,Sdressed,Tdressed,EthreshMat,VsrSinglet,VsrTriplet,size2)
+           call CalcKsr(ym, Ksr, size2, NXM, RX, Rsr(Nsr), energy, Eth, lwave, mu, Cvals, betavdw, phiL,scale)
+           write(503,'(100d15.5)') Bgrid(iB), ((Ksr(i,j), j=1,i), i=1,size2)
+           write(53,40) Bgrid(iB)
+           call printmatrix(Ksr, size2,size2, 53)
+           !              DO j = 1,size2
+           !                 WRITE(53,40) (Ksr(j,k), k = 1,size2)
+           !              ENDDO
            
            
-           call MyDSYEV(Ksr,size2,EVAL,EVEC)
-
-
-!           write(6,*) Bgrid(iB), Ktilde!(1d0-Ktilde)*abar(lwave) !Rmid, (atan(EVAL(i))/Pi, i=1,size2)
-           write(52,*) Bgrid(iB), (atan(EVAL(i))/Pi, i=1,size2)!EVAL!,Ksr
-
-           Ktemp1 = Ksr(2:size2,2:size2) + cotgamma(:,:,iE)
-           KQP = Ksr(2:size2,1:1)
-           KPQ = Ksr(1:1,2:size2)
-           
-           call sqrmatinv(Ktemp1,size2-1)
-           Ktemp2 = MATMUL(KPQ,MATMUL(Ktemp1,KQP))
-!           write(6,*) "Ktemp2:"
-           !           call printmatrix(Ktemp2,1,1,6)
-
-           Ktilde = Ksr(1,1) - Ktemp2(1,1)
-           ascat = (1d0-Ktilde)*abar(lwave)*betavdw
-           write(6,*) Bgrid(iB), ascat , 8d0*pi*ascat**2*(Bohrpercm**2)
-           write(51,*) Bgrid(iB), ascat , 8d0*pi*ascat**2*(Bohrpercm**2)
-!           write(6,*) Bgrid(iB),  (1d0-Ktilde)*abar(lwave)*betavdw/(1d0 + (abar(lwave)*betavdw*wavek)**2 * Ktilde)
-!           write(51,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw/(1d0 + (abar(lwave)*betavdw*wavek)**2 * Ktilde)
-        enddo
+        else if (CALCTYPE.eq.3) then
+           Ksr(:,:) = tan(pi*TripletQD) * Tdressed(:,:) + tan(pi*SingletQD) * Sdressed(:,:)
+        endif
+        
+        
+        call MyDSYEV(Ksr,size2,EVAL,EVEC)
+                
+        !           write(6,*) Bgrid(iB), Ktilde!(1d0-Ktilde)*abar(lwave) !Rmid, (atan(EVAL(i))/Pi, i=1,size2)
+        write(52,*) Bgrid(iB), (atan(EVAL(i))/Pi, i=1,size2)!EVAL!,Ksr
+        
+        Ktemp1 = Ksr(2:size2,2:size2) + cotgamma(:,:,iE)
+        KQP = Ksr(2:size2,1:1)
+        KPQ = Ksr(1:1,2:size2)
+        
+        call sqrmatinv(Ktemp1,size2-1)
+        Ktemp2 = MATMUL(KPQ,MATMUL(Ktemp1,KQP))
+        !           write(6,*) "Ktemp2:"
+        !           call printmatrix(Ktemp2,1,1,6)
+        
+        Ktilde = Ksr(1,1) - Ktemp2(1,1)
+        ascat = (1d0-Ktilde)*abar(lwave)*betavdw
+        write(6,*) Bgrid(iB), ascat , 8d0*pi*ascat**2*(Bohrpercm**2)
+        write(51,*) Bgrid(iB), ascat , 8d0*pi*ascat**2*(Bohrpercm**2)
+        !           write(6,*) Bgrid(iB),  (1d0-Ktilde)*abar(lwave)*betavdw/(1d0 + (abar(lwave)*betavdw*wavek)**2 * Ktilde)
+        !           write(51,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw/(1d0 + (abar(lwave)*betavdw*wavek)**2 * Ktilde)
      enddo
   enddo
+  !  enddo
   stop
 11 continue  
   !----------------------------------------------------------------------------------------------------
   !This next loop is does the full log-derivative calculation
-
   ! prepare some arrays for the log-derivative propagator
-  Rmid = RmidArray(NRmid)     
+
   call GridMaker(Rsr,Nsr,Rmin,Rmid,'linear')  ! Make the radial grids
   call GridMaker(Rlr,Nlr,Rmid,RF,'linear')
   call SetLogderWeights(wSR,Nsr)
   call SetLogderWeights(wLR,Nlr)
-
-  
+    
   ESTATE = 1
-  call SetupPotential(ISTATE,ESTATE,muref,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrSinglet,Cvals)
-  call SetupPotential(ISTATE,ESTATE,muref,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrSinglet,Cvals)
+  call SetupPotential(ISTATE,ESTATE,mu,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrSinglet,Cvals)
+  call SetupPotential(ISTATE,ESTATE,mu,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrSinglet,Cvals)
   ESTATE = 3
-  call SetupPotential(ISTATE,ESTATE,muref,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrTriplet,Cvals)
-  call SetupPotential(ISTATE,ESTATE,muref,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrTriplet,Cvals)
+  call SetupPotential(ISTATE,ESTATE,mu,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrTriplet,Cvals)
+  call SetupPotential(ISTATE,ESTATE,mu,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrTriplet,Cvals)
   
   write(51,*)
-
+  
   do iB = 1, NBgrid
      yi = ystart
-
+     
      call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
      HHZ2 = HHZ2*MHzPerHartree
-
+     
      !Find the asymptotic channel states
      VHZ(:,:) = VlrSinglet(Nlr)*SPmat(:,:) + VlrTriplet(Nlr)*TPmat(:,:) + HHZ2(:,:) 
      call MyDSYEV(VHZ(:,:),size2,Eth,AsymChannels)
@@ -916,7 +911,7 @@ program main
      do i=1,size2
         EThreshMat(i,i) = Eth(i)
      enddo
-
+     
      Write(20,*) Bgrid(iB), Eth
      !----- Rotate into the asymptotic eigenstates (Use the B-field dressed states) -------!
      !Rotate the singlet projection operator
@@ -927,28 +922,18 @@ program main
      call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,TPmat,size2,0d0,TEMP,size2)
      call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Tdressed,size2)
 
-!     do iR = 1, Nsr
-!        RotatedVsrHZ(:,:,iR) = VsrSinglet(iR)*Sdressed(:,:) + VsrTriplet(iR)*Tdressed(:,:) + EThreshMat(:,:)
-!     enddo
-!     do iR = 1, Nlr
-!        RotatedVlrHZ(:,:,iR) = VlrSinglet(iR)*Sdressed(:,:) + VlrTriplet(iR)*Tdressed(:,:) + EThreshMat(:,:)
-!     enddo
-
      ! Start the energy loop
      do iE = 1, 1!NEgrid
         NumOpen=0        
-        Energy = Eth(1) + Egrid(iE)!*nKPerHartree
-!        write(6,*) "energy = ", energy
+        Energy = Eth(1) + Egrid(iE)
+
         do j = 1, size2
            if(energy.gt.Eth(j)) NumOpen = NumOpen+1
         enddo
 
-        !call logderpropA(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,RotatedVsrHZ,size2)
         call logderpropB(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,Sdressed,Tdressed,EthreshMat,VsrSinglet,VsrTriplet, size2) 
-        !call logderpropA(mu,Energy,identity,wLR,Nlr,ym,yf,Rlr,RotatedVlrHZ,size2)
         call logderpropB(mu,Energy,identity,wLR,Nlr,ym,yf,Rlr,Sdressed,Tdressed,EthreshMat,VlrSinglet, VlrTriplet, size2)
         call CalcK(yf,RF,SD,mu,3d0,1d0,Energy,Eth,size2,NumOpen)
-
 
         ! Various output statements:
         if(iE.eq.1) then ! Write the field dependence at the lowest energy (close to threshold)
@@ -959,9 +944,6 @@ program main
         endif
 
         write(50,'(100d20.10)') Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)
-
-
-
 
      enddo
   enddo
