@@ -549,8 +549,8 @@ program main
   integer NPP, iR, iB, ihf, n, i, j, k, A, nc, nr, ESTATE, ISTATE, IMN1,cotgamfile
   integer nspin1, nspin2, espin1, espin2 !nspin is the nuclear spin and espin is the electronic spin
   integer i1,i2,s1,s2,S,sym,size1,size2,NBgrid,NEgrid,mtot, lwave,NumOpen
-  integer Nsr, Nlr, CALCTYPE
-  logical writepot,CalcGam
+  integer Nsr, Nlr, CALCTYPE,MQDTMODE
+  logical writepot
   double precision, allocatable :: Rsr(:), Rlr(:),VsrSinglet(:),VsrTriplet(:),VlrSinglet(:),VlrTriplet(:)
 !  double precision, allocatable :: RotatedVsrHZ(:,:,:),RotatedVlrHZ(:,:,:)
   double precision, allocatable :: wSR(:),wLR(:),Vdum(:),Rdum(:)
@@ -582,7 +582,7 @@ program main
   
   read(5,*)
   read(5,*)
-  read(5,*) ISTATE, sym, CALCTYPE, CalcGam
+  read(5,*) ISTATE, sym, CALCTYPE, MQDTMODE
   read(5,*)
   read(5,*) lwave, mtot, writepot
   read(5,*)
@@ -731,22 +731,14 @@ program main
   RF = RF*betavdw
   !Nsr = multnsr!*int(Rmidmax/stepsize)
   !Nlr = multnlr!Nsr*(int(RF/Rmidmax))
-  write(6,*) "Nsr and Nrl = ", Nsr, Nlr
   
-  ! Diagonalize the HF-Zeeman Hamiltonian for the largest field values so we know the range
-  ! of energies needed for the closed channel MQDT parameter cot(gamma)
-  call MakeHHZ2(Bgrid(NBgrid),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
-  HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
-  call MyDSYEV(HHZ2,size2,Eth,AsymChannels)
-  !Now that we know Eth at the largest field value, we can compute an interpolated function for cot(gamma)
-
   write(6,*) "Rmin = ", Rmin
   write(6,*) "RX = ", RX
   write(6,*) "RMid = ", Rmid
   write(6,*) "RF = ", RF
-
+  write(6,*) "Nsr and Nrl = ", Nsr, Nlr
+  
   allocate(VHZ(size2,size2))
-!  allocate(RotatedVsrHZ(size2,size2,Nsr),RotatedVlrHZ(size2,size2,Nlr))
   allocate(Rsr(Nsr),Rlr(Nlr),wSR(Nsr),wLR(Nlr),VsrSinglet(Nsr),VlrSinglet(Nlr),VsrTriplet(Nsr),VlrTriplet(Nlr))
 
   NQD = 20
@@ -757,32 +749,30 @@ program main
   
   ! prepare some arrays for the log-derivative propagator
   call GridMaker(Rsr,Nsr,Rmin,Rmid,'linear')
-!  call GridMaker(Rlr,Nlr,Rmid,RF,'linear')
-  
   call SetLogderWeights(wSR,Nsr)
-  call SetLogderWeights(wLR,Nlr)
   
   ESTATE = 1
   call SetupPotential(ISTATE,ESTATE,mu,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrSinglet,Cvals)
-!  call SetupPotential(ISTATE,ESTATE,mu,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrSinglet,Cvals)
   ESTATE = 3
   call SetupPotential(ISTATE,ESTATE,mu,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrTriplet,Cvals)
-!  call SetupPotential(ISTATE,ESTATE,mu,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrTriplet,Cvals)
   
   if((iRmid.eq.NRmid).and.writepot) then
      write(6,'(A)') "See fort.10 and fort.30 for the singlet/triplet potentials"
      do iR=1, Nsr
         write(10,*) Rsr(iR), abs((VsrSinglet(iR) - VLR(mu,lwave,Rsr(iR),Cvals))/VsrSinglet(iR))
         write(30,*) Rsr(iR), abs((VsrTriplet(iR) - VLR(mu,lwave,Rsr(iR),Cvals))/VsrTriplet(iR))
-        !           write(100,*) Rsr(iR), (VLR(mu,lwave,Rsr(iR),Cvals)+Eth(ith), ith=1,size2)
-        !           write(100,*) Rsr(iR), (VsrSinglet(iR)+Eth(ith), ith=1,size2)
-        !           write(101,*) Rsr(iR), (VsrTriplet(iR)+Eth(ith), ith=1,size2)
      enddo
   endif
-  
+
+  ! Diagonalize the HF-Zeeman Hamiltonian for the largest field values so we know the range
+  ! of energies needed for the closed channel MQDT parameter cot(gamma)
+  call MakeHHZ2(Bhuge,AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
+  HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
+  call MyDSYEV(HHZ2,size2,Eth,AsymChannels)
+  !Now that we know Eth at the largest field value, we can compute an interpolated function for cot(gamma)
   call CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,Cvals,phiL,scale) ! calculate the phase standardization for lwave = 0
   call CalcNewGammaphaseFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,&
-       InterpGammaphase,scale,CalcGam,cotgamfile)
+       InterpGammaphase,scale,MQDTMODE,cotgamfile)
   
   EThreshMat(:,:) = 0d0
   
@@ -1766,7 +1756,7 @@ subroutine CalcCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Eth,E
 end subroutine CalcCotGammaFunction
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine CalcNewGammaphaseFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Eth,&
-     InterpGammaphase,scale,CalcGam,cotgamfile)
+     InterpGammaphase,scale,MQDTMODE,cotgamfile)
   !This calculates the tan(gamma) MQDT parameter.  See Ruzic's PRA for details
   ! While in principle this can be calculated once as a function of energy, interpolated and
   ! evaluated at the relative energy for each channel, here I'm doing it the "brute force" way
@@ -1775,7 +1765,7 @@ subroutine CalcNewGammaphaseFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,
   use bspline
   use units
   implicit none
-  integer lwave, iE, NE,ix, NXF,size, kx, cotgamfile
+  integer lwave, iE, NE,ix, NXF,size, kx, cotgamfile,MQDTMODE
   double precision RX, RF, mu, betavdw, Cvals(4), phiL,EvdW,E1,E2,ldg0,ldf0,phir,tp
   double precision x, xscale, si, sk, sip, skp, ldk, ldi, kappa, f0, f0p, g0, g0p,Eth(size),ct
   double precision alpha0(2),alphaf(2),energy, tangamma, gam
@@ -1783,21 +1773,22 @@ subroutine CalcNewGammaphaseFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,
   CHARACTER(LEN=*), INTENT(IN) :: scale
   double precision, external :: ksqrLR, VLR, VLRPrime, abar
   type(InterpolatingFunction) :: InterpGammaphase
-  logical CalcGam
-  EvdW = 1d0/(2d0*mu*betavdw**2)
 
-  xscale=0d0
-  NE = 500
+  EvdW = 1d0/(2d0*mu*betavdw**2)
   kx=3
 
-  E1 =  - (Eth(size)-Eth(1))
-  E2 = -1d-12
 
-  write(6,*) "E1, E2 = ",E1, E2
-  write(6,*) "The energy range in van der Waals units is: ",E1/EvdW, E2/EvdW
-  call AllocateInterpolatingFunction(NE,kx,InterpGammaphase)
-
-  If(CalcGam) then
+  If(MQDTMODE.eq.1) then
+     xscale=0d0
+     NE = 500
+     
+     E1 =  - (Eth(size)-Eth(1))
+     E2 = -1d-12
+     
+     write(6,*) "E1, E2 = ",E1, E2
+     write(6,*) "The energy range in van der Waals units is: ",E1/EvdW, E2/EvdW
+     
+     call AllocateInterpolatingFunction(NE,kx,InterpGammaphase)
      call GridMaker(InterpGammaphase%x, nE, E1, E2, "neglog")
      write(6,'(A)') "Calculating the MQDT parameter cot(gamma) as a function of energy"
      do iE = 1, NE
@@ -1822,16 +1813,13 @@ subroutine CalcNewGammaphaseFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,
      enddo
      write(6,*) "done."
      call smoothgamma(InterpGammaPhase%y,NE)
+     write(cotgamfile, *) NE
      do iE = 1, NE
         write(cotgamfile, *) InterpGammaphase%x(iE), InterpGammaphase%y(iE)!, &
-!             atan(abar(lwave)*sqrt(2*mu*abs(InterpGammaPhase%x(iE)))*betavdw), &
-!             abar(lwave)*sqrt(2*mu*abs(InterpGammaPhase%x(iE)))*betavdw
-        write(500, *) InterpGammaphase%x(iE)/EvdW, InterpGammaphase%y(iE), &
-             atan(abar(lwave)*sqrt(2*mu*abs(InterpGammaPhase%x(iE)))*betavdw), &
-             abar(lwave)*sqrt(2*mu*abs(InterpGammaPhase%x(iE)))*betavdw
-
      enddo
   else
+     read(cotgamfile,*) NE
+     call AllocateInterpolatingFunction(NE,kx,InterpGammaphase)
      do iE = 1, NE
         read(cotgamfile, *) InterpGammaphase%x(iE), InterpGammaphase%y(iE)
      enddo
