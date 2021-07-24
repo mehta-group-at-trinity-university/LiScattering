@@ -546,7 +546,7 @@ program main
   use quadrature
 
   implicit none
-  integer NPP, iR, iB, ihf, n, i, j, k, A, nc, nr, ESTATE, ISTATE, IMN1,cotgamfile
+  integer NPP, iR, iB, ihf, n, i, j, k, A, nc, nr, ESTATE, ISTATE, IMN1,cotgamfile,STQDfile
   integer nspin1, nspin2, espin1, espin2 !nspin is the nuclear spin and espin is the electronic spin
   integer i1,i2,s1,s2,S,sym,size1,size2,NBgrid,NEgrid,mtot, lwave,NumOpen
   integer Nsr, Nlr, CALCTYPE,MQDTMODE
@@ -558,25 +558,25 @@ program main
   double precision, allocatable :: weights(:),ystart(:,:),yi(:,:),ym(:,:),yf(:,:),Kmat(:,:),identity(:,:)
   double precision, allocatable :: HHZ(:,:), Bgrid(:),Egrid(:), EVAL(:), EVEC(:,:),EVECTEMP(:,:)
   double precision, allocatable :: EThreshMat(:,:),TEMP(:,:)
-  double precision, allocatable :: cotgamma(:,:,:),Ktemp1(:,:),Ktemp2(:,:),KPQ(:,:),KQP(:,:)
+  double precision, allocatable :: cotgamma(:,:),Ktemp1(:,:),Ktemp2(:,:),KPQ(:,:),KQP(:,:)
   double precision, allocatable :: SPmat(:,:), Sdressed(:,:), Tdressed(:,:), TPmat(:,:)
   double precision, allocatable :: VHZ(:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:),Ksr(:,:)!,RmidArray(:)
-  double precision, allocatable :: KsrMQDT(:,:,:), KsrFT(:,:)
+  double precision, allocatable :: KsrMQDT(:,:), KsrFT(:,:)
   double precision VLIM,Rmin,dR,phiL,stepsize,Vmin,ascat
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2
   double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw,wavek
-  integer iE, iRmid,NRmid,Ndum,NXM,NXF,multnsr, multnlr,ith,NQD
+  integer iE, iRmid,NRmid,Ndum,NXM,NXF,multnsr, multnlr,ith,NQD,NBGridFine
   double precision RX, Rmid, RF, Cvals(4), Ktilde
-  double precision SingletQD, TripletQD, x,Bhuge
+  double precision SingletQD, TripletQD, x,Bhuge,Ebar1,Ebar3
   double precision, external :: VLR, rint, abar
   character(len=20), external :: str
-  CHARACTER(LEN=20) scale
+  CHARACTER(LEN=20) scale, act, dum
   type(hf1atom) a1, a2
   type(hf2atom) mstate1, mstate2
   type(hf1atom), allocatable :: hf1(:) 
   TYPE(ScatData) :: SD
   type(InterpolatingFunction) :: InterpGammaphase, InterpQDSinglet,InterpQDTriplet
-
+  type(InterpolatingMatrix) :: InterpKsr
 !  call testinterpolation
  
   
@@ -592,7 +592,7 @@ program main
   read(5,*)
   read(5,*) NEgrid, Emin, Emax  ! enter in mK
   read(5,*)
-  read(5,*) NBgrid, Bmin, Bmax, Bhuge  ! enter in Gauss
+  read(5,*) NBgrid, Bmin, Bmax, Bhuge, NBgridfine  ! enter in Gauss
   read(5,*)
   read(5,*) scale
 
@@ -601,7 +601,11 @@ program main
 
   !make the magnetic field grid and energy grid
   allocate(Egrid(NEgrid),Bgrid(NBgrid))
-  call GridMaker(Bgrid,NBgrid,Bmin,Bmax,'linear')
+  if((CalcType.eq.2).and.(MQDTMODE.eq.1)) then
+     call GridMaker(Bgrid,NBgrid,Bmin,Bmax,'quadratic')
+  else
+     call GridMaker(Bgrid,NBgrid,Bmin,Bmax,'linear')
+  endif
   call GridMaker(Egrid,NEgrid,Emin,Emax,'linear') ! measure the collision energy in Hartree
   !--------------------------------------------------!
   call AtomData(ISTATE, AHf1, nspin1, espin1, gi1, MU, MUREF, mass1)  !atom 1 data (and atom 2 for identical particles)
@@ -658,7 +662,7 @@ program main
 !  stop
   allocate(SPmat(size2,size2), TPmat(size2,size2))
   allocate(Sdressed(size2,size2), Tdressed(size2,size2))
-  allocate(EThreshMat(size2,size2),Ksr(size2,size2))
+  allocate(EThreshMat(size2,size2),Ksr(size2,size2),KsrMQDT(size2,size2),KsrFT(size2,size2))
   
   S = 0
   call MakeSTHFProj(S, nspin1, nspin1, espin1, espin1, hf2symTempGlobal, size2, SPmat)
@@ -677,7 +681,7 @@ program main
   allocate(EVEC(size2,size2),EVECTEMP(size2,size2),EVAL(size2))
   call AllocateScat(SD,size2)
   allocate(identity(size2,size2),ystart(size2,size2),yi(size2,size2),ym(size2,size2),yf(size2,size2),Eth(size2))
-  allocate(cotgamma(size2-1,size2-1,NEgrid))
+  allocate(cotgamma(size2-1,size2-1))
   allocate(Ktemp1(size2-1,size2-1),Ktemp2(1,1))
   allocate(KPQ(1,size2-1),KQP(size2-1,1))
   identity(:,:)=0d0
@@ -688,17 +692,28 @@ program main
      ystart(i,i)=1d20
   enddo
 
+  if (MQDTMODE.eq.1) then
+     act = 'WRITE'
+  else if (MQDTMODE.gt.1) then
+     act = 'READ'
+  endif
   cotgamfile = 49
-  open(unit = cotgamfile, file = "Gammaphase-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))//"-"//trim(str(NINT(RF)))//"a0.dat")
+  STQDfile = 54
+  if(CALCTYPE.ne.1) then
+     open(unit = cotgamfile, file = "Gammaphase-"//trim(str(ISTATE))//"-"//&
+          trim(str(NINT(RF)))//"a0.dat",ACTION=act)
+     open(unit = 53, file = "KsrFieldDependence-"//trim(str(ISTATE))//"-"// &
+          "-"//trim(str(NINT(Bmin)))//"G-"//trim(str(NINT(Bmax)))//"G.dat",ACTION=act)
+     open(unit = STQDfile, file = "STQDFieldDependence-"//trim(str(ISTATE))// &
+          "-"//trim(str(NINT(Bmin)))//"G-"//trim(str(NINT(Bmax)))//"G.dat",ACTION=act)
+       open(unit = 52, file = "QDFieldDependence-"//trim(str(ISTATE))//"-"// &
+       "-"//trim(str(NINT(Bmin)))//"G-"//trim(str(NINT(Bmax)))//"G.dat",ACTION=act)
+  endif
   open(unit = 20, file = "CollisionThresholds-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))// &
        "-"//trim(str(NINT(Bmin)))//"G-"//trim(str(NINT(Bmax)))//"G.dat")
   open(unit = 50, file = "SigmaEnergyDependence-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))// &
        "-"//trim(str(NINT(Bmin)))//"G-"//trim(str(NINT(Bmax)))//"G.dat")
   open(unit = 51, file = "ScatLenFieldDependence-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))// &
-       "-"//trim(str(NINT(Bmin)))//"G-"//trim(str(NINT(Bmax)))//"G.dat")
-  open(unit = 52, file = "QDFieldDependence-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))// &
-       "-"//trim(str(NINT(Bmin)))//"G-"//trim(str(NINT(Bmax)))//"G.dat")
-  open(unit = 53, file = "KsrFieldDependence-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))// &
        "-"//trim(str(NINT(Bmin)))//"G-"//trim(str(NINT(Bmax)))//"G.dat")
 
   write(6,'(A)') "See file CollisionThresholds.dat for the field dependence of the scattering thresholds."
@@ -769,25 +784,25 @@ program main
   call MakeHHZ2(Bhuge,AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
   HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
   call MyDSYEV(HHZ2,size2,Eth,AsymChannels)
+  write(6,*) "RANGE = ", -abs(Eth(size2)-Eth(1)), abs(Eth(size2)-Eth(1))
   !Now that we know Eth at the largest field value, we can compute an interpolated function for cot(gamma)
+  if (MQDTMODE.gt.1) goto 12
   call CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,Cvals,phiL,scale) ! calculate the phase standardization for lwave = 0
   call CalcNewGammaphaseFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,&
        InterpGammaphase,scale,MQDTMODE,cotgamfile)
-  
+
   EThreshMat(:,:) = 0d0
   
   call logderQD(lwave,mu,Eth,size2,NQD,NXM,Nsr,wsr,VsrSinglet,VsrTriplet,Rsr,&
-       InterpQDTriplet,InterpQDSinglet,phiL,betavdw,RX,Cvals,scale)
+       InterpQDTriplet,InterpQDSinglet,phiL,betavdw,RX,Cvals,scale,MQDTMODE,STQDfile)
   call SetupInterpolatingFunction(InterpQDSinglet)
   call SetupInterpolatingFunction(InterpQDTriplet)
   SingletQD = Interpolated(0d0,InterpQDSinglet)
   TripletQD = Interpolated(0d0,InterpQDTriplet)
-  call plotQDs(InterpQDSinglet,InterpQDTriplet)
-  
-  !     TripletQD = -0.08d0
-  write(53,*) "#NBgrid = ", NBgrid
+  !call plotQDs(InterpQDSinglet,InterpQDTriplet)
+
+  write(53,*)  "#   ", NBgrid
   do iB = 1, NBgrid
-     !        write(6,*) "phiL = ", phiL
      yi = ystart
      call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
      HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
@@ -823,7 +838,7 @@ program main
      call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Tdressed,size2)
      
      ! Start the energy loop
-     do iE = 1, 1!NEgrid
+     do iE = 1, 1
         NumOpen=0        
         Energy = Eth(1) + Egrid(iE)!*nKPerHartree
         wavek = sqrt(2*mu*Egrid(iE))
@@ -836,19 +851,13 @@ program main
            stop
         endif
         
-        call SetupCotGamma(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,iE,cotgamma,InterpGammaphase,scale)
+        call SetupCotGamma(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,iE,cotgamma,InterpGammaphase,scale)  
         !           write(6,*) "done."
         if((CALCTYPE.eq.2).and.(iE.eq.1)) then
-           !call logderprop(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,RotatedVsrHZ,size2)
+           !call logderprop(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,RotatedVsrHZ,sqize2)
            call logderpropB(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,Sdressed,Tdressed,EthreshMat,VsrSinglet,VsrTriplet,size2)
            call CalcKsr(ym, Ksr, size2, NXM, RX, Rsr(Nsr), energy, Eth, lwave, mu, Cvals, betavdw, phiL,scale)
            write(53,'(100d20.10)') Bgrid(iB), ((Ksr(i,j), j=1,i), i=1,size2)
-!           write(53,40) Bgrid(iB)
-!           call printmatrix(Ksr, size2,size2, 53)
-           !              DO j = 1,size2
-           !                 WRITE(53,40) (Ksr(j,k), k = 1,size2)
-           !              ENDDO
-           
            
         else if (CALCTYPE.eq.3) then
            Ksr(:,:) = tan(pi*TripletQD) * Tdressed(:,:) + tan(pi*SingletQD) * Sdressed(:,:)
@@ -859,7 +868,7 @@ program main
         !           write(6,*) Bgrid(iB), Ktilde!(1d0-Ktilde)*abar(lwave) !Rmid, (atan(EVAL(i))/Pi, i=1,size2)
         write(52,*) Bgrid(iB), (atan(EVAL(i))/Pi, i=1,size2)!EVAL!,Ksr
         
-        Ktemp1 = Ksr(2:size2,2:size2) + cotgamma(:,:,iE)
+        Ktemp1 = Ksr(2:size2,2:size2) + cotgamma(:,:)
         KQP = Ksr(2:size2,1:1)
         KPQ = Ksr(1:1,2:size2)
         
@@ -875,12 +884,100 @@ program main
         !           write(6,*) Bgrid(iB),  (1d0-Ktilde)*abar(lwave)*betavdw/(1d0 + (abar(lwave)*betavdw*wavek)**2 * Ktilde)
         !           write(51,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw/(1d0 + (abar(lwave)*betavdw*wavek)**2 * Ktilde)
      enddo
-  enddo
-  !  enddo
+  enddo  
   stop
 
-11 continue  
+  ! Use this next part if you want to read in Ksr and gamma(E) in the MQDT/FT calculation
+12 continue
+
+  call CalcNewGammaphaseFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,&
+       InterpGammaphase,scale,MQDTMODE,cotgamfile)
+  call logderQD(lwave,mu,Eth,size2,NQD,NXM,Nsr,wsr,VsrSinglet,VsrTriplet,Rsr,&
+       InterpQDTriplet,InterpQDSinglet,phiL,betavdw,RX,Cvals,scale,MQDTMODE,STQDfile)
+  call SetupInterpolatingFunction(InterpQDSinglet)
+  call SetupInterpolatingFunction(InterpQDTriplet)
+  
+  deallocate(Bgrid)
+  read(53,*) dum, NBgrid
+  write(6,*) "Reading in NBgrid = ", NBgrid
+  allocate(Bgrid(NBgridfine))
+  call GridMaker(Bgrid,NBgridfine,Bmin,Bmax,'linear')
+  
+  call AllocateInterpolatingMatrix(NBgrid,3,size2,size2,InterpKsr)
+  do iB = 1, NBgrid
+     read(53,*) InterpKsr%x(iB), ((InterpKsr%M(iB,i,j), j=1,i), i=1,size2)
+     do i=1,size2
+        do j=1,i
+           InterpKsr%M(iB,j,i) = InterpKsr%M(iB,i,j)
+        enddo
+     enddo
+  enddo
+  call SetupInterpolatingMatrix(InterpKsr)
+  iE=1
+  do iB = 1, NBgridfine
+     call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
+     HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
+     !Find the asymptotic channel states
+     call MyDSYEV(HHZ2,size2,Eth,AsymChannels)
+
+     if(CalcType.eq.2) then
+        Ksr = InterpolatedMatrix(Bgrid(iB),InterpKsr)
+     else if (CALCTYPE.eq.3) then
+             !----- Rotate into the asymptotic eigenstates (Use the B-field dressed states) -------!
+     !Rotate the singlet projection operator
+        TEMP = 0d0
+        call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,SPmat,size2,0d0,TEMP,size2)
+        call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Sdressed,size2)
+        
+        !Rotate the triplet projection operator
+        call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,TPmat,size2,0d0,TEMP,size2)
+        call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Tdressed,size2)
+        
+        Ebar1 = 0d0
+        Ebar3 = 0d0
+        
+        do i=1,size2
+           Ebar1 = Ebar1 + (Egrid(iE) + Eth(1) - Eth(i))*Sdressed(i,i)
+           Ebar3 = Ebar3 + 0.25d0*(Egrid(iE) + Eth(1) - Eth(i))*Tdressed(i,i)
+        enddo
+!        write(6,*) "Ebar1 = ",Ebar1, "Ebar3 = ", Ebar3
+!        write(6,*) "mu1(Ebar1) = ", Interpolated(Ebar1,InterpQDSinglet), "mu1(0)=",Interpolated(0d0,InterpQDSinglet)
+!        write(6,*) "mu3(Ebar3) = ", Interpolated(Ebar3,InterpQDTriplet), "mu3(0)=",Interpolated(0d0,InterpQDTriplet)
+!!$        stop
+!        
+!        Ksr(:,:) = tan(pi*Interpolated(0d0,InterpQDTriplet)) * Tdressed(:,:) &
+!             + tan(pi*Interpolated(0d0,InterpQDSinglet)) * Sdressed(:,:)
+        Ksr(:,:) = tan(pi*Interpolated(Ebar3,InterpQDTriplet)) * Tdressed(:,:) &
+             + tan(pi*Interpolated(Ebar1,InterpQDSinglet)) * Sdressed(:,:)
+     endif
+     
+     call SetupCotGamma(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,iE,cotgamma,InterpGammaphase,scale)  
+     !write(504,*) Bgrid(iB), ((Ksr(i,j), j=1,i), i=1,size2)
+     Ktemp1 = Ksr(2:size2,2:size2) + cotgamma(:,:)
+     KQP = Ksr(2:size2,1:1)
+     KPQ = Ksr(1:1,2:size2)
+        
+     call sqrmatinv(Ktemp1,size2-1)
+     Ktemp2 = MATMUL(KPQ,MATMUL(Ktemp1,KQP))
+     !           write(6,*) "Ktemp2:"
+     !           call printmatrix(Ktemp2,1,1,6)
+     
+     Ktilde = Ksr(1,1) - Ktemp2(1,1)
+     ascat = (1d0-Ktilde)*abar(lwave)*betavdw
+
+!     write(6,*) Bgrid(iB), ascat , 8d0*pi*ascat**2*(Bohrpercm**2)
+     write(51,*) Bgrid(iB), ascat , 8d0*pi*ascat**2*(Bohrpercm**2)
+     !           write(6,*) Bgrid(iB),  (1d0-Ktilde)*abar(lwave)*betavdw/(1d0 + (abar(lwave)*betavdw*wavek)**2 * Ktilde)
+     !           write(51,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw/(1d0 + (abar(lwave)*betavdw*wavek)**2 * Ktilde)
+     
+  enddo
+
+
+  
+  
+  stop
   !----------------------------------------------------------------------------------------------------
+11 continue  
   !This next loop is does the full log-derivative calculation
   ! prepare some arrays for the log-derivative propagator
 
@@ -1641,7 +1738,7 @@ subroutine SetupCotGamma(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid
   use InterpType
   implicit none
   integer lwave, NEgrid, iE, ix,size,ith,NXF
-  double precision RX, RF, mu, betavdw, Cvals(4), phiL, Egrid(NEgrid), cotgamma(size-1,size-1,NEgrid),EvdW
+  double precision RX, RF, mu, betavdw, Cvals(4), phiL, Egrid(NEgrid), cotgamma(size-1,size-1),EvdW
   double precision x, xscale, si, sk, sip, skp, ldk, ldi, kappa, f0, f0p, g0, g0p,Eth(size)
   double precision alpha0(2),alphaf(2),energy, tangamma, gam, phir, ldg0, ldf0 ,tp
   double precision, allocatable :: xgrid(:), Rgrid(:)
@@ -1675,16 +1772,16 @@ subroutine SetupCotGamma(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid
 !!$     tp = tan(phir+phiL)
 !!$     call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
 !!$
-!!$     cotgamma(ith-1,ith-1,iE)  = tp * (ldf0 + kappa)/(ldg0 + kappa)
-!     cotgamma(ith-1,ith-1,iE) = tan(phir+phiL) * (ldf0 - kappa*ldk)/(ldg0 - kappa*ldk)! 1d0/tangamma
+!!$     cotgamma(ith-1,ith-1)  = tp * (ldf0 + kappa)/(ldg0 + kappa)
+!     cotgamma(ith-1,ith-1) = tan(phir+phiL) * (ldf0 - kappa*ldk)/(ldg0 - kappa*ldk)! 1d0/tangamma
 
      !-----------------------------------------
      ! This part uses the interpolated function
-     cotgamma(ith-1,ith-1,iE) = 1d0/tan(Interpolated(energy, InterpGammaphase))
-!     write(6,*) "Compare full: ", energy, cotgamma(ith-1,ith-1,iE)!,
+     cotgamma(ith-1,ith-1) = 1d0/tan(Interpolated(energy, InterpGammaphase))
+!     write(6,*) "Compare full: ", energy, cotgamma(ith-1,ith-1)!,
 !     write(6,*) "Compare interp: ", ith, Interpolated(energy, InterpGammaphase)
-     !     write(6,*) "Compare: ", ith, energy, cotgamma(ith-1, ith-1, iE), Interpolated(energy, InterpGammaphase)
-!     write(6,*) "Compare: ", ith, energy, cotgamma(ith-1, ith-1, iE), cotan(Interpolated(energy, InterpGammaphase))
+     !     write(6,*) "Compare: ", ith, energy, cotgamma(ith-1, ith-1), Interpolated(energy, InterpGammaphase)
+!     write(6,*) "Compare: ", ith, energy, cotgamma(ith-1, ith-1), cotan(Interpolated(energy, InterpGammaphase))
      
      !-----------------------------------------
      !     write(400,*) xgrid(ix), ldk
@@ -1771,6 +1868,7 @@ subroutine CalcNewGammaphaseFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,
   double precision alpha0(2),alphaf(2),energy, tangamma, gam
   double precision, allocatable :: xgrid(:), Rgrid(:)
   CHARACTER(LEN=*), INTENT(IN) :: scale
+  CHARACTER(LEN=20) dum
   double precision, external :: ksqrLR, VLR, VLRPrime, abar
   type(InterpolatingFunction) :: InterpGammaphase
 
@@ -1780,7 +1878,7 @@ subroutine CalcNewGammaphaseFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,
 
   If(MQDTMODE.eq.1) then
      xscale=0d0
-     NE = 500
+     NE = 100
      
      E1 =  - (Eth(size)-Eth(1))
      E2 = -1d-12
@@ -1813,15 +1911,16 @@ subroutine CalcNewGammaphaseFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,
      enddo
      write(6,*) "done."
      call smoothgamma(InterpGammaPhase%y,NE)
-     write(cotgamfile, *) NE
+     write(cotgamfile, *) "#", NE
      do iE = 1, NE
-        write(cotgamfile, *) InterpGammaphase%x(iE), InterpGammaphase%y(iE)!, &
+        write(cotgamfile, *) InterpGammaphase%x(iE)/EvdW, InterpGammaphase%y(iE)!, &
      enddo
   else
-     read(cotgamfile,*) NE
+     read(cotgamfile,*) dum, NE
      call AllocateInterpolatingFunction(NE,kx,InterpGammaphase)
      do iE = 1, NE
         read(cotgamfile, *) InterpGammaphase%x(iE), InterpGammaphase%y(iE)
+        InterpGammaphase%x(iE) = InterpGammaphase%x(iE)*EvdW
      enddo
   endif
   call SetupInterpolatingFunction(InterpGammaphase)
@@ -2529,11 +2628,11 @@ double precision function abar(L)
 end function abar
 
 subroutine logderQD(lwave,mu,Eth,size2,NQD,NXM,Nsr,wsr,VSINGLET,VTRIPLET,R,&
-     InterpQDTriplet,InterpQDSinglet,phiL,betavdw,RX,Cvals,scale)
+     InterpQDTriplet,InterpQDSinglet,phiL,betavdw,RX,Cvals,scale,MQDTMODE,STQDfile)
   use units
   use InterpType
   implicit none
-  integer n, n1, n2, Nsr, NXM,lwave,iE,NQD,size2
+  integer n, n1, n2, Nsr, NXM,lwave,iE,NQD,size2,STQDfile,MQDTMODE
   double precision norm, k, energy,td1,td2,TripletQD,SingletQD, Ustart,psistart,s,mu,RX,ldf1,ldg1,Eth(size2)
   double precision R(Nsr),wsr(Nsr),VSINGLET(Nsr), VTRIPLET(Nsr),ystart(2,2),VMAT(2,2,Nsr)
   double precision alphax(2), alpham1(2), alpham2(2), phiL,betavdw,Cvals(4),identity(2,2),yf(2,2)!
@@ -2543,50 +2642,60 @@ subroutine logderQD(lwave,mu,Eth,size2,NQD,NXM,Nsr,wsr,VSINGLET,VTRIPLET,R,&
   CHARACTER(LEN=*), INTENT(IN) :: scale
   type(InterpolatingFunction) :: InterpQDSinglet,InterpQDTriplet
 
-  call GridMaker(InterpQDSinglet%x, NQD, -abs(Eth(size2)-Eth(1)), abs(Eth(size2)-Eth(1)), "linear")
-  InterpQDTriplet%x = InterpQDSinglet%x
+  if(MQDTMODE.eq.1) then
+     call GridMaker(InterpQDSinglet%x, NQD, -abs(Eth(size2)-Eth(1)), abs(Eth(size2)-Eth(1)), "linear")
+     InterpQDTriplet%x = InterpQDSinglet%x
+     
+     do iE = 1, NQD
+        energy = InterpQDSinglet%x(iE)
+        alphax(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
+        alphax(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
+             /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
+        
+        RM = R(Nsr)
+        
+        !call MQDTfunctions(RX, RM, NXM,'quadratic', Cvals, mu, lwave, energy, betavdw, phiL, alphax, alpham1, f1, g1, f1p, g1p)
+        call MQDTNewfunctions(RX, RM, NXM, scale, Cvals, mu, lwave, energy, betavdw, phiL, phir, alphax, alpham1, &
+             f1, g1, f1p, g1p, ldf1, ldg1)
+        !     write(6,*) f1, g1, f1p, g1p
+        
+        identity = 0d0
+        identity(1,1) = 1d0
+        identity(2,2) = 1d0
+        ystart = 0d0
+        ystart(1,1) = 1d20
+        ystart(2,2) = 1d20
+        VMAT(:,:,:) = 0d0
+        do n = 1, Nsr
+           VMAT(1,1,n) = VSINGLET(n)
+           VMAT(2,2,n) = VTRIPLET(n)
+        enddo
+        
+        call logderpropA(mu,energy,identity,wSR,Nsr,ystart,yf,R,VMAT,2)
+        
+        td1 = (f1p - yf(1,1)*f1) / (g1p - yf(1,1)*g1)
+        td2 = (f1p - yf(2,2)*f1) / (g1p - yf(2,2)*g1)
+        
+        InterpQDSinglet%y(iE) = atan(td1)/pi
+        InterpQDTriplet%y(iE) = atan(td2)/pi
+        
+        !SingletQD = atan(td1)/pi
+        !TripletQD = atan(td2)/pi
+        write(6,*) "Energy = ",energy, " Quantum Defects:"
+        write(6,*) "-------------------------------------"
+        write(6,*) "Singlet:", InterpQDSinglet%y(iE)
+        write(6,*) "Triplet:", InterpQDTriplet%y(iE)
+        write(6,*)
+        write(STQDfile,*) energy, InterpQDSinglet%y(iE), InterpQDTriplet%y(iE)
 
-  do iE = 1, NQD
-     energy = InterpQDSinglet%x(iE)
-     alphax(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
-     alphax(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
-          /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
-
-     RM = R(Nsr)
-
-     !call MQDTfunctions(RX, RM, NXM,'quadratic', Cvals, mu, lwave, energy, betavdw, phiL, alphax, alpham1, f1, g1, f1p, g1p)
-     call MQDTNewfunctions(RX, RM, NXM, scale, Cvals, mu, lwave, energy, betavdw, phiL, phir, alphax, alpham1, &
-          f1, g1, f1p, g1p, ldf1, ldg1)
-!     write(6,*) f1, g1, f1p, g1p
-
-     identity = 0d0
-     identity(1,1) = 1d0
-     identity(2,2) = 1d0
-     ystart = 0d0
-     ystart(1,1) = 1d20
-     ystart(2,2) = 1d20
-     VMAT(:,:,:) = 0d0
-     do n = 1, Nsr
-        VMAT(1,1,n) = VSINGLET(n)
-        VMAT(2,2,n) = VTRIPLET(n)
      enddo
-     
-     call logderpropA(mu,energy,identity,wSR,Nsr,ystart,yf,R,VMAT,2)
-     
-     td1 = (f1p - yf(1,1)*f1) / (g1p - yf(1,1)*g1)
-     td2 = (f1p - yf(2,2)*f1) / (g1p - yf(2,2)*g1)
-
-     InterpQDSinglet%y(iE) = atan(td1)/pi
-     InterpQDTriplet%y(iE) = atan(td2)/pi
-     
-     !SingletQD = atan(td1)/pi
-     !TripletQD = atan(td2)/pi
-     write(6,*) "Energy = ",energy, " Quantum Defects:"
-     write(6,*) "-------------------------------------"
-     write(6,*) "Singlet:", InterpQDSinglet%y(iE)
-     write(6,*) "Triplet:", InterpQDTriplet%y(iE)
-     write(6,*)
-  enddo
+  else if (MQDTMODE.gt.1) then
+     do iE = 1, NQD
+        read(STQDfile,*) InterpQDSinglet%x(iE), InterpQDSinglet%y(iE), InterpQDTriplet%y(iE)
+        InterpQDTriplet%x(iE) = InterpQDSinglet%x(iE)
+     enddo
+  endif
+  
 !  stop
 end subroutine LogderQD
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
