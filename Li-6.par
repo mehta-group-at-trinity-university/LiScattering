@@ -10,7 +10,7 @@
 # NEgrid	      Emin		Emax (enter energy range in mK)
   10		      10d-6		50d0
 # NBgrid	      Bmin		Bmax (enter B-field range in gauss)	 Bhuge (largest possible field)  NBGridFine
-  20		      500d0		600d0 	    	    	     		 1200d0   		 	 100000
+  20		      540d0		550d0 	    	    	     		 1200d0   		 	 100000
 # Grid for calculating MQDT functions (must be 'linear', 'quadratic', 'cubic', or 'log')		      
-  'quadratic'
+  'log'
 

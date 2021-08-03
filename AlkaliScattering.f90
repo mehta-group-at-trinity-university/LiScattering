@@ -1596,6 +1596,7 @@ subroutine CalcNewMilne2step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
 end subroutine CalcNewMilne2step
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine CalcNewMilne4step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
+  ! USES BODE'S 5-point rule
   implicit none
   double precision h, energy, y(2), mu,Cvals(4),y1(2),y2(2),y3(2),y4(2),y5(2),h4,R1,R2,R3,R4
   integer NA, iR, lwave
@@ -1640,6 +1641,62 @@ subroutine CalcNewMilne4step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
 !stop
 
 end subroutine CalcNewMilne4step
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine CalcNewMilne6step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
+  ! USES BODES 7-point rule
+  implicit none
+  double precision h, energy, y(2), mu,Cvals(4)
+  double precision y1(2),y2(2),y3(2),y4(2),y5(2), y6(2), y7(2)
+  double precision h6,R1,R2,R3,R4,R5,R6
+  integer NA, iR, lwave
+  double precision alpha(NA,2), R(NA),Delta(2),Delta0(2),eps, phaseint(NA)
+  double precision OneOverOneForty
+  OneOverOneForty=0.00714285714285714285714285714286d0
+
+  
+  y1(1) = log(alpha(1,1))
+  y1(2) = alpha(1,2)/alpha(1,1)
+
+  phaseint = 0d0
+  phaseint(1) = 0d0
+  !write(6,*) R(1), phaseint(1), y1(1), y1(2)
+  do iR = 1, NA-1
+     h = R(iR+1)-R(iR)
+     h6 = h/6d0
+     R1=R(iR)
+     R2=R1+h6
+     R3=R2+h6
+     R4=R3+h6
+     R5=R4+h6
+     R6=R5+h6
+
+     ! do 6 steps and use Bode's 7-point integration rule to calculate the phase integral
+     y2=y1
+     call RK4StepNewMilne(y2,mu,lwave,energy,h6,R1,Cvals)
+     y3=y2
+     call RK4StepNewMilne(y3,mu,lwave,energy,h6,R2,Cvals)
+     y4=y3
+     call RK4StepNewMilne(y4,mu,lwave,energy,h6,R3,Cvals)
+     y5=y4
+     call RK4StepNewMilne(y5,mu,lwave,energy,h6,R4,Cvals)
+     y6=y5
+     call RK4StepNewMilne(y6,mu,lwave,energy,h6,R5,Cvals)
+     y7=y6
+     call RK4StepNewMilne(y7,mu,lwave,energy,h6,R6,Cvals)
+     
+     phaseint(iR+1) = phaseint(iR) + OneOverOneForty*h6* &
+          (41d0*(exp(-2*y1(1)) + exp(-2*y7(1))) + 216d0*(exp(-2*y2(1)) + exp(-2*y6(1))) + &
+           27d0*(exp(-2*y3(1)) + exp(-2*y5(1))) + 272d0*exp(-2*y4(1)))
+     y1=y7
+     y=y7
+     alpha(iR+1,1) = exp(y(1))
+     alpha(iR+1,2) = y(2)*exp(y(1))
+     !write(102,*) R(iR+1), phaseint(iR+1)
+     !write(6,*) R(iR+1), phaseint(iR+1), y(1), y(2)
+  enddo
+!stop
+
+end subroutine CalcNewMilne6step
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine MQDTfunctions(R1, R2, NA, scale, Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf,f0, g0, f0p, g0p)
   use units
@@ -1701,7 +1758,8 @@ subroutine MQDTNewfunctions(R1, R2, NA, scale, Cvals, mu, lwave, energy, &
   alpha(1,:) = alpha0
   
 !  call CalcNewMilne2step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
-  call CalcNewMilne4step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
+!  call CalcNewMilne4step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
+  call CalcNewMilne6step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
 !  write(6,*) "y = ", y
   alphaf = alpha(NA,:)
   phir = phaseint(NA)
@@ -2188,6 +2246,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
         
         re = 2.6729932d0
         Scorr = 3.62d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
+        write(6,'(A,d16.8,A)') "Li6 Singlet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
         do i=1,NPP
            if(XO(i).lt.re) then
               VV(i) = VV(i) + Scorr*(XO(i) - re)**2
@@ -2204,6 +2263,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
         ! No short-range correction needed for Li-7 in the singlet state.  This already gives a scattering length of 34.331 bohr
         re=2.672993d0
         Scorr =  4.03d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  !Singlet Correction
+        write(6,'(A,d16.8,A)') "Li7 Singlet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
         do i=1,NPP
            if(XO(i).lt.re) then
               VV(i) = VV(i) + Scorr*(XO(i) - re)**2
@@ -2322,6 +2382,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
         ! We therefore add a quadratic term a*(r-re)**2 for all r inside the minimum.
         re = 4.17005000d0
         Scorr =  1.5542d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  !Triplet Correction
+        write(6,'(A,d16.8,A)') "Li6 Triplet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
         do i=1,NPP
            if(XO(i).lt.re) then
               VV(i) = VV(i) + Scorr*(XO(i) - re)**2
@@ -2340,6 +2401,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
         
         re = 4.17005000d0
         Scorr =  1.85d-6 * HartreePerInvcm/(BohrPerAngstrom**2) !Triplet Correction
+        write(6,'(A,d16.8,A)') "Li7 Triplet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
         do i=1,NPP
            if(XO(i).lt.re) then
               VV(i) = VV(i) + Scorr*(XO(i) - re)**2
