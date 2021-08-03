@@ -332,6 +332,62 @@ contains
 
   end subroutine MakeHF2Basis
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  subroutine MakeLambdaProj(s1,s2,S,MS,i1,i2,I,MI, hfsym, size,lambda)
+    implicit none
+    integer S, MS,I,MI,i1, i2, s1, s2
+    integer bra, ket, size
+    type(symhf2atom), intent(in) :: hfsym(size)
+    double precision, intent(out) :: lambda(size,size)
+    double precision me1, me2, me3, me4
+    
+    lambda = 0d0
+    do bra = 1, size
+       do ket = 1, size
+          call LambdaHFproj(s1,s2,S,MS,i1,i2,I,MI,hfsym(bra)%state1,hfsym(ket)%state1,me1)
+          me1 = me1*hfsym(bra)%norm*hfsym(ket)%norm
+          call LambdaHFproj(s1,s2,S,MS,i1,i2,I,MI,hfsym(bra)%state1,hfsym(ket)%state2,me2)
+          me2 = me2*hfsym(bra)%norm*hfsym(ket)%norm
+          me2 = me2*hfsym(ket)%phase
+          call lambdaHFproj(s1,s2,S,MS,i1,i2,I,MI,hfsym(bra)%state2,hfsym(ket)%state1,me3)
+          me3 = me3*hfsym(bra)%norm*hfsym(ket)%norm
+          me3 = me3*hfsym(bra)%phase
+          call lambdaHFproj(s1,s2,S,MS,i1,i2,I,MI,hfsym(bra)%state2,hfsym(ket)%state2,me4)
+          me4 = me4*hfsym(bra)%norm*hfsym(ket)%norm
+          lambda(bra, ket) = me1 + me2 + me3 + me4
+       enddo
+    enddo
+    
+  end subroutine MakeLambdaProj
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+  subroutine LambdaHFProj(s1,s2,S,MS,i1,i2,I,MI,hf2bra,hf2ket,res)
+    implicit none
+    ! This subroutine calculates the unsymmetrized matrix element for the singlet/triplet projection operator
+    ! in the hyperfine basis |f1 m1 f2 m2>
+    ! i1 = nuclear spin of atom 1, mi1 = z-projection of i1
+    ! i2 = nuclear spin of atom 2, mi2 = z-projection of i2
+    ! I = total nuclear spin
+    ! s1 = electronic spin of atom 1
+    ! s2 = electronic spin of atom 2
+    ! S = total electronic spin
+    ! mS, mI = z-projections of total nuclear and electronic spins
+    ! hf2bra and hf2ket contain f1p m1p f2p m2p and f1 m1 f2 m2m respectively. 
+    ! f = S+I = total spin of atom
+    ! S = 0 for singlet, 2 for triplet (since this is really 2S)
+    integer S,I,mS,mI
+    integer i1,i2,s1,s2!,f1p,m1p,f2p,m2p,f1,m1,f2,m2
+    double precision res,me1,me2
+    type(hf2atom) hf2bra, hf2ket
+
+    !    write(6,*) "For i1,i2,s1,s2 = ",i1,i2,s1,s2
+    res=0d0
+    
+    call OverlapSpinHF(i1,i2,s1,s2,S,mS,I,mI,hf2ket%a1%f,hf2ket%a1%m,hf2ket%a2%f,hf2ket%a2%m,me1)
+    call OverlapSpinHF(i1,i2,s1,s2,S,mS,I,mI,hf2bra%a1%f,hf2bra%a1%m,hf2bra%a2%f,hf2bra%a2%m,me2)
+    res = me1*me2
+
+    
+  end subroutine LambdaHFProj
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   subroutine HHZ1ME(B,hf1bra,hf1ket,gs,gi,Ahf,s,i,res)
     implicit none
     double precision, intent(in) :: B
@@ -436,7 +492,7 @@ contains
     ! This subroutine calcualtes the overlap between the hyperfine state |f1 m1 f2 m2> and the
     ! spin state |(s1 s2) S mS (i1 i2) I mI >
     ! it returns in me1 = <(s1 s2) S mS (i1 i2) I mI | (i1 s1) f1 m1 (i2 s2) f2 m2 >
-    ! I haven't checked this, but it should be equal to the 9-J coefficient corresponding to the above overal.
+    ! Note that this is not quite the same as the 9-j symbol because we do not couple to a total F MF
     integer S,mS,I,mI,f1,m1,f2,m2,i1,i2,s1,s2,phaseexp
     integer mi1,mi2,ms1,ms2,phase
     double precision prefact,tj1,tj2,tj3,tj4,me1
@@ -534,8 +590,12 @@ contains
     enddo
 
   end subroutine MakeSTHFProj
-end module hyperfine
+  !****************************************************************************************************
+
 !****************************************************************************************************
+
+end module hyperfine
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 program main
   use bspline
   use InterpType
@@ -552,22 +612,21 @@ program main
   integer Nsr, Nlr, CALCTYPE,MQDTMODE
   logical writepot
   double precision, allocatable :: Rsr(:), Rlr(:),VsrSinglet(:),VsrTriplet(:),VlrSinglet(:),VlrTriplet(:)
-!  double precision, allocatable :: RotatedVsrHZ(:,:,:),RotatedVlrHZ(:,:,:)
   double precision, allocatable :: wSR(:),wLR(:),Vdum(:),Rdum(:)
-!  double precision, allocatable :: VSinglet(:), VTriplet(:), R(:)
   double precision, allocatable :: weights(:),ystart(:,:),yi(:,:),ym(:,:),yf(:,:),Kmat(:,:),identity(:,:)
   double precision, allocatable :: HHZ(:,:), Bgrid(:),Egrid(:), EVAL(:), EVEC(:,:),EVECTEMP(:,:)
   double precision, allocatable :: EThreshMat(:,:),TEMP(:,:)
   double precision, allocatable :: cotgamma(:,:),Ktemp1(:,:),Ktemp2(:,:),KPQ(:,:),KQP(:,:)
   double precision, allocatable :: SPmat(:,:), Sdressed(:,:), Tdressed(:,:), TPmat(:,:)
   double precision, allocatable :: VHZ(:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:),Ksr(:,:)!,RmidArray(:)
-  double precision, allocatable :: KsrMQDT(:,:), KsrFT(:,:)
+  double precision, allocatable :: KsrEIFT(:,:),Ktemp1EIFT(:,:),Ktemp2EIFT(:,:)
+  double precision, allocatable :: KQPEIFT(:,:),KPQEIFT(:,:)
   double precision VLIM,Rmin,dR,phiL,stepsize,Vmin,ascat
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2
   double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw,wavek
   integer iE, iRmid,NRmid,Ndum,NXM,NXF,multnsr, multnlr,ith,NQD,NBGridFine
   double precision RX, Rmid, RF, Cvals(4), Ktilde
-  double precision SingletQD, TripletQD, x,Bhuge,Ebar1,Ebar3
+  double precision SingletQD, TripletQD, x,Bhuge,Ebar1,Ebar3,trace1, trace3,ascatEIFT,KtildeEIFT
   double precision, external :: VLR, rint, abar
   character(len=20), external :: str
   CHARACTER(LEN=20) scale, act, dum
@@ -598,7 +657,12 @@ program main
 
   Emin = Emin/HartreePermK
   Emax = Emax/HartreePermK
+  If((MQDTMODE.eq.1).and.(CALCTYPE.eq.2)) then
+     write(6,*) "Using full B-field range for calculation of Ksr and QDs."
 
+     Bmin = 0d0
+     Bmax = Bhuge
+  endif
   !make the magnetic field grid and energy grid
   allocate(Egrid(NEgrid),Bgrid(NBgrid))
   if((CalcType.eq.2).and.(MQDTMODE.eq.1)) then
@@ -662,7 +726,8 @@ program main
 !  stop
   allocate(SPmat(size2,size2), TPmat(size2,size2))
   allocate(Sdressed(size2,size2), Tdressed(size2,size2))
-  allocate(EThreshMat(size2,size2),Ksr(size2,size2),KsrMQDT(size2,size2),KsrFT(size2,size2))
+  allocate(EThreshMat(size2,size2),Ksr(size2,size2))
+  allocate(Ktemp1EIFT(size2,size2),Ktemp2EIFT(size2,size2),KsrEIFT(size2,size2))
   
   S = 0
   call MakeSTHFProj(S, nspin1, nspin1, espin1, espin1, hf2symTempGlobal, size2, SPmat)
@@ -670,12 +735,16 @@ program main
   write(6,*) "-------------------------------"
   call printmatrix(SPmat,size2,size2,6)
   write(6,*)
+  trace1 = sum( (/ (SPmat(i,i), i=1,size2) /) )
+  write(6,*) "Trace of singlet operator:", trace1
   S = 2
   call MakeSTHFProj(S, nspin1, nspin1, espin1, espin1, hf2symTempGlobal, size2, TPmat)
   write(6,*) "The triplet projection matrix:"
   write(6,*) "-------------------------------"
   call printmatrix(TPmat,size2,size2,6)
   write(6,*)
+  trace3 = sum( (/ (TPmat(i,i), i=1,size2) /) )
+  write(6,*) "Trace of triplet operator:", trace3
   allocate(TEMP(size2,size2),AsymChannels(size2,size2))
   allocate(HHZ2(size2,size2))
   allocate(EVEC(size2,size2),EVECTEMP(size2,size2),EVAL(size2))
@@ -684,6 +753,7 @@ program main
   allocate(cotgamma(size2-1,size2-1))
   allocate(Ktemp1(size2-1,size2-1),Ktemp2(1,1))
   allocate(KPQ(1,size2-1),KQP(size2-1,1))
+  allocate(KPQEIFT(1,size2-1),KQPEIFT(size2-1,1))
   identity(:,:)=0d0
   ystart(:,:)=0d0
   yf(:,:)=0d0
@@ -702,12 +772,9 @@ program main
   if(CALCTYPE.ne.1) then
      open(unit = cotgamfile, file = "Gammaphase-"//trim(str(ISTATE))//"-"//&
           trim(str(NINT(RF)))//"a0.dat",ACTION=act)
-     open(unit = 53, file = "KsrFieldDependence-"//trim(str(ISTATE))//"-"// &
-          "-"//trim(str(NINT(Bmin)))//"G-"//trim(str(NINT(Bmax)))//"G.dat",ACTION=act)
-     open(unit = STQDfile, file = "STQDFieldDependence-"//trim(str(ISTATE))// &
-          "-"//trim(str(NINT(Bmin)))//"G-"//trim(str(NINT(Bmax)))//"G.dat",ACTION=act)
-       open(unit = 52, file = "QDFieldDependence-"//trim(str(ISTATE))//"-"// &
-       "-"//trim(str(NINT(Bmin)))//"G-"//trim(str(NINT(Bmax)))//"G.dat",ACTION=act)
+     open(unit = 53, file = "KsrFieldDependence-"//trim(str(ISTATE))//".dat",ACTION=act)
+     open(unit = STQDfile, file = "STQDFieldDependence-"//trim(str(ISTATE))//".dat",ACTION=act)
+     open(unit = 52, file = "QDFieldDependence-"//trim(str(ISTATE))//".dat",ACTION=act)
   endif
   open(unit = 20, file = "CollisionThresholds-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))// &
        "-"//trim(str(NINT(Bmin)))//"G-"//trim(str(NINT(Bmax)))//"G.dat")
@@ -752,7 +819,7 @@ program main
   write(6,*) "RMid = ", Rmid
   write(6,*) "RF = ", RF
   write(6,*) "Nsr and Nrl = ", Nsr, Nlr
-  
+  write(6,*) "NXM and NXF = ", NXM, NXF
   allocate(VHZ(size2,size2))
   allocate(Rsr(Nsr),Rlr(Nlr),wSR(Nsr),wLR(Nlr),VsrSinglet(Nsr),VlrSinglet(Nlr),VsrTriplet(Nsr),VlrTriplet(Nlr))
 
@@ -898,14 +965,14 @@ program main
   call SetupInterpolatingFunction(InterpQDTriplet)
   
   deallocate(Bgrid)
-  read(53,*) dum, NBgrid
+  if(CALCTYPE.eq.2) read(53,*) dum, NBgrid
   write(6,*) "Reading in NBgrid = ", NBgrid
   allocate(Bgrid(NBgridfine))
   call GridMaker(Bgrid,NBgridfine,Bmin,Bmax,'linear')
   
   call AllocateInterpolatingMatrix(NBgrid,3,size2,size2,InterpKsr)
   do iB = 1, NBgrid
-     read(53,*) InterpKsr%x(iB), ((InterpKsr%M(iB,i,j), j=1,i), i=1,size2)
+     if(CALCTYPE.eq.2) read(53,*) InterpKsr%x(iB), ((InterpKsr%M(iB,i,j), j=1,i), i=1,size2)
      do i=1,size2
         do j=1,i
            InterpKsr%M(iB,j,i) = InterpKsr%M(iB,i,j)
@@ -919,7 +986,7 @@ program main
      HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
      !Find the asymptotic channel states
      call MyDSYEV(HHZ2,size2,Eth,AsymChannels)
-
+     energy = Eth(1) + Egrid(iE)
      if(CalcType.eq.2) then
         Ksr = InterpolatedMatrix(Bgrid(iB),InterpKsr)
      else if (CALCTYPE.eq.3) then
@@ -932,44 +999,63 @@ program main
         !Rotate the triplet projection operator
         call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,TPmat,size2,0d0,TEMP,size2)
         call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Tdressed,size2)
-        
-        Ebar1 = 0d0
-        Ebar3 = 0d0
-        
-        do i=1,size2
-           Ebar1 = Ebar1 + (Egrid(iE) + Eth(1) - Eth(i))*Sdressed(i,i)
-           Ebar3 = Ebar3 + 0.25d0*(Egrid(iE) + Eth(1) - Eth(i))*Tdressed(i,i)
-        enddo
+
+
+!        Ebar1 = 0d0
+!        Ebar3 = 0d0
+!        trace1 =  sum( (/ (Sdressed(i,i), i=1,size2) /) )
+!        trace3 =  sum( (/ (Tdressed(i,i), i=1,size2) /) )
+!        write(6,*) "Trace of singlet operator:", trace1
+!        write(6,*) "Trace of triplet operator:", trace3
+!        do i=1,size2
+!           Ebar1 = Ebar1 + (Egrid(iE) + Eth(1) - Eth(i))*Sdressed(i,i)/(trace1)
+!           Ebar3 = Ebar3 + (Egrid(iE) + Eth(1) - Eth(i))*Tdressed(i,i)/(trace3)
+!        enddo
 !        write(6,*) "Ebar1 = ",Ebar1, "Ebar3 = ", Ebar3
 !        write(6,*) "mu1(Ebar1) = ", Interpolated(Ebar1,InterpQDSinglet), "mu1(0)=",Interpolated(0d0,InterpQDSinglet)
 !        write(6,*) "mu3(Ebar3) = ", Interpolated(Ebar3,InterpQDTriplet), "mu3(0)=",Interpolated(0d0,InterpQDTriplet)
 !!$        stop
 !        
 !        Ksr(:,:) = tan(pi*Interpolated(0d0,InterpQDTriplet)) * Tdressed(:,:) &
-!             + tan(pi*Interpolated(0d0,InterpQDSinglet)) * Sdressed(:,:)
-        Ksr(:,:) = tan(pi*Interpolated(Ebar3,InterpQDTriplet)) * Tdressed(:,:) &
-             + tan(pi*Interpolated(Ebar1,InterpQDSinglet)) * Sdressed(:,:)
+        !             + tan(pi*Interpolated(0d0,InterpQDSinglet)) * Sdressed(:,:)
+        call CalcEDFTKSR(nspin1,nspin1,espin1,espin1,hf2symTempGlobal,energy,Eth,&
+             AsymChannels,size2,Ksr,InterpQDSinglet,InterpQDTriplet)
+        !Ksr(:,:) = tan(pi*Interpolated(Ebar3,InterpQDTriplet)) * Tdressed(:,:) &
+         !    + tan(pi*Interpolated(Ebar1,InterpQDSinglet)) * Sdressed(:,:)
+
      endif
+     KsrEIFT(:,:) = tan(pi*Interpolated(0d0,InterpQDTriplet)) * Tdressed(:,:) &
+          + tan(pi*Interpolated(0d0,InterpQDSinglet)) * Sdressed(:,:)
      
      call SetupCotGamma(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,iE,cotgamma,InterpGammaphase,scale)  
      !write(504,*) Bgrid(iB), ((Ksr(i,j), j=1,i), i=1,size2)
      Ktemp1 = Ksr(2:size2,2:size2) + cotgamma(:,:)
+     Ktemp1EIFT = KsrEIFT(2:size2,2:size2) + cotgamma(:,:)
+
      KQP = Ksr(2:size2,1:1)
      KPQ = Ksr(1:1,2:size2)
-        
-     call sqrmatinv(Ktemp1,size2-1)
-     Ktemp2 = MATMUL(KPQ,MATMUL(Ktemp1,KQP))
-     !           write(6,*) "Ktemp2:"
-     !           call printmatrix(Ktemp2,1,1,6)
-     
-     Ktilde = Ksr(1,1) - Ktemp2(1,1)
-     ascat = (1d0-Ktilde)*abar(lwave)*betavdw
+     KQPEIFT = KsrEIFT(2:size2,1:1)
+     KPQEIFT = KsrEIFT(1:1,2:size2)
 
-!     write(6,*) Bgrid(iB), ascat , 8d0*pi*ascat**2*(Bohrpercm**2)
-     write(51,*) Bgrid(iB), ascat , 8d0*pi*ascat**2*(Bohrpercm**2)
-     !           write(6,*) Bgrid(iB),  (1d0-Ktilde)*abar(lwave)*betavdw/(1d0 + (abar(lwave)*betavdw*wavek)**2 * Ktilde)
-     !           write(51,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw/(1d0 + (abar(lwave)*betavdw*wavek)**2 * Ktilde)
-     
+     call sqrmatinv(Ktemp1,size2-1)
+     call sqrmatinv(Ktemp1EIFT,size2-1)
+     Ktemp2 = MATMUL(KPQ,MATMUL(Ktemp1,KQP))
+     Ktemp2EIFT = MATMUL(KPQEIFT,MATMUL(Ktemp1EIFT,KQPEIFT))
+          
+     Ktilde = Ksr(1,1) - Ktemp2(1,1)
+     KtildeEIFT = KsrEIFT(1,1) - Ktemp2EIFT(1,1)
+     ascat = (1d0-Ktilde)*abar(lwave)*betavdw
+     ascatEIFT = (1d0-KtildeEIFT)*abar(lwave)*betavdw
+
+     write(6,*) Bgrid(iB), ascat , 8d0*pi*ascat**2*(Bohrpercm**2)
+
+     if(CALCTYPE.eq.3) then
+        write(51,*) Bgrid(iB), ascat , ascatEIFT, 8d0*pi*ascat**2*(Bohrpercm**2),8d0*pi*ascatEIFT**2*(Bohrpercm**2)
+        !           write(6,*) Bgrid(iB),  (1d0-Ktilde)*abar(lwave)*betavdw/(1d0 + (abar(lwave)*betavdw*wavek)**2 * Ktilde)
+        !           write(51,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw/(1d0 + (abar(lwave)*betavdw*wavek)**2 * Ktilde)
+     else
+        write(51,*) Bgrid(iB), ascat , 8d0*pi*ascat**2*(Bohrpercm**2)
+     endif
   enddo
 
 
@@ -992,7 +1078,8 @@ program main
   ESTATE = 3
   call SetupPotential(ISTATE,ESTATE,mu,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrTriplet,Cvals)
   call SetupPotential(ISTATE,ESTATE,mu,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrTriplet,Cvals)
-  
+
+  call logderScatLengths(lwave,mu,Nsr,Nlr,Rsr,Rlr,wsr,wlr,VsrSinglet,VlrSinglet,VsrTriplet,VlrTriplet)
   write(51,*)
   
   do iB = 1, NBgrid
@@ -1597,6 +1684,7 @@ subroutine MQDTNewfunctions(R1, R2, NA, scale, Cvals, mu, lwave, energy, &
 
   allocate(R(NA),alpha(NA,2),phaseint(NA))
   call GridMaker(R,NA,R1,R2,scale)
+
 !!$  If(R2.lt.betavdw) then
 !!$     call GridMaker(R,NA,R1,R2,scale)
 !!$  else if (R2.ge.betavdw) then
@@ -1612,8 +1700,8 @@ subroutine MQDTNewfunctions(R1, R2, NA, scale, Cvals, mu, lwave, energy, &
 
   alpha(1,:) = alpha0
   
-  call CalcNewMilne2step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
-!  call CalcNewMilne4step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
+!  call CalcNewMilne2step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
+  call CalcNewMilne4step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
 !  write(6,*) "y = ", y
   alphaf = alpha(NA,:)
   phir = phaseint(NA)
@@ -1743,8 +1831,9 @@ subroutine SetupCotGamma(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid
   double precision alpha0(2),alphaf(2),energy, tangamma, gam, phir, ldg0, ldf0 ,tp
   double precision, allocatable :: xgrid(:), Rgrid(:)
   double precision, allocatable :: phaseint(:)
-  double precision, external :: ksqrLR, VLR, VLRPrime
+  double precision, external :: ksqrLR, VLR, VLRPrime, UniversalGamma
   type(InterpolatingFunction) :: InterpGammaphase
+
   CHARACTER(LEN=*), INTENT(IN) :: scale
   
   EvdW = 1d0/(2d0*mu*betavdw**2)
@@ -1784,10 +1873,13 @@ subroutine SetupCotGamma(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid
 !     write(6,*) "Compare: ", ith, energy, cotgamma(ith-1, ith-1), cotan(Interpolated(energy, InterpGammaphase))
      
      !-----------------------------------------
+     ! Use this part if you want to try the "universal function"
+     !cotgamma(ith-1,ith-1) = 1d0/tan(UniversalGamma(energy, EvdW))
+     
      !     write(400,*) xgrid(ix), ldk
      !write(400,*) energy/EvdW, gam(iE)
   enddo
- 
+
 
   
 end subroutine SetupCotGamma
@@ -1873,12 +1965,12 @@ subroutine CalcNewGammaphaseFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,
   type(InterpolatingFunction) :: InterpGammaphase
 
   EvdW = 1d0/(2d0*mu*betavdw**2)
-  kx=3
+  kx=8
 
 
   If(MQDTMODE.eq.1) then
      xscale=0d0
-     NE = 100
+     NE = 200
      
      E1 =  - (Eth(size)-Eth(1))
      E2 = -1d-12
@@ -2699,6 +2791,60 @@ subroutine logderQD(lwave,mu,Eth,size2,NQD,NXM,Nsr,wsr,VSINGLET,VTRIPLET,R,&
 !  stop
 end subroutine LogderQD
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine logderScatLengths(lwave,mu,Nsr,Nlr,Rsr,Rlr,wsr,wlr,VsrSinglet,VlrSinglet,VsrTriplet,VlrTriplet)
+  use units
+  implicit none
+  integer n, n1, n2, Nsr,Nlr,lwave,iE
+  double precision norm, k, energy,td1,td2, Ustart,psistart,s,mu
+  double precision, intent(in) :: Rsr(Nsr),Rlr(Nlr),wsr(Nsr),wlr(Nlr)
+  double precision, intent(in) :: VsrSinglet(Nsr),VlrSinglet(Nlr),VsrTriplet(Nsr),VlrTriplet(Nlr)
+  double precision ystart(2,2),VMATsr(2,2,Nsr),VMATlr(2,2,Nlr)
+  double precision identity(2,2),ym(2,2),yf(2,2),a1,a3!
+!  double precision, allocatable :: U(:)
+  double precision f, fp, g, gp,x
+
+
+
+  energy = 1d-3*nKPerHartree
+  k = sqrt(2d0*mu*energy)
+          
+  identity = 0d0
+  identity(1,1) = 1d0
+  identity(2,2) = 1d0
+  ystart = 0d0
+  ystart(1,1) = 1d20
+  ystart(2,2) = 1d20
+  VMATsr(:,:,:) = 0d0
+  VMATlr(:,:,:) = 0d0
+  
+  VMATsr(1,1,:) = VsrSinglet(:)
+  VMATsr(2,2,:) = VsrTriplet(:)
+
+
+  VMATlr(1,1,:) = VlrSinglet(:)
+  VMATlr(2,2,:) = VlrTriplet(:)  
+
+  call logderpropA(mu,energy,identity,wsr,Nsr,ystart,ym,Rsr,VMATsr,2)
+  call logderpropA(mu,energy,identity,wlr,Nlr,ym,yf,    Rlr,VMATlr,2)
+
+  x = k*Rlr(Nlr)
+  call sphbesjy(lwave,x,f,g,fp,gp) ! These are the Ricatti functions kr*j_n(kr)
+  
+  td1 = -(yf(1,1)*f - k*fp) / (yf(1,1)*g - k*gp)
+  td2 = -(yf(2,2)*f - k*fp) / (yf(2,2)*g - k*gp)
+  a1 = -td1/k
+  a3 = -td2/k
+
+  
+  write(6,'(A,f10.5,A)') " Energy = ",energy/nKPerHartree,"nK"
+  write(6,*) "Scattering Lengths:"
+  write(6,*) "-------------------"
+  write(6,*) "Singlet:", a1
+  write(6,*) "Triplet:", a3
+  
+  stop
+end subroutine LogderScatLengths
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine testinterpolation
   use InterpType
   use bspline
@@ -2747,4 +2893,63 @@ subroutine plotQDs(InterpQDSinglet,InterpQDTriplet)
      energy = energy + dE
   enddo
 end subroutine plotQDs
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine CalcEDFTKSR(i1,i2,s1,s2,hf2sym,energy,Eth,AsymC,size2,Ksr,InterpQDSinglet,InterpQDTriplet)
+  use units
+  use hyperfine
+  use InterpType
   
+  implicit none
+  integer size2,j
+  type(symhf2atom) hf2sym(size2)
+  double precision energy, Eth(size2),AsymC(size2,size2),Ebar,lambda(size2,size2)
+  double precision Ksr(size2,size2),temp1(size2,size2), temp2(size2,size2)
+!  double precision dressedLambda(size2,size2)
+  type(InterpolatingFunction) ::  InterpQDSinglet,InterpQDTriplet
+  integer i1,i2,s1,s2,S,MS,I,MI
+  Ksr = 0d0
+  temp1=0d0
+  temp2=0d0
+  
+  do S=iabs(s1-s2),s1+s2,2
+     do I = iabs(i1-i2), i1+i2, 2
+        do mS = -S, S, 2
+           do mI = -I, I, 2
+              lambda=0d0
+              call MakeLambdaProj(s1,s2,S,MS,i1,i2,I,MI, hf2sym, size2, lambda)
+              temp1 = MATMUL(TRANSPOSE(AsymC),lambda)
+              temp2 = MATMUL(temp1,AsymC)
+              
+              do j=1,size2
+                 Ebar = (energy - Eth(j))*temp2(j,j)
+              enddo
+
+!              temp1 = MATMUL(TRANSPOSE(AsymC),lambda)              
+!              dressedLambda = MATMUL(temp1,AsymC)
+              
+              if(S.eq.0) then
+                 Ksr(:,:) = Ksr(:,:) + tan(pi*Interpolated(Ebar,InterpQDsinglet))*temp2(:,:)!*dressedLambda(:,:)
+              else if(S.eq.2) then
+                 Ksr(:,:) = Ksr(:,:) + tan(pi*Interpolated(Ebar,InterpQDTriplet))*temp2(:,:)!*dressedLambda(:,:)
+              endif
+           enddo
+        enddo
+     enddo
+  enddo
+
+end subroutine CalcEDFTKSR
+double precision function UniversalGamma(Energy,EvdW)
+  implicit none
+  double precision Energy,EvdW
+  
+  Energy = Energy/EvdW
+  
+  UniversalGamma = 0.42787317828891924*Sqrt(Abs(Energy)) - 0.03361652019144483*Abs(Energy) + &
+       0.002746975227849866*Abs(Energy)**1.5 - &
+       0.00014177856592782387*Abs(Energy)**2 + &
+       4.567789798830159d-6*Abs(Energy)**2.5 - 9.31705339758295d-8*Abs(Energy)**3 + &
+       1.2007664448926092d-9*Abs(Energy)**3.5 - &
+       9.461832747178823d-12*Abs(Energy)**4 + &
+       4.156391821939997d-14*Abs(Energy)**4.5 - 7.792047355366279d-17*Abs(Energy)**5 
+  
+end function UniversalGamma

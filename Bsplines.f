@@ -100,7 +100,7 @@ cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       end
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       subroutine CalcBasisFuncsBP(Left,Right,kLeft,kRight,Order,xPoints,LegPoints,
-     >     xLeg,MatrixDim,xBounds,xNumPoints,Deriv,u)
+     >     xLeg,MatrixDim,xBounds,xNumPoints,Deriv,u)  ! Imposed the Bethe-Pierls boundary condition kleft and kright
       implicit none
 
       integer, intent(in) :: Left,Right,Order,LegPoints,MatrixDim,xNumPoints,Deriv

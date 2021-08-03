@@ -2310,6 +2310,7 @@ module InterpType
      integer nx, kx
      
   END TYPE InterpolatingFunction
+  
   TYPE InterpolatingMatrix
      
      DOUBLE PRECISION, ALLOCATABLE :: x(:),M(:,:,:),knots(:),b(:,:,:)
