@@ -1420,19 +1420,23 @@ end subroutine RK4StepNewMilne
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine RichardsonStepRK4Milne(y,mu,lwave,energy,h,R,Cvals)
   implicit none
-  double precision h,h2,y1(2),y2(2),y(2),mu,energy,R,Cvals(4)
+  double precision h,h1,h2,y1(2),y2(2),y(2),mu,energy,R,Cvals(4)
   integer lwave
 
   y1 = y
+  h1=h
+
   y2 = y
   h2 = 0.5d0*h
   
-  call RK4StepNewMilne(y1,mu,lwave,energy,h,R,Cvals)
+  call RK4StepNewMilne(y1,mu,lwave,energy,h1,R,Cvals)
 
   call RK4StepNewMilne(y2,mu,lwave,energy,h2,R,Cvals)
   call RK4StepNewMilne(y2,mu,lwave,energy,h2,R+h2,Cvals)
 
-  y = (16d0*y2-y1)/15d0
+  !y = (16d0*y2-y1)/15d0
+  y = (h1*y2 - h2*y1)/(h1-h2)
+  
 end subroutine RichardsonStepRK4Milne
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine RK5CashKarpStepMilne(y,mu,lwave,energy,h,R,Cvals,Delta)
@@ -1666,6 +1670,53 @@ subroutine CalcNewMilne4step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
 
 end subroutine CalcNewMilne4step
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine CalcNewMilne4stepRichardson(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
+  ! USES BODE'S 5-point rule
+  implicit none
+  double precision h, energy, y(2), mu,Cvals(4),y1(2),y2(2),y3(2),y4(2),y5(2),h4,R1,R2,R3,R4
+  integer NA, iR, lwave
+  double precision alpha(NA,2), R(NA),Delta(2),Delta0(2),eps, phaseint(NA)
+  double precision TwoOnFortyFive
+
+  TwoOnFortyFive = 0.04444444444444444444444444d0
+  
+  y1(1) = log(alpha(1,1))
+  y1(2) = alpha(1,2)/alpha(1,1)
+
+  phaseint = 0d0
+  phaseint(1) = 0d0
+  !write(6,*) R(1), phaseint(1), y1(1), y1(2)
+  do iR = 1, NA-1
+     h = R(iR+1)-R(iR)
+     h4 = 0.25d0*h
+     R1=R(iR)
+     R2=R1+h4
+     R3=R2+h4
+     R4=R3+h4
+
+     ! do 4 quarter-steps and use Bode's 5-point integration rule to calculate the phase integral
+     y2=y1
+     call RichardsonStepRK4Milne(y2,mu,lwave,energy,h4,R1,Cvals)
+     y3=y2
+     call RichardsonStepRK4Milne(y3,mu,lwave,energy,h4,R2,Cvals)
+     y4=y3
+     call RichardsonStepRK4Milne(y4,mu,lwave,energy,h4,R3,Cvals)
+     y5=y4
+     call RichardsonStepRK4Milne(y5,mu,lwave,energy,h4,R4,Cvals)
+
+     phaseint(iR+1) = phaseint(iR) + TwoOnFortyFive*h4* &
+          (7d0*exp(-2*y1(1)) + 32d0*exp(-2*y2(1)) + 12d0*exp(-2*y3(1)) + 32d0*exp(-2*y4(1)) + 7d0*exp(-2*y5(1)))
+     y1=y5
+     y=y5
+     alpha(iR+1,1) = exp(y(1))
+     alpha(iR+1,2) = y(2)*exp(y(1))
+     !write(102,*) R(iR+1), phaseint(iR+1)
+     !write(6,*) R(iR+1), phaseint(iR+1), y(1), y(2)
+  enddo
+!stop
+
+end subroutine CalcNewMilne4stepRichardson
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine CalcNewMilne6step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
   ! USES BODES 7-point rule
   implicit none
@@ -1784,7 +1835,8 @@ subroutine MQDTNewfunctions(R1, R2, NA, scale, Cvals, mu, lwave, energy, &
   
   !call CalcNewMilne2step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
   !call CalcNewMilne4step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
-  call CalcNewMilne6step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
+  !call CalcNewMilne6step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
+  call CalcNewMilne4stepRichardson(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
 !  write(6,*) "y = ", y
   alphaf = alpha(NA,:)
   phir = phaseint(NA)
@@ -2083,7 +2135,7 @@ subroutine CalcNewGammaphaseFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,
         InterpGammaphase%y(iE) = atan(1d0/ct)
         !        write(6,'(A)',ADVANCE='NO') "."
         call cpu_time(t2)
-        write(6,'(A,i3,A,i3,A,f8.4,A)') "(",iE,"/",NE,").  Estimated time remaining = ",(NE-iE)*(t2-t1)/60d0," min."
+        write(6,'(A,i3,A,i3,A,f8.4,A)') "(",iE,"/",NE,").  Estimated time remaining = ", (NE-iE)*(t2-t1)/60d0," min."
      enddo
      write(6,*) "done."
      call smoothgamma(InterpGammaPhase%y,NE)
