@@ -625,7 +625,7 @@ program main
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2
   double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw,wavek
   integer iE, iRmid,NRmid,Ndum,NXM,NXF,multnsr, multnlr,ith,NQD,NBGridFine
-  double precision RX, Rmid, RF, Cvals(4), Ktilde
+  double precision RX, Rmid, RF, Cvals(4), Ktilde,t1,t2
   double precision SingletQD, TripletQD, x,Bhuge,Ebar1,Ebar3,trace1, trace3,ascatEIFT,KtildeEIFT
   double precision, external :: VLR, rint, abar
   character(len=20), external :: str
@@ -982,6 +982,7 @@ program main
   call SetupInterpolatingMatrix(InterpKsr)
   iE=1
   do iB = 1, NBgridfine
+     call cpu_time(t1)
      call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
      HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
      !Find the asymptotic channel states
@@ -1047,7 +1048,9 @@ program main
      ascat = (1d0-Ktilde)*abar(lwave)*betavdw
      ascatEIFT = (1d0-KtildeEIFT)*abar(lwave)*betavdw
 
-     write(6,*) Bgrid(iB), ascat , 8d0*pi*ascat**2*(Bohrpercm**2)
+     call cpu_time(t2)
+     write(6,'(f10.3,f14.5,d14.5,A,f10.3,A)') Bgrid(iB), ascat, 8d0*pi*ascat**2*(Bohrpercm**2), &
+          "  Estimated time remaining = ", (NBgrid-iB)*(t2-t1)/60d0, " min."
 
      if(CALCTYPE.eq.3) then
         write(51,*) Bgrid(iB), ascat , ascatEIFT, 8d0*pi*ascat**2*(Bohrpercm**2),8d0*pi*ascatEIFT**2*(Bohrpercm**2)
@@ -1084,7 +1087,7 @@ program main
   
   do iB = 1, NBgrid
      yi = ystart
-     
+     call cpu_time(t1)
      call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
      HHZ2 = HHZ2*MHzPerHartree
      
@@ -1120,13 +1123,17 @@ program main
         call CalcK(yf,RF,SD,mu,3d0,1d0,Energy,Eth,size2,NumOpen)
 
         ! Various output statements:
+        call cpu_time(t2)
         if(iE.eq.1) then ! Write the field dependence at the lowest energy (close to threshold)
            !write(51,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*muref*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
            ascat = -SD%K(1,1)/dsqrt(2d0*mu*(Energy-Eth(1)))
            write(51,*) Bgrid(iB), ascat, 8d0*pi*ascat**2*(Bohrpercm**2)
-           write(6,*) Bgrid(iB),  ascat, 8d0*pi*ascat**2*(Bohrpercm**2),  2d0*SD%sigma*(Bohrpercm**2)
+           write(6,'(f10.3,f14.5,d14.5,A,f10.3,A)') Bgrid(iB), ascat, 8d0*pi*ascat**2*(Bohrpercm**2), &
+                "  Estimated time remaining = ", (NBgrid-iB)*(t2-t1)/60d0, " min."
+           
+           !write(6,*) Bgrid(iB),  ascat, 8d0*pi*ascat**2*(Bohrpercm**2),  2d0*SD%sigma*(Bohrpercm**2)
         endif
-
+        
         write(50,'(100d20.10)') Egrid(iE)*HartreePermK, 2d0*SD%sigma*(Bohrpercm**2)
 
      enddo
@@ -1411,6 +1418,23 @@ subroutine RK4StepNewMilne(y,mu,lwave,energy,h,R,Cvals)
   y = y + k1/6.0d0 + k2/3.0d0 + k3/3.0d0 + k4/6.0d0
 end subroutine RK4StepNewMilne
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine RichardsonStepRK4Milne(y,mu,lwave,energy,h,R,Cvals)
+  implicit none
+  double precision h,h2,y1(2),y2(2),y(2),mu,energy,R,Cvals(4)
+  integer lwave
+
+  y1 = y
+  y2 = y
+  h2 = 0.5d0*h
+  
+  call RK4StepNewMilne(y1,mu,lwave,energy,h,R,Cvals)
+
+  call RK4StepNewMilne(y2,mu,lwave,energy,h2,R,Cvals)
+  call RK4StepNewMilne(y2,mu,lwave,energy,h2,R+h2,Cvals)
+
+  y = (16d0*y2-y1)/15d0
+end subroutine RichardsonStepRK4Milne
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine RK5CashKarpStepMilne(y,mu,lwave,energy,h,R,Cvals,Delta)
   use quadrature
   implicit none
@@ -1685,8 +1709,9 @@ subroutine CalcNewMilne6step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
      call RK4StepNewMilne(y7,mu,lwave,energy,h6,R6,Cvals)
      
      phaseint(iR+1) = phaseint(iR) + OneOverOneForty*h6* &
-          (41d0*(exp(-2*y1(1)) + exp(-2*y7(1))) + 216d0*(exp(-2*y2(1)) + exp(-2*y6(1))) + &
-           27d0*(exp(-2*y3(1)) + exp(-2*y5(1))) + 272d0*exp(-2*y4(1)))
+          (41d0*(exp(-2*y1(1)) + exp(-2*y7(1))) + 216d0*(exp(-2*y2(1)) + exp(-2*y6(1)))  &
+          + 27d0*(exp(-2*y3(1)) + exp(-2*y5(1))) + 272d0*exp(-2*y4(1)))
+     
      y1=y7
      y=y7
      alpha(iR+1,1) = exp(y(1))
@@ -1757,8 +1782,8 @@ subroutine MQDTNewfunctions(R1, R2, NA, scale, Cvals, mu, lwave, energy, &
 
   alpha(1,:) = alpha0
   
-!  call CalcNewMilne2step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
-!  call CalcNewMilne4step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
+  !call CalcNewMilne2step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
+  !call CalcNewMilne4step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
   call CalcNewMilne6step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
 !  write(6,*) "y = ", y
   alphaf = alpha(NA,:)
@@ -2015,7 +2040,7 @@ subroutine CalcNewGammaphaseFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,
   integer lwave, iE, NE,ix, NXF,size, kx, cotgamfile,MQDTMODE
   double precision RX, RF, mu, betavdw, Cvals(4), phiL,EvdW,E1,E2,ldg0,ldf0,phir,tp
   double precision x, xscale, si, sk, sip, skp, ldk, ldi, kappa, f0, f0p, g0, g0p,Eth(size),ct
-  double precision alpha0(2),alphaf(2),energy, tangamma, gam
+  double precision alpha0(2),alphaf(2),energy, tangamma, gam,t1,t2
   double precision, allocatable :: xgrid(:), Rgrid(:)
   CHARACTER(LEN=*), INTENT(IN) :: scale
   CHARACTER(LEN=20) dum
@@ -2040,6 +2065,7 @@ subroutine CalcNewGammaphaseFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,
      call GridMaker(InterpGammaphase%x, nE, E1, E2, "neglog")
      write(6,'(A)') "Calculating the MQDT parameter cot(gamma) as a function of energy"
      do iE = 1, NE
+        call cpu_time(t1)
         energy = InterpGammaphase%x(iE)
         kappa = sqrt(2*mu*abs(energy))
         alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
@@ -2055,9 +2081,9 @@ subroutine CalcNewGammaphaseFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,
         ct = tp * (ldf0 + kappa)/(ldg0 + kappa)
 
         InterpGammaphase%y(iE) = atan(1d0/ct)
-        write(6,'(A)',ADVANCE='NO') "."
-
-
+        !        write(6,'(A)',ADVANCE='NO') "."
+        call cpu_time(t2)
+        write(6,'(A,i3,A,i3,A,f8.4,A)') "(",iE,"/",NE,").  Estimated time remaining = ",(NE-iE)*(t2-t1)/60d0," min."
      enddo
      write(6,*) "done."
      call smoothgamma(InterpGammaPhase%y,NE)
