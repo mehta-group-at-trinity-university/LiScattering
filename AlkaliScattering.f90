@@ -606,14 +606,17 @@ program main
   use quadrature
 
   implicit none
-  integer NPP, iR, iB, ihf, n, i, j, k, A, nc, nr, ESTATE, ISTATE, IMN1,cotgamfile,STQDfile
+  integer iR, iB, ihf, n, i, j, k, A, nc, nr, ESTATE, ISTATE, IMN1,cotgamfile,STQDfile
   integer nspin1, nspin2, espin1, espin2 !nspin is the nuclear spin and espin is the electronic spin
   integer i1,i2,s1,s2,S,sym,size1,size2,NBgrid,NEgrid,mtot, lwave,NumOpen
-  integer Nsr, Nlr, CALCTYPE,MQDTMODE
+  integer Nsr, CALCTYPE,MQDTMODE
   logical writepot
   double precision, allocatable :: Rsr(:), Rlr(:),VsrSinglet(:),VsrTriplet(:),VlrSinglet(:),VlrTriplet(:)
+  double precision, allocatable :: VAllTriplet(:),VAllSinglet(:),wAll(:),RAll(:)
+  double precision, allocatable :: VHalfTriplet(:),VHalfSinglet(:),wHalf(:),RHalf(:)
   double precision, allocatable :: wSR(:),wLR(:),Vdum(:),Rdum(:)
   double precision, allocatable :: weights(:),ystart(:,:),yi(:,:),ym(:,:),yf(:,:),Kmat(:,:),identity(:,:)
+  double precision, allocatable :: yfAll(:,:),yfHalf(:,:)
   double precision, allocatable :: HHZ(:,:), Bgrid(:),Egrid(:), EVAL(:), EVEC(:,:),EVECTEMP(:,:)
   double precision, allocatable :: EThreshMat(:,:),TEMP(:,:)
   double precision, allocatable :: cotgamma(:,:),Ktemp1(:,:),Ktemp2(:,:),KPQ(:,:),KQP(:,:)
@@ -621,10 +624,10 @@ program main
   double precision, allocatable :: VHZ(:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:),Ksr(:,:)!,RmidArray(:)
   double precision, allocatable :: KsrEIFT(:,:),Ktemp1EIFT(:,:),Ktemp2EIFT(:,:)
   double precision, allocatable :: KQPEIFT(:,:),KPQEIFT(:,:)
-  double precision VLIM,Rmin,dR,phiL,stepsize,Vmin,ascat
+  double precision VLIM,Rmin,dR,phiL,stepsize,Vmin,ascat,hstep,hstephalf,hdiff
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2
   double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw,wavek
-  integer iE, iRmid,NRmid,Ndum,NXM,NXF,multnsr, multnlr,ith,NQD,NBGridFine
+  integer iE, iRmid,NRmid,Ndum,NXM,NXF,multnsr, multnlr,ith,NQD,NBGridFine,NAll,NHalf
   double precision RX, Rmid, RF, Cvals(4), Ktilde,t1,t2
   double precision SingletQD, TripletQD, x,Bhuge,Ebar1,Ebar3,trace1, trace3,ascatEIFT,KtildeEIFT
   double precision, external :: VLR, rint, abar
@@ -647,7 +650,7 @@ program main
   read(5,*)
   read(5,*) Rmin, Rmid, RX, RF
   read(5,*)
-  read(5,*) NXM, NXF, Nsr, Nlr
+  read(5,*) NXM, NXF, Nsr, NAll
   read(5,*)
   read(5,*) NEgrid, Emin, Emax  ! enter in mK
   read(5,*)
@@ -660,7 +663,7 @@ program main
   If((MQDTMODE.eq.1).and.(CALCTYPE.eq.2)) then
      write(6,*) "Using full B-field range for calculation of Ksr and QDs."
 
-     Bmin = 0d0
+     Bmin = 0.1d0
      Bmax = Bhuge
   endif
   !make the magnetic field grid and energy grid
@@ -748,8 +751,11 @@ program main
   allocate(TEMP(size2,size2),AsymChannels(size2,size2))
   allocate(HHZ2(size2,size2))
   allocate(EVEC(size2,size2),EVECTEMP(size2,size2),EVAL(size2))
-  call AllocateScat(SD,size2)
+  call allocateScat(SD,size2)
   allocate(identity(size2,size2),ystart(size2,size2),yi(size2,size2),ym(size2,size2),yf(size2,size2),Eth(size2))
+
+  allocate(yfAll(size2,size2),yfHalf(size2,size2))
+  
   allocate(cotgamma(size2-1,size2-1))
   allocate(Ktemp1(size2-1,size2-1),Ktemp2(1,1))
   allocate(KPQ(1,size2-1),KQP(size2-1,1))
@@ -818,11 +824,17 @@ program main
   write(6,*) "RX = ", RX
   write(6,*) "RMid = ", Rmid
   write(6,*) "RF = ", RF
-  write(6,*) "Nsr and Nrl = ", Nsr, Nlr
+  write(6,*) "Nsr and NAll = ", Nsr, NAll
+
+  NHalf = (NAll)/2
+
   write(6,*) "NXM and NXF = ", NXM, NXF
   allocate(VHZ(size2,size2))
-  allocate(Rsr(Nsr),Rlr(Nlr),wSR(Nsr),wLR(Nlr),VsrSinglet(Nsr),VlrSinglet(Nlr),VsrTriplet(Nsr),VlrTriplet(Nlr))
+  allocate(Rsr(Nsr),wSR(Nsr),VsrSinglet(Nsr),VsrTriplet(Nsr))
+!  allocate(Rlr(Nlr),wLR(Nlr),VlrSinglet(Nlr),VlrTriplet(Nlr))
 
+
+  
   NQD = 20
   call AllocateInterpolatingFunction(NQD,2,InterpQDSinglet)
   call AllocateInterpolatingFunction(NQD,2,InterpQDTriplet)
@@ -851,7 +863,17 @@ program main
   call MakeHHZ2(Bhuge,AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
   HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
   call MyDSYEV(HHZ2,size2,Eth,AsymChannels)
-  write(6,*) "RANGE = ", -abs(Eth(size2)-Eth(1)), abs(Eth(size2)-Eth(1))
+    write(6,*) "---------------------------------------------------------"
+  write(6,*) "The lowest collision channel corresponds to the following "
+  write(6,*) "superposition of symmetrized two-atom states:"
+  write(6,*) "---------------------------------------------------------"
+  do i = 1, size2
+     write(6,'(f10.5,A,I4,A,f5.2,A,4I3,A,I3,A,4I3,A)') AsymChannels(i,1), ' x ', i," : ", hf2symTempGlobal(i)%norm, &
+          " ( |", hf2symTempGlobal(i)%state1," > +", hf2symTempGlobal(i)%phase,"|", hf2symTempGlobal(i)%state2," > )"
+  enddo
+
+  write(6,*) "---------------------------------------------------------"
+  write(6,'(A,d14.6,d14.6)') "RANGE of energies for QD calcualtion = ", -abs(Eth(size2)-Eth(1)), abs(Eth(size2)-Eth(1))
   !Now that we know Eth at the largest field value, we can compute an interpolated function for cot(gamma)
   if (MQDTMODE.gt.1) goto 12
   call CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,Cvals,phiL,scale) ! calculate the phase standardization for lwave = 0
@@ -874,7 +896,8 @@ program main
      call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
      HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
      !Find the asymptotic channel states
-     VHZ(:,:) = VlrSinglet(Nlr)*SPmat(:,:) + VlrTriplet(Nlr)*TPmat(:,:) + HHZ2(:,:) 
+!     VHZ(:,:) = VlrSinglet(Nlr)*SPmat(:,:) + VlrTriplet(Nlr)*TPmat(:,:) + HHZ2(:,:)
+     VHZ(:,:) =  HHZ2(:,:) 
      call MyDSYEV(VHZ,size2,Eth,AsymChannels)
      EVEC = AsymChannels
      
@@ -921,7 +944,7 @@ program main
         call SetupCotGamma(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Egrid,NEgrid,Eth,iE,cotgamma,InterpGammaphase,scale)  
         !           write(6,*) "done."
         if((CALCTYPE.eq.2).and.(iE.eq.1)) then
-           !call logderprop(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,RotatedVsrHZ,sqize2)
+
            call logderpropB(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,Sdressed,Tdressed,EthreshMat,VsrSinglet,VsrTriplet,size2)
            call CalcKsr(ym, Ksr, size2, NXM, RX, Rsr(Nsr), energy, Eth, lwave, mu, Cvals, betavdw, phiL,scale)
            write(53,'(100d20.10)') Bgrid(iB), ((Ksr(i,j), j=1,i), i=1,size2)
@@ -1066,23 +1089,40 @@ program main
   
   stop
   !----------------------------------------------------------------------------------------------------
-11 continue  
+11 continue
+  allocate(RAll(NAll),wAll(NAll),VAllSinglet(NAll),VAllTriplet(NAll))
+  allocate(RHalf(NAll),wHalf(NAll),VHalfSinglet(NAll),VHalfTriplet(NAll))
   !This next loop is does the full log-derivative calculation
   ! prepare some arrays for the log-derivative propagator
 
-  call GridMaker(Rsr,Nsr,Rmin,Rmid,'linear')  ! Make the radial grids
-  call GridMaker(Rlr,Nlr,Rmid,RF,'linear')
-  call SetLogderWeights(wSR,Nsr)
-  call SetLogderWeights(wLR,Nlr)
+!  call GridMaker(Rsr,Nsr,Rmin,Rmid,'linear')  ! Make the radial grids
+!  call GridMaker(Rlr,Nlr,Rmid,RF,'linear')
+  call GridMaker(RAll,NAll,Rmin,RF,'linear')
+  call GridMaker(RHalf,NHalf,Rmin,RF,'linear')
+  hstep = RAll(2)-RAll(1)
+  hstephalf = RHalf(2)-RHalf(1)
+  write(6,*) "hstephalf = ", hstephalf
+  write(6,*) "hstepfull = ", hstep
+  write(6,*) "ratio = ", hstep/hstephalf
+!  call SetLogderWeights(wSR,Nsr)
+!  call SetLogderWeights(wLR,Nlr)
+  call SetLogderWeights(wAll,NAll)
+  call SetLogderWeights(wHalf,NHalf)
     
   ESTATE = 1
-  call SetupPotential(ISTATE,ESTATE,mu,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrSinglet,Cvals)
-  call SetupPotential(ISTATE,ESTATE,mu,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrSinglet,Cvals)
+!  call SetupPotential(ISTATE,ESTATE,mu,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrSinglet,Cvals)
+!  call SetupPotential(ISTATE,ESTATE,mu,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrSinglet,Cvals)
+  call SetupPotential(ISTATE,ESTATE,mu,muref,NAll,VLIM,RAll*BohrPerAngstrom,VAllSinglet,Cvals)
+  call SetupPotential(ISTATE,ESTATE,mu,muref,NHalf,VLIM,RHalf*BohrPerAngstrom,VHalfSinglet,Cvals)
   ESTATE = 3
-  call SetupPotential(ISTATE,ESTATE,mu,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrTriplet,Cvals)
-  call SetupPotential(ISTATE,ESTATE,mu,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrTriplet,Cvals)
+ ! call SetupPotential(ISTATE,ESTATE,mu,muref,Nsr,VLIM,Rsr*BohrPerAngstrom,VsrTriplet,Cvals)
+ ! call SetupPotential(ISTATE,ESTATE,mu,muref,Nlr,VLIM,Rlr*BohrPerAngstrom,VlrTriplet,Cvals)
+  call SetupPotential(ISTATE,ESTATE,mu,muref,NAll,VLIM,RAll*BohrPerAngstrom,VAllTriplet,Cvals)
+  call SetupPotential(ISTATE,ESTATE,mu,muref,NHalf,VLIM,RHalf*BohrPerAngstrom,VHalfTriplet,Cvals)
+  
+  !  call logderScatLengths(lwave,mu,Nsr,Nlr,Rsr,Rlr,wsr,wlr,VsrSinglet,VlrSinglet,VsrTriplet,VlrTriplet)
+  call logderScatLengths1(lwave,mu,NAll,RAll,wAll,VAllSinglet,VAllTriplet)
 
-  call logderScatLengths(lwave,mu,Nsr,Nlr,Rsr,Rlr,wsr,wlr,VsrSinglet,VlrSinglet,VsrTriplet,VlrTriplet)
   write(51,*)
   
   do iB = 1, NBgrid
@@ -1092,7 +1132,8 @@ program main
      HHZ2 = HHZ2*MHzPerHartree
      
      !Find the asymptotic channel states
-     VHZ(:,:) = VlrSinglet(Nlr)*SPmat(:,:) + VlrTriplet(Nlr)*TPmat(:,:) + HHZ2(:,:) 
+     !VHZ(:,:) = VlrSinglet(Nlr)*SPmat(:,:) + VlrTriplet(Nlr)*TPmat(:,:) + HHZ2(:,:)
+     VHZ(:,:) =  HHZ2(:,:) 
      call MyDSYEV(VHZ(:,:),size2,Eth,AsymChannels)
 
      do i=1,size2
@@ -1118,9 +1159,16 @@ program main
            if(energy.gt.Eth(j)) NumOpen = NumOpen+1
         enddo
 
-        call logderpropB(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,Sdressed,Tdressed,EthreshMat,VsrSinglet,VsrTriplet, size2) 
-        call logderpropB(mu,Energy,identity,wLR,Nlr,ym,yf,Rlr,Sdressed,Tdressed,EthreshMat,VlrSinglet, VlrTriplet, size2)
+!        call logderpropB(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,Sdressed,Tdressed,EthreshMat,VsrSinglet,VsrTriplet, size2) 
+        !        call logderpropB(mu,Energy,identity,wLR,Nlr,ym,yf,Rlr,Sdressed,Tdressed,EthreshMat,VlrSinglet, VlrTriplet, size2)
+        call logderpropB(mu,Energy,identity,wHalf,NHalf,yi,yfHalf,RHalf,Sdressed,Tdressed,&
+             EthreshMat,VHalfSinglet,VHalfTriplet,size2)
+        call logderpropB(mu,Energy,identity,wAll,NAll,yi,yfAll,RAll,Sdressed,Tdressed,&
+             EthreshMat,VAllSinglet,VAllTriplet,size2)
+
+        yf = (hstephalf*yfAll - hstep*yfHalf)/(hstephalf - hstep)
         call CalcK(yf,RF,SD,mu,3d0,1d0,Energy,Eth,size2,NumOpen)
+
 
         ! Various output statements:
         call cpu_time(t2)
@@ -1128,7 +1176,7 @@ program main
            !write(51,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*muref*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
            ascat = -SD%K(1,1)/dsqrt(2d0*mu*(Energy-Eth(1)))
            write(51,*) Bgrid(iB), ascat, 8d0*pi*ascat**2*(Bohrpercm**2)
-           write(6,'(f10.3,f14.5,d14.5,A,f10.3,A)') Bgrid(iB), ascat, 8d0*pi*ascat**2*(Bohrpercm**2), &
+           write(6,'(f10.3,f10.3,d14.5,A,f10.3,A)') Bgrid(iB), ascat, 8d0*pi*ascat**2*(Bohrpercm**2), &
                 "  Estimated time remaining = ", (NBgrid-iB)*(t2-t1)/60d0, " min."
            
            !write(6,*) Bgrid(iB),  ascat, 8d0*pi*ascat**2*(Bohrpercm**2),  2d0*SD%sigma*(Bohrpercm**2)
@@ -1204,8 +1252,83 @@ end subroutine SetLogderWeights
 !!$  double precision, parameter :: OneTwelfth = 0.083333333333333333333d0
 !!$
 !!$end subroutine NumerovMC
+!!$
+
+!!$subroutine logderpropC(mu,Energy,identity,weights,NPP,yi,yf,XO,Sdressed,Tdressed,EthreshMat,Vsinglet,Vtriplet,size)
+!!$  ! This version of the log-derivative propagator attempts to use BurlischStoer extrapolation.
+!!$  ! Each step is done twice, once with a step size 2h, and once with two steps of size h.
+!!$  ! The radial points do not need to be equally spaced for this algorithm, unlike logderA and logderB
+!!$  implicit none
+!!$  integer i,j,step,NPP,size
+!!$!  double precision, allocatable :: VTriplet(:),VSinglet(:),wAll(:),wHalf(:),Rall(:)
+!!$  double precision h,h2,Energy,mu,Rmin,Rmax
+!!$  double precision yi(size,size),yf(size,size)
+!!$  double precision Tdressed(size,size), Sdressed(size,size), Ethreshmat(size,size)
+!!$!  double precision Vtriplet(NPP), Vsinglet(NPP)
+!!$  double precision pottemp(size,size),pottempmid(size,size)
+!!$!  double precision Pot(size,size,NPP) !make sure Pot includes the threshold offsets
+!!$  double precision tempy(size,size),ycurrent(size,size),yprevious(size,size),identity(size,size)
+!!$  double precision ysave(size,size)
+!!$  double precision vtemp1(size,size), vtemp2(size,size), un(size,size)
+!!$  double precision, parameter :: onesixth = 0.166666666666666666666d0
+!!$  double precision, parameter :: onethird = 0.333333333333333333333d0
+!!$
+!!$
+!!$  
+!!$  allocate(Rall(NPP),VTriplet(NPP),VSinglet(NPP))
+!!$  allocate(wAll(NPP),wHalf(NPP/2))
+!!$  call GridMaker(grid,numpts,E1,E2,scale)
+!!$  
+!!$  h = XO(2)-XO(1)
+!!$  h2 = 2*h
+!!$  yprevious = yi
+!!$  do step = 1, NPP,2
+!!$     !----------------------------------------------------------------------------------------------------
+!!$     !first do two steps
+!!$     pottemp = Vsinglet(step)*Sdressed + Vtriplet(step)*Tdressed + EthreshMat
+!!$     vtemp1 = 2d0*mu*(identity*Energy-pottemp)
+!!$
+!!$     if (mod(step,2).eq.0) then
+!!$        un = vtemp1
+!!$     else
+!!$        vtemp2 = identity + h*h*onesixth*vtemp1
+!!$        call sqrmatinv(vtemp2,size)
+!!$        un = matmul(vtemp2,vtemp1)
+!!$     endif
+!!$     tempy = identity + h*yprevious
+!!$     call sqrmatinv(tempy,size)
+!!$     ycurrent = MATMUL(tempy,yprevious) - onethird*h*weights(step)*un
+!!$     yprevious = ycurrent
+!!$
+!!$     
+!!$     pottempmid = Vsinglet(step+1)*Sdressed + Vtriplet(step+1)*Tdressed + EthreshMat
+!!$     vtemp1 = 2d0*mu*(identity*Energy-pottempmid)
+!!$
+!!$     if (mod(step,2).eq.0) then
+!!$        un = vtemp1
+!!$     else
+!!$        vtemp2 = identity + h*h*onesixth*vtemp1
+!!$        call sqrmatinv(vtemp2,size)
+!!$        un = matmul(vtemp2,vtemp1)
+!!$     endif
+!!$     tempy = identity + h*yprevious
+!!$     call sqrmatinv(tempy,size)
+!!$     ycurrent = MATMUL(tempy,yprevious) - onethird*h*weights(step+1)*un
+!!$     yprevious = ycurrent
+!!$     !----------------------------------------------------------------------------------------------------
+!!$     
+!!$
+!!$     
+!!$  enddo
+!!$
+!!$
+!!$  yf(:,:) = ycurrent(:,:)
+!!$
+!!$end subroutine logderpropC
+
   !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!subroutine logderprop(mu,Energy,identity,weights,NPP,yi,yf,XO,Pot,size)
+
+
 subroutine logderpropB(mu,Energy,identity,weights,NPP,yi,yf,XO,Sdressed,Tdressed,EthreshMat,Vsinglet,Vtriplet,size)
   implicit none
   integer i,j,step,NPP,size
@@ -1418,9 +1541,9 @@ subroutine RK4StepNewMilne(y,mu,lwave,energy,h,R,Cvals)
   y = y + k1/6.0d0 + k2/3.0d0 + k3/3.0d0 + k4/6.0d0
 end subroutine RK4StepNewMilne
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine RichardsonStepRK4Milne(y,mu,lwave,energy,h,R,Cvals)
+subroutine BurlischStoerStepRK4Milne(y,mu,lwave,energy,h,R,Cvals)
   implicit none
-  double precision h,h1,h2,y1(2),y2(2),y(2),mu,energy,R,Cvals(4)
+  double precision h,h1,h2,y1(2),y2(2),y(2),mu,energy,R,Cvals(4),h3,y3(2)
   integer lwave
 
   y1 = y
@@ -1428,16 +1551,27 @@ subroutine RichardsonStepRK4Milne(y,mu,lwave,energy,h,R,Cvals)
 
   y2 = y
   h2 = 0.5d0*h
+
+  h3 = 0.25d0*h
+  y3 = y
   
   call RK4StepNewMilne(y1,mu,lwave,energy,h1,R,Cvals)
 
   call RK4StepNewMilne(y2,mu,lwave,energy,h2,R,Cvals)
   call RK4StepNewMilne(y2,mu,lwave,energy,h2,R+h2,Cvals)
-
-  !y = (16d0*y2-y1)/15d0
-  y = (h1*y2 - h2*y1)/(h1-h2)
+    
+  call RK4StepNewMilne(y3,mu,lwave,energy,h3,R,Cvals)
+  call RK4StepNewMilne(y3,mu,lwave,energy,h3,R+h3,Cvals)
+  call RK4StepNewMilne(y3,mu,lwave,energy,h3,R+2*h3,Cvals)
+  call RK4StepNewMilne(y3,mu,lwave,energy,h3,R+3*h3,Cvals)
   
-end subroutine RichardsonStepRK4Milne
+  !y = (32d0*y2-y1)/31d0  !Richardson extrapolation (not so great -- do not use)
+!  y = (h1*y2 - h2*y1)/(h1-h2)  !Burlisch-Stoer with a linear fit to two points (not bad)
+
+  y = (h2*(h2 - h3)*h3*y1 + h1*h3*(-h1 + h3)*y2 + h1*(h1 - h2)*h2*y3)/ &  ! quadratic fit Burlisch-Stoer (best)
+       ((h1 - h2)*(h1 - h3)*(h2 - h3))
+  
+end subroutine BurlischStoerStepRK4Milne
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine RK5CashKarpStepMilne(y,mu,lwave,energy,h,R,Cvals,Delta)
   use quadrature
@@ -1670,7 +1804,7 @@ subroutine CalcNewMilne4step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
 
 end subroutine CalcNewMilne4step
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine CalcNewMilne4stepRichardson(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
+subroutine CalcNewMilne4stepBurlischStoer(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
   ! USES BODE'S 5-point rule
   implicit none
   double precision h, energy, y(2), mu,Cvals(4),y1(2),y2(2),y3(2),y4(2),y5(2),h4,R1,R2,R3,R4
@@ -1696,13 +1830,13 @@ subroutine CalcNewMilne4stepRichardson(R,alpha,y,NA,energy,lwave,mu,Cvals,phasei
 
      ! do 4 quarter-steps and use Bode's 5-point integration rule to calculate the phase integral
      y2=y1
-     call RichardsonStepRK4Milne(y2,mu,lwave,energy,h4,R1,Cvals)
+     call BurlischStoerStepRK4Milne(y2,mu,lwave,energy,h4,R1,Cvals)
      y3=y2
-     call RichardsonStepRK4Milne(y3,mu,lwave,energy,h4,R2,Cvals)
+     call BurlischStoerStepRK4Milne(y3,mu,lwave,energy,h4,R2,Cvals)
      y4=y3
-     call RichardsonStepRK4Milne(y4,mu,lwave,energy,h4,R3,Cvals)
+     call BurlischStoerStepRK4Milne(y4,mu,lwave,energy,h4,R3,Cvals)
      y5=y4
-     call RichardsonStepRK4Milne(y5,mu,lwave,energy,h4,R4,Cvals)
+     call BurlischStoerStepRK4Milne(y5,mu,lwave,energy,h4,R4,Cvals)
 
      phaseint(iR+1) = phaseint(iR) + TwoOnFortyFive*h4* &
           (7d0*exp(-2*y1(1)) + 32d0*exp(-2*y2(1)) + 12d0*exp(-2*y3(1)) + 32d0*exp(-2*y4(1)) + 7d0*exp(-2*y5(1)))
@@ -1715,7 +1849,7 @@ subroutine CalcNewMilne4stepRichardson(R,alpha,y,NA,energy,lwave,mu,Cvals,phasei
   enddo
 !stop
 
-end subroutine CalcNewMilne4stepRichardson
+end subroutine CalcNewMilne4stepBurlischStoer
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine CalcNewMilne6step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
   ! USES BODES 7-point rule
@@ -1836,7 +1970,7 @@ subroutine MQDTNewfunctions(R1, R2, NA, scale, Cvals, mu, lwave, energy, &
   !call CalcNewMilne2step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
   !call CalcNewMilne4step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
   !call CalcNewMilne6step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
-  call CalcNewMilne4stepRichardson(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
+  call CalcNewMilne4stepBurlischStoer(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
 !  write(6,*) "y = ", y
   alphaf = alpha(NA,:)
   phir = phaseint(NA)
@@ -2991,6 +3125,55 @@ subroutine logderScatLengths(lwave,mu,Nsr,Nlr,Rsr,Rlr,wsr,wlr,VsrSinglet,VlrSing
   
 
 end subroutine LogderScatLengths
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine logderScatLengths1(lwave,mu,N,R,w,VSinglet,VTriplet)
+  use units
+  implicit none
+  integer n1, n2, N,lwave,iE
+  double precision norm, k, energy,td1,td2, Ustart,psistart,s,mu
+  double precision, intent(in) :: R(N),w(N)
+  double precision, intent(in) :: VSinglet(N),VTriplet(N)
+  double precision ystart(2,2),VMAT(2,2,N)
+  double precision identity(2,2),ym(2,2),yf(2,2),a1,a3!
+
+  double precision f, fp, g, gp,x
+
+
+
+  energy = 1d-3*nKPerHartree
+  k = sqrt(2d0*mu*energy)
+          
+  identity = 0d0
+  identity(1,1) = 1d0
+  identity(2,2) = 1d0
+  ystart = 0d0
+  ystart(1,1) = 1d20
+  ystart(2,2) = 1d20
+  VMAT(:,:,:) = 0d0
+
+  
+  VMAT(1,1,:) = VSinglet(:)
+  VMAT(2,2,:) = VTriplet(:)
+
+  call logderpropA(mu,energy,identity,w,N,ystart,yf,R,VMAT,2)
+
+  x = k*R(N)
+  call sphbesjy(lwave,x,f,g,fp,gp) ! These are the Ricatti functions kr*j_n(kr)
+  
+  td1 = (yf(1,1)*f - k*fp) / (yf(1,1)*g - k*gp)
+  td2 = (yf(2,2)*f - k*fp) / (yf(2,2)*g - k*gp)
+  a1 = -td1/k
+  a3 = -td2/k
+
+  
+  write(6,'(A,f10.5,A)') " Energy = ",energy/nKPerHartree,"nK"
+  write(6,*) "Scattering Lengths:"
+  write(6,*) "-------------------"
+  write(6,*) "Singlet:", a1
+  write(6,*) "Triplet:", a3
+  
+
+end subroutine LogderScatLengths1
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine testinterpolation
   use InterpType
