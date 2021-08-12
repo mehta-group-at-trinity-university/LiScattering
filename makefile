@@ -4,7 +4,7 @@ OPTFLAG = -O4 -floop-nest-optimize
 FREEFORM = -ffree-form
 STND = #-fdec #-std=gnu
 LEGACY = -std=legacy
-DEBUG   = -fcheck=all
+DEBUG   = -fcheck=bounds -fbounds-check # -Wall
 FORCEDP = #-fdefault-real-8 -fdefault-double-
 LAPACK =   -framework accelerate
 ARPACK =  -L/usr/local/lib/ -larpack

@@ -624,8 +624,8 @@ program main
   double precision, allocatable :: VHZ(:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:),Ksr(:,:)!,RmidArray(:)
   double precision, allocatable :: KsrEIFT(:,:),Ktemp1EIFT(:,:),Ktemp2EIFT(:,:)
   double precision, allocatable :: KQPEIFT(:,:),KPQEIFT(:,:)
-  double precision VLIM,Rmin,dR,phiL,stepsize,Vmin,ascat,hstep,hstephalf,hdiff
-  double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2
+  double precision VLIM,Rmin,dR,phiL,stepsize,Vmin,ascat,hstep,hstephalf,hdiff,as1,as2,at1,at2,asext,atext
+  double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2,EvdW
   double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw,wavek
   integer iE, iRmid,NRmid,Ndum,NXM,NXF,multnsr, multnlr,ith,NQD,NBGridFine,NAll,NHalf
   double precision RX, Rmid, RF, Cvals(4), Ktilde,t1,t2
@@ -788,7 +788,8 @@ program main
        "-"//trim(str(NINT(Bmin)))//"G-"//trim(str(NINT(Bmax)))//"G.dat")
   open(unit = 51, file = "ScatLenFieldDependence-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))// &
        "-"//trim(str(NINT(Bmin)))//"G-"//trim(str(NINT(Bmax)))//"G.dat")
-
+  open(unit = 60, file = "vdWLengthEnergy-"//trim(str(ISTATE))//".dat")
+  
   write(6,'(A)') "See file CollisionThresholds.dat for the field dependence of the scattering thresholds."
   write(6,'(A)') "See file SigmaEnergyDependence.dat for the energy-dependent cross section"
   write(6,'(A)') "See file ScatLenFieldDependence.dat for the field-dependent scattering length at threshold"
@@ -813,8 +814,10 @@ program main
   !write(6,'(A,f12.5)') "The suggested maximum step size is ", stepsize
 !  write(6,'(A,I10)') "The minimum value of Nsr = ", int((Rmidmax - Rmin)/stepsize)
   call VdWLength(Cvals,betavdw,mu)
-  write(6,'(A,f12.4)') "The van der Waals length is rvdw = ", betavdw
-
+  EvdW = 1d0/(2d0*mu*betavdw**2)
+  write(6,'(A,d16.8)') "The van der Waals length is rvdw = ", betavdw
+  write(6,'(A,d16.8)') "The van der Waals energy is EvdW = ", EvdW
+  write(60,*) betavdw, EvdW
   RX = RX*betavdw
   RF = RF*betavdw
   !Nsr = multnsr!*int(Rmidmax/stepsize)
@@ -1121,8 +1124,18 @@ program main
   call SetupPotential(ISTATE,ESTATE,mu,muref,NHalf,VLIM,RHalf*BohrPerAngstrom,VHalfTriplet,Cvals)
   
   !  call logderScatLengths(lwave,mu,Nsr,Nlr,Rsr,Rlr,wsr,wlr,VsrSinglet,VlrSinglet,VsrTriplet,VlrTriplet)
-  call logderScatLengths1(lwave,mu,NAll,RAll,wAll,VAllSinglet,VAllTriplet)
-
+  call logderScatLengths1(lwave,mu,NHalf,RHalf,wHalf,VHalfSinglet,VHalfTriplet,as1,at1)  
+  call logderScatLengths1(lwave,mu,NAll,RAll,wAll,VAllSinglet,VAllTriplet,as2,at2)
+  
+  asext = (hstephalf*as2 - hstep*as1)/(hstephalf - hstep)
+  atext = (hstephalf*at2 - hstep*at1)/(hstephalf - hstep)
+!  write(6,'(A,f10.5,A)') " Energy = ",energy/nKPerHartree,"nK"
+  write(6,*) "Scattering Lengths:"
+  write(6,*) "-------------------"
+  write(6,*) "Singlet:", asext
+  write(6,*) "Triplet:", atext
+  write(60,*) asext, atext
+  
   write(51,*)
   
   do iB = 1, NBgrid
@@ -3126,7 +3139,7 @@ subroutine logderScatLengths(lwave,mu,Nsr,Nlr,Rsr,Rlr,wsr,wlr,VsrSinglet,VlrSing
 
 end subroutine LogderScatLengths
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine logderScatLengths1(lwave,mu,N,R,w,VSinglet,VTriplet)
+subroutine logderScatLengths1(lwave,mu,N,R,w,VSinglet,VTriplet,a1,a3)
   use units
   implicit none
   integer n1, n2, N,lwave,iE
@@ -3164,13 +3177,6 @@ subroutine logderScatLengths1(lwave,mu,N,R,w,VSinglet,VTriplet)
   td2 = (yf(2,2)*f - k*fp) / (yf(2,2)*g - k*gp)
   a1 = -td1/k
   a3 = -td2/k
-
-  
-  write(6,'(A,f10.5,A)') " Energy = ",energy/nKPerHartree,"nK"
-  write(6,*) "Scattering Lengths:"
-  write(6,*) "-------------------"
-  write(6,*) "Singlet:", a1
-  write(6,*) "Triplet:", a3
   
 
 end subroutine LogderScatLengths1
