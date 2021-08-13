@@ -1,6 +1,6 @@
 # This is a parameter file for input into AlkaliScattering.x
 # ISTATE (for Li-6)  SYM (-1 for fermion)  CALCTYPE (1 for logder, 2 for MQDT, 3 for FT) 	MQDTMODE
-  6	      	      -1     	 	   2	   	   	     	       	     		2
+  6	      	      -1     	 	   1	   	   	     	       	     		1
 # L (partial wave)    2*MFtot (twice total F projection) writepot
   0 	     	      0	      	     	     		 .false.
 # Rmin		      Rmidmax  		 RX    		 RF (all in bohr except RX and RF which is in vdw units.  Converted to bohr in the code.)

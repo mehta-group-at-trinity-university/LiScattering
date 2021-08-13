@@ -983,12 +983,15 @@ program main
   ! Use this next part if you want to read in Ksr and gamma(E) in the MQDT/FT calculation
 12 continue
 
+  
   call CalcNewGammaphaseFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,&
        InterpGammaphase,scale,MQDTMODE,cotgamfile)
   call logderQD(lwave,mu,Eth,size2,NQD,NXM,Nsr,wsr,VsrSinglet,VsrTriplet,Rsr,&
        InterpQDTriplet,InterpQDSinglet,phiL,betavdw,RX,Cvals,scale,MQDTMODE,STQDfile)
   call SetupInterpolatingFunction(InterpQDSinglet)
   call SetupInterpolatingFunction(InterpQDTriplet)
+
+  stop
   
   deallocate(Bgrid)
   if(CALCTYPE.eq.2) read(53,*) dum, NBgrid
@@ -1076,7 +1079,7 @@ program main
 
      call cpu_time(t2)
      write(6,'(f10.3,f14.5,d14.5,A,f10.3,A)') Bgrid(iB), ascat, 8d0*pi*ascat**2*(Bohrpercm**2), &
-          "  Estimated time remaining = ", (NBgrid-iB)*(t2-t1)/60d0, " min."
+          "  Estimated time remaining = ", (NBgridfine-iB)*(t2-t1)/60d0, " min."
 
      if(CALCTYPE.eq.3) then
         write(51,*) Bgrid(iB), ascat , ascatEIFT, 8d0*pi*ascat**2*(Bohrpercm**2),8d0*pi*ascatEIFT**2*(Bohrpercm**2)
@@ -1132,10 +1135,11 @@ program main
 !  write(6,'(A,f10.5,A)') " Energy = ",energy/nKPerHartree,"nK"
   write(6,*) "Scattering Lengths:"
   write(6,*) "-------------------"
-  write(6,*) "Singlet:", asext
-  write(6,*) "Triplet:", atext
+  write(6,*) "Singlet:", as1,as2,asext
+  write(6,*) "Triplet:", at1,at2,atext
   write(60,*) asext, atext
-  
+  call testlogder()  
+  stop
   write(51,*)
   
   do iB = 1, NBgrid
@@ -1145,7 +1149,6 @@ program main
      HHZ2 = HHZ2*MHzPerHartree
      
      !Find the asymptotic channel states
-     !VHZ(:,:) = VlrSinglet(Nlr)*SPmat(:,:) + VlrTriplet(Nlr)*TPmat(:,:) + HHZ2(:,:)
      VHZ(:,:) =  HHZ2(:,:) 
      call MyDSYEV(VHZ(:,:),size2,Eth,AsymChannels)
 
@@ -1223,7 +1226,6 @@ subroutine SetLogderWeights(weights,Npts)
   integer Npts,iR
   double precision weights(Npts)
 
-
   do iR = 1, Npts-1
      if (mod(iR,2).eq.1)  weights(iR)=4d0
      if (mod(iR,2).eq.0)  weights(iR)=2d0
@@ -1266,80 +1268,6 @@ end subroutine SetLogderWeights
 !!$
 !!$end subroutine NumerovMC
 !!$
-
-!!$subroutine logderpropC(mu,Energy,identity,weights,NPP,yi,yf,XO,Sdressed,Tdressed,EthreshMat,Vsinglet,Vtriplet,size)
-!!$  ! This version of the log-derivative propagator attempts to use BurlischStoer extrapolation.
-!!$  ! Each step is done twice, once with a step size 2h, and once with two steps of size h.
-!!$  ! The radial points do not need to be equally spaced for this algorithm, unlike logderA and logderB
-!!$  implicit none
-!!$  integer i,j,step,NPP,size
-!!$!  double precision, allocatable :: VTriplet(:),VSinglet(:),wAll(:),wHalf(:),Rall(:)
-!!$  double precision h,h2,Energy,mu,Rmin,Rmax
-!!$  double precision yi(size,size),yf(size,size)
-!!$  double precision Tdressed(size,size), Sdressed(size,size), Ethreshmat(size,size)
-!!$!  double precision Vtriplet(NPP), Vsinglet(NPP)
-!!$  double precision pottemp(size,size),pottempmid(size,size)
-!!$!  double precision Pot(size,size,NPP) !make sure Pot includes the threshold offsets
-!!$  double precision tempy(size,size),ycurrent(size,size),yprevious(size,size),identity(size,size)
-!!$  double precision ysave(size,size)
-!!$  double precision vtemp1(size,size), vtemp2(size,size), un(size,size)
-!!$  double precision, parameter :: onesixth = 0.166666666666666666666d0
-!!$  double precision, parameter :: onethird = 0.333333333333333333333d0
-!!$
-!!$
-!!$  
-!!$  allocate(Rall(NPP),VTriplet(NPP),VSinglet(NPP))
-!!$  allocate(wAll(NPP),wHalf(NPP/2))
-!!$  call GridMaker(grid,numpts,E1,E2,scale)
-!!$  
-!!$  h = XO(2)-XO(1)
-!!$  h2 = 2*h
-!!$  yprevious = yi
-!!$  do step = 1, NPP,2
-!!$     !----------------------------------------------------------------------------------------------------
-!!$     !first do two steps
-!!$     pottemp = Vsinglet(step)*Sdressed + Vtriplet(step)*Tdressed + EthreshMat
-!!$     vtemp1 = 2d0*mu*(identity*Energy-pottemp)
-!!$
-!!$     if (mod(step,2).eq.0) then
-!!$        un = vtemp1
-!!$     else
-!!$        vtemp2 = identity + h*h*onesixth*vtemp1
-!!$        call sqrmatinv(vtemp2,size)
-!!$        un = matmul(vtemp2,vtemp1)
-!!$     endif
-!!$     tempy = identity + h*yprevious
-!!$     call sqrmatinv(tempy,size)
-!!$     ycurrent = MATMUL(tempy,yprevious) - onethird*h*weights(step)*un
-!!$     yprevious = ycurrent
-!!$
-!!$     
-!!$     pottempmid = Vsinglet(step+1)*Sdressed + Vtriplet(step+1)*Tdressed + EthreshMat
-!!$     vtemp1 = 2d0*mu*(identity*Energy-pottempmid)
-!!$
-!!$     if (mod(step,2).eq.0) then
-!!$        un = vtemp1
-!!$     else
-!!$        vtemp2 = identity + h*h*onesixth*vtemp1
-!!$        call sqrmatinv(vtemp2,size)
-!!$        un = matmul(vtemp2,vtemp1)
-!!$     endif
-!!$     tempy = identity + h*yprevious
-!!$     call sqrmatinv(tempy,size)
-!!$     ycurrent = MATMUL(tempy,yprevious) - onethird*h*weights(step+1)*un
-!!$     yprevious = ycurrent
-!!$     !----------------------------------------------------------------------------------------------------
-!!$     
-!!$
-!!$     
-!!$  enddo
-!!$
-!!$
-!!$  yf(:,:) = ycurrent(:,:)
-!!$
-!!$end subroutine logderpropC
-
-  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 
 subroutine logderpropB(mu,Energy,identity,weights,NPP,yi,yf,XO,Sdressed,Tdressed,EthreshMat,Vsinglet,Vtriplet,size)
@@ -1385,7 +1313,7 @@ subroutine logderpropA(mu,Energy,identity,weights,NPP,yi,yf,XO,Pot,size)
 !subroutine logderprop(mu,Energy,identity,weights,NPP,yi,yf,XO,Sdressed,Tdressed,EthreshMat,size)
   implicit none
   integer i,j,step,NPP,size
-  double precision h,Energy,mu
+  double precision h,Energy,mu,wtemp
   double precision xx(NPP),weights(NPP),XO(NPP)
   double precision yi(size,size),yf(size,size)
   double precision Pot(size,size,NPP) !make sure Pot includes the threshold offsets
@@ -1400,20 +1328,61 @@ subroutine logderpropA(mu,Energy,identity,weights,NPP,yi,yf,XO,Pot,size)
      vtemp1 = 2d0*mu*(identity*Energy-Pot(:,:,step))
      if (mod(step,2).eq.0) then
         un = vtemp1
+        wtemp = 2d0
      else
         vtemp2 = identity + h*h*onesixth*vtemp1
         call sqrmatinv(vtemp2,size)
         un = matmul(vtemp2,vtemp1)
+        wtemp = 4d0
      endif
      tempy = identity + h*yprevious
      call sqrmatinv(tempy,size)
-     ycurrent = MATMUL(tempy,yprevious) - onethird*h*weights(step)*un
+     !ycurrent = MATMUL(tempy,yprevious) - onethird*h*weights(step)*un
+     if(step.eq.NPP) wtemp = 1d0
+     ycurrent = MATMUL(tempy,yprevious) - onethird*h*wtemp*un
      yprevious = ycurrent
   enddo
 
   yf(:,:) = ycurrent(:,:)
 
 end subroutine logderpropA
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!!$subroutine logderpropC(mu,Energy,identity,NPP,yi,yf,XO,Pot,size)
+!!$  ! This version attempts to do two steps at a time, thereby avoiding the need to pass a weights array.
+!!$!subroutine logderprop(mu,Energy,identity,weights,NPP,yi,yf,XO,Sdressed,Tdressed,EthreshMat,size)
+!!$  implicit none
+!!$  integer i,j,step,NPP,size
+!!$  double precision h,Energy,mu
+!!$  double precision XO(NPP)
+!!$  double precision yi(size,size),yf(size,size)
+!!$  double precision Pot(size,size,NPP) !make sure Pot includes the threshold offsets
+!!$  double precision tempy(size,size),ycurrent(size,size),yprevious(size,size),identity(size,size)
+!!$  double precision vtemp1(size,size), vtemp2(size,size), un(size,size)
+!!$  double precision, parameter :: onesixth = 0.166666666666666666666d0
+!!$  double precision, parameter :: onethird = 0.333333333333333333333d0
+!!$
+!!$  h=XO(2)-XO(1)
+!!$  yprevious = yi  ! At R=0 or some similar point deep in the classically forbidden region
+!!$  do step = 1, NPP,2
+!!$     vtemp1 = 2d0*mu*(identity*Energy-Pot(:,:,step))
+!!$!     if (mod(step,2).eq.0) then
+!!$!        un = vtemp1
+!!$     !     else
+!!$
+!!$     ! THE FIRST STEP of each pair
+!!$     vtemp2 = identity + h*h*onesixth*vtemp1
+!!$        call sqrmatinv(vtemp2,size)
+!!$        un = matmul(vtemp2,vtemp1)
+!!$!     endif
+!!$     tempy = identity + h*yprevious
+!!$     call sqrmatinv(tempy,size)
+!!$     ycurrent = MATMUL(tempy,yprevious) - onethird*h*weights(step)*un
+!!$     yprevious = ycurrent
+!!$  enddo
+!!$
+!!$  yf(:,:) = ycurrent(:,:)
+!!$
+!!$end subroutine logderpropC
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 SUBROUTINE printmatrix(M,nr,nc,file)
   IMPLICIT NONE
@@ -2407,17 +2376,18 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
         RSR = 2.870d0
         NS = 12d0
         U1 = -0.263145571d4
-        U2 = 0.813723194d9
+        U2 = 0.813723194d9  
         B = -0.400d0
         RLR = 12.00d0
         RM = 3.92436437d0
-        C6 = 0.1892652670d8
+        C6 = 0.1892652670d8   
         C8 =  0.5706799527d9
         C10 = 0.1853042722d11
         C26 = 0.0d0
         Aex = 0.90092159d4
         gamma = 5.19500d0
         beta = 2.13539d0
+        
         A = (/-4450.899484d0, 0.30601009538111d-1, 0.13671217000518d5,0.10750910095361d5, &
              -0.20933401680991d4,-0.19385874804675d5,-0.49208915890513d5,0.11026639220148d6, &
              0.72867339500920d6,-0.29310679369135d7,-0.12407070106619d8,0.40333947198094d8, &
@@ -2428,6 +2398,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
              0.37939637008662d11,-0.85271868691526d11,-0.82123523240949d10,0.18626451751424d11/)
         nu0 = 0.13148609d0
         nu1 = 2.08523853d0
+        
      case (5)   !Sodium
         N = 27
         allocate(A(N))
@@ -3114,7 +3085,6 @@ subroutine logderScatLengths(lwave,mu,Nsr,Nlr,Rsr,Rlr,wsr,wlr,VsrSinglet,VlrSing
   VMATsr(1,1,:) = VsrSinglet(:)
   VMATsr(2,2,:) = VsrTriplet(:)
 
-
   VMATlr(1,1,:) = VlrSinglet(:)
   VMATlr(2,2,:) = VlrTriplet(:)  
 
@@ -3148,10 +3118,7 @@ subroutine logderScatLengths1(lwave,mu,N,R,w,VSinglet,VTriplet,a1,a3)
   double precision, intent(in) :: VSinglet(N),VTriplet(N)
   double precision ystart(2,2),VMAT(2,2,N)
   double precision identity(2,2),ym(2,2),yf(2,2),a1,a3!
-
   double precision f, fp, g, gp,x
-
-
 
   energy = 1d-3*nKPerHartree
   k = sqrt(2d0*mu*energy)
@@ -3164,22 +3131,96 @@ subroutine logderScatLengths1(lwave,mu,N,R,w,VSinglet,VTriplet,a1,a3)
   ystart(2,2) = 1d20
   VMAT(:,:,:) = 0d0
 
-  
   VMAT(1,1,:) = VSinglet(:)
   VMAT(2,2,:) = VTriplet(:)
 
   call logderpropA(mu,energy,identity,w,N,ystart,yf,R,VMAT,2)
 
   x = k*R(N)
-  call sphbesjy(lwave,x,f,g,fp,gp) ! These are the Ricatti functions kr*j_n(kr)
+!  call sphbesjy(lwave,x,f,g,fp,gp) ! These are the Ricatti functions kr*j_n(kr)
   
-  td1 = (yf(1,1)*f - k*fp) / (yf(1,1)*g - k*gp)
-  td2 = (yf(2,2)*f - k*fp) / (yf(2,2)*g - k*gp)
+  !  td1 = (yf(1,1)*f - k*fp) / (yf(1,1)*g - k*gp)
+  !  td2 = (yf(2,2)*f - k*fp) / (yf(2,2)*g - k*gp)
+    td1 = (yf(1,1)*sin(x) - k*cos(x)) / (yf(1,1)*cos(x) - k*(-sin(x)))
+    td2 = (yf(2,2)*sin(x) - k*cos(x)) / (yf(2,2)*cos(x) - k*(-sin(x)))
+
   a1 = -td1/k
   a3 = -td2/k
   
 
 end subroutine LogderScatLengths1
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine testlogder()
+  use units
+  implicit none
+  integer n1, n2, N,lwave,iE
+  double precision mass,DD1,DD2,Ri,Rf
+  double precision norm, k, energy,td1,td2, Ustart,psistart,s,mu
+  double precision, allocatable :: R(:),W(:), VMAT(:,:,:)
+  double precision, allocatable :: VSinglet(:),VTriplet(:),V1(:),V2(:)
+  double precision ystart(2,2)
+  double precision identity(2,2),ym(2,2),yf(2,2),a1,a3!
+  double precision f, fp, g, gp,x,del1,del2,h
+
+  mass = 1d0
+  mu = mass/2d0
+  
+  !N = 101
+  do N = 101, 2001, 100
+     allocate(V1(N),V2(N))
+     allocate(R(N),W(N))
+     allocate(VMAT(2,2,N))
+     Ri=0d0
+     Rf=10d0
+     call GridMaker(R, N, Ri, Rf, "linear")
+     h = R(2)-R(1)
+     W(1)=1d0
+     call SetLogderWeights(W(2:N),N)
+     W(N)=1d0
+     energy = 1d-6!1d-3*nKPerHartree
+     k = sqrt(2d0*mu*energy)
+     
+     identity = 0d0
+     identity(1,1) = 1d0
+     identity(2,2) = 1d0
+     ystart = 0d0
+     ystart(1,1) = 1d20
+     ystart(2,2) = 1d20
+     VMAT(:,:,:) = 0d0
+     
+     VMAT(1,1,:) = 0d0
+     VMAT(2,2,:) = -4.899828818866035d0/cosh(R(:))**2
+     
+     call logderpropA(mu,energy,identity,W,N,ystart,yf,R(2:N),VMAT(:,:,2:N),2)
+     
+     x = k*R(N)
+     call sphbesjy(0,x,f,g,fp,gp) ! These are the Ricatti functions kr*j_n(kr)
+     
+     !td1 = (yf(1,1)*f - k*fp) / (yf(1,1)*g - k*gp)
+     !td2 = (yf(2,2)*f - k*fp) / (yf(2,2)*g - k*gp)
+     td1 = (yf(1,1)*sin(x) - k*cos(x)) / (yf(1,1)*cos(x) - k*(-sin(x)))
+     td2 = (yf(2,2)*sin(x) - k*cos(x)) / (yf(2,2)*cos(x) - k*(-sin(x)))
+     del1 = atan(td1)
+     del2 = atan(td2)
+     a1 = -td1/k
+     a3 = -td2/k
+     
+     write(6,*) "h = ",h
+     write(6,*) "TEST: "
+     write(6,*) "--------------------"
+     write(6,'(d20.10)') yf(1,1)
+     write(6,'(3d20.10)') k*cos(x)/sin(x), k*fp/f, yf(1,1) - k*fp/f
+     
+     write(6,*) "--------------------"
+     write(6,'(d20.10)') a3
+     write(6,'(d20.10)') -2d0
+     write(6,*) "--------------------"
+
+     write(300,*) h, abs((yf(1,1) - k*fp/f)/(k*fp/f)), abs((a3-(-2d0))/(-2d0))
+     
+     deallocate(V1,V2,VMAT,W,R)
+  enddo
+end subroutine Testlogder
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine testinterpolation
   use InterpType
@@ -3289,3 +3330,12 @@ double precision function UniversalGamma(Energy,EvdW)
        4.156391821939997d-14*Abs(Energy)**4.5 - 7.792047355366279d-17*Abs(Energy)**5 
   
 end function UniversalGamma
+
+subroutine VST(ISTATE,ESTATE,mu,muref,R,V)
+  !Calculates the singlet or triplet at one point (expensive, but useful sometimes)
+  integer ISTATE, ESTATE
+  double precision mu,muref,V,R,VV(1),RR(1),C(4)
+  RR(1)=R
+  call SetupPotential(ISTATE, ESTATE, MU, MUREF, 1, 0d0, RR, VV, C)
+  V=VV(1)
+end subroutine VST
