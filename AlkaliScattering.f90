@@ -1328,18 +1328,18 @@ subroutine logderpropA(mu,Energy,identity,weights,NPP,yi,yf,XO,Pot,size)
      vtemp1 = 2d0*mu*(identity*Energy-Pot(:,:,step))
      if (mod(step,2).eq.0) then
         un = vtemp1
-        wtemp = 2d0
+      !  wtemp = 2d0
      else
         vtemp2 = identity + h*h*onesixth*vtemp1
         call sqrmatinv(vtemp2,size)
         un = matmul(vtemp2,vtemp1)
-        wtemp = 4d0
+     !   wtemp = 4d0
      endif
      tempy = identity + h*yprevious
      call sqrmatinv(tempy,size)
-     !ycurrent = MATMUL(tempy,yprevious) - onethird*h*weights(step)*un
-     if(step.eq.NPP) wtemp = 1d0
-     ycurrent = MATMUL(tempy,yprevious) - onethird*h*wtemp*un
+     ycurrent = MATMUL(tempy,yprevious) - onethird*h*weights(step)*un
+     !if(step.eq.NPP) wtemp = 1d0
+     !ycurrent = MATMUL(tempy,yprevious) - onethird*h*wtemp*un
      yprevious = ycurrent
   enddo
 
