@@ -60,7 +60,7 @@ C  (C) Copr. 1986-92 Numerical Recipes Software v%1jw#<0(9p#3.
       SUBROUTINE fit(x,y,ndata,sig,mwt,a,b,siga,sigb,chi2,q)
       INTEGER mwt,ndata
       DOUBLE PRECISION a,b,chi2,q,siga,sigb,sig(ndata),x(ndata),y(ndata)
-CU    USES gammq
+!C    USES gammq
       INTEGER i
       DOUBLE PRECISION sigdat,ss,st2,sx,sxoss,sy,t,wt,gammq
       sx=0.0d0
