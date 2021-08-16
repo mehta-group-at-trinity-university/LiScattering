@@ -988,7 +988,6 @@ program main
   call SetupInterpolatingFunction(InterpQDSinglet)
   call SetupInterpolatingFunction(InterpQDTriplet)
 
-  stop
   
   deallocate(Bgrid)
   if(CALCTYPE.eq.2) read(53,*) dum, NBgrid
