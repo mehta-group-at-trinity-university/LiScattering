@@ -401,7 +401,7 @@ contains
     fp = hf1bra%f
     mp = hf1bra%m
     c1 = gs*muB*B*dsqrt((dble(fp)+1d0)*(dble(f)+1d0))
-    c2 = gi*muB*B*dsqrt((dble(fp)+1d0)*(dble(f)+1d0))
+    c2 = gi*muB*B*dsqrt((dble(fp)+1d0)*(dble(f)+1d0))  !NOTE THIS MINUS SIGN TO BE CONSISTENT WITH NEGATIVE gi FROM ARIMONDO
 
     Zsum1 = 0d0
     Zsum2 = 0d0
@@ -850,9 +850,9 @@ program main
   ESTATE = 3
   call SetupPotential(ISTATE,ESTATE,mu,muref,Nsr+1,VLIM,Rsr(0:Nsr)*BohrPerAngstrom,VsrTriplet(0:Nsr),Cvals)
   
-  if((iRmid.eq.NRmid).and.writepot) then
+  if(writepot) then
      write(6,'(A)') "See fort.10 and fort.30 for the singlet/triplet potentials"
-     do iR=1, Nsr
+     do iR=0, Nsr
         write(10,*) Rsr(iR), abs((VsrSinglet(iR) - VLR(mu,lwave,Rsr(iR),Cvals))/VsrSinglet(iR))
         write(30,*) Rsr(iR), abs((VsrTriplet(iR) - VLR(mu,lwave,Rsr(iR),Cvals))/VsrTriplet(iR))
      enddo
@@ -871,10 +871,18 @@ program main
      write(6,'(f10.5,A,I4,A,f5.2,A,4I3,A,I3,A,4I3,A)') AsymChannels(i,1), ' x ', i," : ", hf2symTempGlobal(i)%norm, &
           " ( |", hf2symTempGlobal(i)%state1," > +", hf2symTempGlobal(i)%phase,"|", hf2symTempGlobal(i)%state2," > )"
   enddo
-
   write(6,*) "---------------------------------------------------------"
   write(6,'(A,d14.6,d14.6)') "RANGE of energies for QD calcualtion = ", -abs(Eth(size2)-Eth(1)), abs(Eth(size2)-Eth(1))
+  
   !Now that we know Eth at the largest field value, we can compute an interpolated function for cot(gamma)
+
+  if(writepot) then
+     do iR = 0, Nsr
+        write(11,*) Rsr(iR), VsrSinglet(iR), -abs(Eth(size2)-Eth(1))
+        write(31,*) Rsr(iR), VsrTriplet(iR), -abs(Eth(size2)-Eth(1))
+     enddo
+  endif        
+  
   if (MQDTMODE.gt.1) goto 12
   call CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,Cvals,phiL,scale) ! calculate the phase standardization for lwave = 0
   call CalcNewGammaphaseFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,&
@@ -1169,14 +1177,14 @@ program main
            if(energy.gt.Eth(j)) NumOpen = NumOpen+1
         enddo
 
-        call logderpropB(mu,Energy,identity,wHalf,NHalf,yi,yfHalf,RHalf,Sdressed,Tdressed,&
-             EthreshMat,VHalfSinglet,VHalfTriplet,size2)
+!        call logderpropB(mu,Energy,identity,wHalf,NHalf,yi,yfHalf,RHalf,Sdressed,Tdressed,&
+!             EthreshMat,VHalfSinglet,VHalfTriplet,size2)
         call logderpropB(mu,Energy,identity,wAll,NAll,yi,yfAll,RAll,Sdressed,Tdressed,&
              EthreshMat,VAllSinglet,VAllTriplet,size2)
-
+        call CalcK(yfAll,RF,SD,mu,3d0,1d0,Energy,Eth,size2,NumOpen)
         !yf = (h1*yfHalf - h2*yfAll)/(h1 - h2)
-        yf =  (hratio**4 * yfAll - yfHalf)/(hratio**4 - 1d0)  !Richardson extrapolation
-        call CalcK(yf,RF,SD,mu,3d0,1d0,Energy,Eth,size2,NumOpen)
+        !yf =  (hratio**4 * yfAll - yfHalf)/(hratio**4 - 1d0)  !Richardson extrapolation
+        !call CalcK(yf,RF,SD,mu,3d0,1d0,Energy,Eth,size2,NumOpen)
 
 
         ! Various output statements:
@@ -1635,7 +1643,7 @@ subroutine RK4StepNewMilne(y,mu,lwave,energy,h,R,Cvals)
   y = y + k1/6.0d0 + k2/3.0d0 + k3/3.0d0 + k4/6.0d0
 end subroutine RK4StepNewMilne
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine BurlischStoerStepRK4Milne(y,mu,lwave,energy,h,R,Cvals)
+subroutine RichardsonStepRK4Milne(y,mu,lwave,energy,h,R,Cvals)
   implicit none
   double precision h,h1,h2,y1(2),y2(2),y(2),mu,energy,R,Cvals(4),h3,y3(2)
   integer lwave
@@ -1654,18 +1662,20 @@ subroutine BurlischStoerStepRK4Milne(y,mu,lwave,energy,h,R,Cvals)
   call RK4StepNewMilne(y2,mu,lwave,energy,h2,R,Cvals)
   call RK4StepNewMilne(y2,mu,lwave,energy,h2,R+h2,Cvals)
     
-!  call RK4StepNewMilne(y3,mu,lwave,energy,h3,R,Cvals)
-!  call RK4StepNewMilne(y3,mu,lwave,energy,h3,R+h3,Cvals)
-!  call RK4StepNewMilne(y3,mu,lwave,energy,h3,R+2*h3,Cvals)
-!  call RK4StepNewMilne(y3,mu,lwave,energy,h3,R+3*h3,Cvals)
+  call RK4StepNewMilne(y3,mu,lwave,energy,h3,R,Cvals)
+  call RK4StepNewMilne(y3,mu,lwave,energy,h3,R+h3,Cvals)
+  call RK4StepNewMilne(y3,mu,lwave,energy,h3,R+2*h3,Cvals)
+  call RK4StepNewMilne(y3,mu,lwave,energy,h3,R+3*h3,Cvals)
   
-  y = (32d0*y2-y1)/31d0  !Richardson extrapolation (not so great -- do not use)
+  !y = (16d0*y2-y1)/15d0  !Richardson extrapolation (one iteration)
 !  y = (h1*y2 - h2*y1)/(h1-h2)  !Burlisch-Stoer with a linear fit to two points (not bad)
 
- ! y = (h2*(h2 - h3)*h3*y1 + h1*h3*(-h1 + h3)*y2 + h1*(h1 - h2)*h2*y3)/ &  ! quadratic fit Burlisch-Stoer (best)
+  y = (512d0*y3 - 48d0*y2 + y1)/465d0 ! Richardson extrapolation, repeated iteration
+  
+  !y = (h2*(h2 - h3)*h3*y1 + h1*h3*(-h1 + h3)*y2 + h1*(h1 - h2)*h2*y3)/ &  ! quadratic fit Burlisch-Stoer (best)
   !     ((h1 - h2)*(h1 - h3)*(h2 - h3))
   
-end subroutine BurlischStoerStepRK4Milne
+end subroutine RichardsonStepRK4Milne
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine RK5CashKarpStepMilne(y,mu,lwave,energy,h,R,Cvals,Delta)
   use quadrature
@@ -1898,7 +1908,7 @@ subroutine CalcNewMilne4step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
 
 end subroutine CalcNewMilne4step
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine CalcNewMilne4stepBurlischStoer(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
+subroutine CalcNewMilne4stepRichardson(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
   ! USES BODE'S 5-point rule
   implicit none
   double precision h, energy, y(2), mu,Cvals(4),y1(2),y2(2),y3(2),y4(2),y5(2),h4,R1,R2,R3,R4
@@ -1924,13 +1934,13 @@ subroutine CalcNewMilne4stepBurlischStoer(R,alpha,y,NA,energy,lwave,mu,Cvals,pha
 
      ! do 4 quarter-steps and use Bode's 5-point integration rule to calculate the phase integral
      y2=y1
-     call BurlischStoerStepRK4Milne(y2,mu,lwave,energy,h4,R1,Cvals)
+     call RichardsonStepRK4Milne(y2,mu,lwave,energy,h4,R1,Cvals)
      y3=y2
-     call BurlischStoerStepRK4Milne(y3,mu,lwave,energy,h4,R2,Cvals)
+     call RichardsonStepRK4Milne(y3,mu,lwave,energy,h4,R2,Cvals)
      y4=y3
-     call BurlischStoerStepRK4Milne(y4,mu,lwave,energy,h4,R3,Cvals)
+     call RichardsonStepRK4Milne(y4,mu,lwave,energy,h4,R3,Cvals)
      y5=y4
-     call BurlischStoerStepRK4Milne(y5,mu,lwave,energy,h4,R4,Cvals)
+     call RichardsonStepRK4Milne(y5,mu,lwave,energy,h4,R4,Cvals)
 
      phaseint(iR+1) = phaseint(iR) + TwoOnFortyFive*h4* &
           (7d0*exp(-2*y1(1)) + 32d0*exp(-2*y2(1)) + 12d0*exp(-2*y3(1)) + 32d0*exp(-2*y4(1)) + 7d0*exp(-2*y5(1)))
@@ -1943,9 +1953,9 @@ subroutine CalcNewMilne4stepBurlischStoer(R,alpha,y,NA,energy,lwave,mu,Cvals,pha
   enddo
 !stop
 
-end subroutine CalcNewMilne4stepBurlischStoer
+end subroutine CalcNewMilne4stepRichardson
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine CalcNewMilne6step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
+subroutine CalcNewMilne6stepRichardson(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
   ! USES BODES 7-point rule
   implicit none
   double precision h, energy, y(2), mu,Cvals(4)
@@ -1975,17 +1985,17 @@ subroutine CalcNewMilne6step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
 
      ! do 6 steps and use Bode's 7-point integration rule to calculate the phase integral
      y2=y1
-     call RK4StepNewMilne(y2,mu,lwave,energy,h6,R1,Cvals)
+     call RichardsonStepRK4Milne(y2,mu,lwave,energy,h6,R1,Cvals)
      y3=y2
-     call RK4StepNewMilne(y3,mu,lwave,energy,h6,R2,Cvals)
+     call RichardsonStepRK4Milne(y3,mu,lwave,energy,h6,R2,Cvals)
      y4=y3
-     call RK4StepNewMilne(y4,mu,lwave,energy,h6,R3,Cvals)
+     call RichardsonStepRK4Milne(y4,mu,lwave,energy,h6,R3,Cvals)
      y5=y4
-     call RK4StepNewMilne(y5,mu,lwave,energy,h6,R4,Cvals)
+     call RichardsonStepRK4Milne(y5,mu,lwave,energy,h6,R4,Cvals)
      y6=y5
-     call RK4StepNewMilne(y6,mu,lwave,energy,h6,R5,Cvals)
+     call RichardsonStepRK4Milne(y6,mu,lwave,energy,h6,R5,Cvals)
      y7=y6
-     call RK4StepNewMilne(y7,mu,lwave,energy,h6,R6,Cvals)
+     call RichardsonStepRK4Milne(y7,mu,lwave,energy,h6,R6,Cvals)
      
      phaseint(iR+1) = phaseint(iR) + OneOverOneForty*h6* &
           (41d0*(exp(-2*y1(1)) + exp(-2*y7(1))) + 216d0*(exp(-2*y2(1)) + exp(-2*y6(1)))  &
@@ -2000,7 +2010,7 @@ subroutine CalcNewMilne6step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
   enddo
 !stop
 
-end subroutine CalcNewMilne6step
+end subroutine CalcNewMilne6stepRichardson
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine MQDTfunctions(R1, R2, NA, scale, Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf,f0, g0, f0p, g0p)
   use units
@@ -2064,7 +2074,9 @@ subroutine MQDTNewfunctions(R1, R2, NA, scale, Cvals, mu, lwave, energy, &
   !call CalcNewMilne2step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
   !call CalcNewMilne4step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
   !call CalcNewMilne6step(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
-  call CalcNewMilne4stepBurlischStoer(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
+  !call CalcNewMilne4stepRichardson(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
+  call CalcNewMilne6stepRichardson(R,alpha,y,NA,energy,lwave,mu,Cvals,phaseint)
+  
 !  write(6,*) "y = ", y
   alphaf = alpha(NA,:)
   phir = phaseint(NA)
@@ -2780,16 +2792,17 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
         do i = 1, NPP
            if(XO(i) .LE. RSR) then
               VV(i) = U1 + U2/(XO(i)**NS)
+              
            else if ((XO(i) .GE. RSR) .AND. (XO(i) .LE. RLR)) then
               xi = (XO(i) - RM)/(XO(i) + B*RM)
               VV(i) = 0.0d0
-
               do j = 0, N-1
                  VV(i) = VV(i) + A(j+1)*xi**j
               enddo
+              
            else
               VV(i) = -C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0)  - C26/(XO(i)**26.0d0)
-
+              
               if(ESTATE.EQ.1) then
                  VV(i) = VV(i) - Aex*(XO(i)**gamma)*EXP((-1)*beta*XO(i))
               elseif(ESTATE.EQ.3) then
@@ -2799,8 +2812,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
               endif
 
            endif
-
-           VV(i) = VV(i) + (nu0 + nu1*((XO(i) - RM)/(XO(i) + B*RM)))*(1 - MU/MUREF)*((2*RM)/(XO(i)+RM))**6
+           !VV(i) = VV(i) + (nu0 + nu1*((XO(i) - RM)/(XO(i) + B*RM)))*(1 - MU/MUREF)*((2*RM)/(XO(i)+RM))**6 !!!!NPM MOVE THIS TO ONLY R<RLR
         enddo
 
      endif
@@ -3103,10 +3115,10 @@ subroutine logderQD(lwave,mu,Eth,size2,NQD,NXM,Nsr,wsr,VSINGLET,VTRIPLET,R,&
   use InterpType
   implicit none
   integer n, n1, n2, Nsr, NXM,lwave,iE,NQD,size2,STQDfile,MQDTMODE
-  double precision norm, k, energy,td1,td2,TripletQD,SingletQD, Ustart,psistart,s,mu,RX,ldf1,ldg1,Eth(size2)
-  double precision R(Nsr),wsr(Nsr),VSINGLET(Nsr), VTRIPLET(Nsr),ystart(2,2),VMAT(2,2,Nsr)
+  double precision norm, k, energy,td1,td2,TripletQD,SingletQD, s,mu,RX,ldf1,ldg1,Eth(size2)
+  double precision R(0:Nsr),wsr(0:Nsr),VSINGLET(0:Nsr), VTRIPLET(0:Nsr),ystart(2,2),VMAT(2,2,0:Nsr)
   double precision alphax(2), alpham1(2), alpham2(2), phiL,betavdw,Cvals(4),identity(2,2),yf(2,2)!
-  double precision, allocatable :: U(:)
+
   double precision f1,g1,f1p,g1p,f2,g2,f2p,g2p,RM,psi1,psi2,phir
   double precision, external :: VLR, VLRPrime
   CHARACTER(LEN=*), INTENT(IN) :: scale
@@ -3136,10 +3148,9 @@ subroutine logderQD(lwave,mu,Eth,size2,NQD,NXM,Nsr,wsr,VSINGLET,VTRIPLET,R,&
         ystart(1,1) = 1d20
         ystart(2,2) = 1d20
         VMAT(:,:,:) = 0d0
-        do n = 1, Nsr
-           VMAT(1,1,n) = VSINGLET(n)
-           VMAT(2,2,n) = VTRIPLET(n)
-        enddo
+        !        do n = 1, Nsr
+        VMAT(1,1,:) = VSINGLET(:)
+        VMAT(2,2,:) = VTRIPLET(:)
         
         !call logderpropANew(mu,energy,identity,wSR,Nsr,ystart,yf,R,VMAT,2)
         call logderpropA(mu,energy,identity,wSR,Nsr,ystart,yf,R,VMAT,2)
