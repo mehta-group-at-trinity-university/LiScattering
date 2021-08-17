@@ -632,7 +632,7 @@ program main
   double precision SingletQD, TripletQD, x,Bhuge,Ebar1,Ebar3,trace1, trace3,ascatEIFT,KtildeEIFT
   double precision, external :: VLR, rint, abar
   character(len=20), external :: str
-  CHARACTER(LEN=20) scale, act, dum
+  CHARACTER(LEN=20) scale, act, dum, actksr
   type(hf1atom) a1, a2
   type(hf2atom) mstate1, mstate2
   type(hf1atom), allocatable :: hf1(:) 
@@ -769,18 +769,23 @@ program main
   enddo
 
   if (MQDTMODE.eq.1) then
-     act = 'WRITE'
-  else if (MQDTMODE.gt.1) then
-     act = 'READ'
+     act = 'WRITE'  ! WRITE gamma(E), Ksr, S/T QDs.
+     actksr = 'WRITE'
+  else if (MQDTMODE.eq.2) then
+     act = 'READ' ! read gamma(E), Ksr, S/T QDs
+     actksr = 'READ'
+  else if (MQDTMODE.eq.3) then
+     act = 'READ'  !read gamma(E) and S/T QDs, but recalculate and write Ksr
+     actksr = 'WRITE'
   endif
   cotgamfile = 49
   STQDfile = 54
   if(CALCTYPE.ne.1) then
      open(unit = cotgamfile, file = "Gammaphase-"//trim(str(ISTATE))//"-"//&
           trim(str(NINT(RF)))//"a0.dat",ACTION=act)
-     open(unit = 53, file = "KsrFieldDependence-"//trim(str(ISTATE))//".dat",ACTION=act)
-     open(unit = STQDfile, file = "STQDFieldDependence-"//trim(str(ISTATE))//".dat",ACTION=act)
-     open(unit = 52, file = "QDFieldDependence-"//trim(str(ISTATE))//".dat",ACTION=act)
+     open(unit = 53, file = "KsrFieldDependence-"//trim(str(ISTATE))//".dat",ACTION=actksr)
+     open(unit = STQDfile, file = "STQDFieldDependence-"//trim(str(ISTATE))//".dat",ACTION=actksr)
+     open(unit = 52, file = "QDFieldDependence-"//trim(str(ISTATE))//".dat",ACTION=actksr)
   endif
   open(unit = 20, file = "CollisionThresholds-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))// &
        "-"//trim(str(NINT(Bmin)))//"G-"//trim(str(NINT(Bmax)))//"G.dat")
@@ -883,7 +888,7 @@ program main
      enddo
   endif        
   
-  if (MQDTMODE.gt.1) goto 12
+  if (MQDTMODE.eq.2) goto 12  ! CONTINUE HERE IF MQDTMODE is 1 or 3
   call CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,Cvals,phiL,scale) ! calculate the phase standardization for lwave = 0
   call CalcNewGammaphaseFunction(RX,RF,NXF,size2,lwave,mu,betavdw,Cvals,phiL,Eth,&
        InterpGammaphase,scale,MQDTMODE,cotgamfile)
@@ -891,7 +896,7 @@ program main
   EThreshMat(:,:) = 0d0
   
   call logderQD(lwave,mu,Eth,size2,NQD,NXM,Nsr,wsr,VsrSinglet,VsrTriplet,Rsr,&
-       InterpQDTriplet,InterpQDSinglet,phiL,betavdw,RX,Cvals,scale,MQDTMODE,STQDfile)
+       InterpQDTriplet,InterpQDSinglet,phiL,betavdw,RX,Cvals,scale,MQDTMODE,STQDfile)  !RECALCULATE QDs if MQDTMODE is 1 or 3
   call SetupInterpolatingFunction(InterpQDSinglet)
   call SetupInterpolatingFunction(InterpQDTriplet)
   SingletQD = Interpolated(0d0,InterpQDSinglet)
@@ -1034,28 +1039,8 @@ program main
         call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,TPmat,size2,0d0,TEMP,size2)
         call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Tdressed,size2)
 
-
-!        Ebar1 = 0d0
-!        Ebar3 = 0d0
-!        trace1 =  sum( (/ (Sdressed(i,i), i=1,size2) /) )
-!        trace3 =  sum( (/ (Tdressed(i,i), i=1,size2) /) )
-!        write(6,*) "Trace of singlet operator:", trace1
-!        write(6,*) "Trace of triplet operator:", trace3
-!        do i=1,size2
-!           Ebar1 = Ebar1 + (Egrid(iE) + Eth(1) - Eth(i))*Sdressed(i,i)/(trace1)
-!           Ebar3 = Ebar3 + (Egrid(iE) + Eth(1) - Eth(i))*Tdressed(i,i)/(trace3)
-!        enddo
-!        write(6,*) "Ebar1 = ",Ebar1, "Ebar3 = ", Ebar3
-!        write(6,*) "mu1(Ebar1) = ", Interpolated(Ebar1,InterpQDSinglet), "mu1(0)=",Interpolated(0d0,InterpQDSinglet)
-!        write(6,*) "mu3(Ebar3) = ", Interpolated(Ebar3,InterpQDTriplet), "mu3(0)=",Interpolated(0d0,InterpQDTriplet)
-!!$        stop
-!        
-!        Ksr(:,:) = tan(pi*Interpolated(0d0,InterpQDTriplet)) * Tdressed(:,:) &
-        !             + tan(pi*Interpolated(0d0,InterpQDSinglet)) * Sdressed(:,:)
         call CalcEDFTKSR(nspin1,nspin1,espin1,espin1,hf2symTempGlobal,energy,Eth,&
              AsymChannels,size2,Ksr,InterpQDSinglet,InterpQDTriplet)
-        !Ksr(:,:) = tan(pi*Interpolated(Ebar3,InterpQDTriplet)) * Tdressed(:,:) &
-         !    + tan(pi*Interpolated(Ebar1,InterpQDSinglet)) * Sdressed(:,:)
 
      endif
      KsrEIFT(:,:) = tan(pi*Interpolated(0d0,InterpQDTriplet)) * Tdressed(:,:) &
@@ -2340,7 +2325,7 @@ subroutine CalcNewGammaphaseFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,
   type(InterpolatingFunction) :: InterpGammaphase
 
   EvdW = 1d0/(2d0*mu*betavdw**2)
-  kx=8
+  kx=5
 
 
   If(MQDTMODE.eq.1) then
@@ -2383,7 +2368,7 @@ subroutine CalcNewGammaphaseFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,
      do iE = 1, NE
         write(cotgamfile, *) InterpGammaphase%x(iE)/EvdW, InterpGammaphase%y(iE)!, &
      enddo
-  else
+  else ! Should do this for MQDTMODE not equal to 1 (so both 2 and 3 cases should direct here)
      read(cotgamfile,*) dum, NE
      call AllocateInterpolatingFunction(NE,kx,InterpGammaphase)
      do iE = 1, NE
@@ -3124,7 +3109,7 @@ subroutine logderQD(lwave,mu,Eth,size2,NQD,NXM,Nsr,wsr,VSINGLET,VTRIPLET,R,&
   CHARACTER(LEN=*), INTENT(IN) :: scale
   type(InterpolatingFunction) :: InterpQDSinglet,InterpQDTriplet
 
-  if(MQDTMODE.eq.1) then
+  if((MQDTMODE.eq.1).or.(MQDTMODE.eq.3)) then
      call GridMaker(InterpQDSinglet%x, NQD, -abs(Eth(size2)-Eth(1)), abs(Eth(size2)-Eth(1)), "linear")
      InterpQDTriplet%x = InterpQDSinglet%x
      
@@ -3171,7 +3156,7 @@ subroutine logderQD(lwave,mu,Eth,size2,NQD,NXM,Nsr,wsr,VSINGLET,VTRIPLET,R,&
         write(STQDfile,*) energy, InterpQDSinglet%y(iE), InterpQDTriplet%y(iE)
 
      enddo
-  else if (MQDTMODE.gt.1) then
+  else    
      do iE = 1, NQD
         read(STQDfile,*) InterpQDSinglet%x(iE), InterpQDSinglet%y(iE), InterpQDTriplet%y(iE)
         InterpQDTriplet%x(iE) = InterpQDSinglet%x(iE)
