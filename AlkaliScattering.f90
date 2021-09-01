@@ -639,9 +639,23 @@ program main
   TYPE(ScatData) :: SD
   type(InterpolatingFunction) :: InterpGammaphase, InterpQDSinglet,InterpQDTriplet
   type(InterpolatingMatrix) :: InterpKsr
-!  call testinterpolation
- 
-  
+  !  call testinterpolation
+  !----------------------------------------------------------------------------------------------------
+  ! NOTE FOR INPUT FILE AND FLOW CONTROL:
+  ! CALCTYPE = 1 means do the full coupled channels (FCC) calculation using the logder method
+  ! CALCTYPE = 2 means do some set of MQDT calculations as determined by the value of MQDTMODE
+  ! CALCTYPE = 3 means do the MQDT frame transformation calculation (This still needs gamma(E))
+  ! MQDTMODE = 1 means calculate gamma(E), Ksr(B), and the S/T quantum defects from scratch.  Write to a file and stop.
+  ! MQDTMODE = 2 means read gamma(E), Ksr(B) and S/T QDs from file and proceed to the calcuation of physical K-matrix
+  ! MQDTMODE = 3 means read only the single channle parameter gamma(E) from file, but re-calculate Ksr(B) and the S/T QDs, then stop.
+  !
+  ! MQDTMODE 1 and 3 must be run under CALCTYPE=2, otherwise the calculation will skip over the relevant code.
+  ! After running MQDTMODE 3, you must re-run the code with MQDTMODE set to 2 in order to obtain the physical K-matrix on a fine B-field grid.
+  ! The main purpose of MQDTMODE 3 is to treat situations where you want to calculate the physical K-matrix for a different total MF block, but re-use the
+  ! expensive single-channel MQDT function gamma(E).  Normally this should run fine without any problems,
+  ! but if you get any interpolation out of bounds errors, it might mean that you need gamma(E) over a wider energy range.
+  ! Increase the value of BHuge, re-run under MQDTMODE 1 and try again.
+  !----------------------------------------------------------------------------------------------------
   read(5,*)
   read(5,*)
   read(5,*) ISTATE, sym, CALCTYPE, MQDTMODE
@@ -1655,10 +1669,10 @@ subroutine RichardsonStepRK4Milne(y,mu,lwave,energy,h,R,Cvals)
   !y = (16d0*y2-y1)/15d0  !Richardson extrapolation (one iteration)
 !  y = (h1*y2 - h2*y1)/(h1-h2)  !Burlisch-Stoer with a linear fit to two points (not bad)
 
-  y = (512d0*y3 - 48d0*y2 + y1)/465d0 ! Richardson extrapolation, repeated iteration
+  !y = (512d0*y3 - 48d0*y2 + y1)/465d0 ! Richardson extrapolation, repeated iteration (pretty good)
   
-  !y = (h2*(h2 - h3)*h3*y1 + h1*h3*(-h1 + h3)*y2 + h1*(h1 - h2)*h2*y3)/ &  ! quadratic fit Burlisch-Stoer (best)
-  !     ((h1 - h2)*(h1 - h3)*(h2 - h3))
+  y = (h2*(h2 - h3)*h3*y1 + h1*h3*(-h1 + h3)*y2 + h1*(h1 - h2)*h2*y3)/ &  ! quadratic fit Burlisch-Stoer (best)
+       ((h1 - h2)*(h1 - h3)*(h2 - h3))
   
 end subroutine RichardsonStepRK4Milne
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -2479,6 +2493,20 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
              -0.573987344918535471d9, 0.102010964189156187d10, 0.300040150506311035d10,-0.893187252759830856d10, &
              -0.736002541483347511d10, 0.423130460980355225d11,-0.786351477693491840d10,-0.102470557344862152d12, &
              0.895155811349267578d11,0.830355322355692902d11,-0.150102297761234375d12,0.586778574293387070d11 /)
+
+
+        if(ISTATE.eq.1) then !Rb 87
+           Scorr = 0d0!3.25d-7 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
+           write(6,'(A,d16.8,A)') "Rb87 Singlet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
+           
+
+        else if(ISTATE.eq.2) then ! Rb 85
+           Scorr = 0d0!1.94d-7 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
+           write(6,'(A,d16.8,A)') "Rb85 Singlet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
+        endif
+        
+
+        
      case (3:4)  !Potassium singlet
         N = 32
         allocate(A(N))
@@ -2508,8 +2536,17 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
         nu0 = 0.13148609d0
         nu1 = 2.08523853d0
 
-        
-     case (5)   !Sodium
+        if(ISTATE.eq.4) then
+           Scorr = 3.0d-7 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
+           write(6,'(A,d16.8,A)') "K40 Singlet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
+           
+
+        else if(ISTATE.eq.3) then
+           Scorr = 4d-7 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
+           write(6,'(A,d16.8,A)') "K39 Singlet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
+        endif
+
+     case (5)   !Sodium singlet
         N = 27
         allocate(A(N))
         RSR = 2.181d0
@@ -2538,7 +2575,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
              -0.131052566070353687d13, -0.385189954553600769d11, 0.135760501276292969d13, &
              -0.108790546442390417d13, 0.282033835345282288d12/)
 
-     case (6) !Lithium-6
+     case (6) !Lithium-6 singlet
         IMN1 = 6
         IMN2 = IMN1
         !C6 = 6.718500D+06
@@ -2559,7 +2596,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
            endif
         enddo
         
-     case (7) !Lithium-7
+     case (7) !Lithium-7 singlet
         IMN1 = 7
         IMN2 = IMN1
         C6 = 6.71527d6
@@ -2576,7 +2613,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
            endif
         enddo
 
-     case (8) !Cesium
+     case (8) !Cesium singlet
         N = 23
         allocate(A(N))
         p = 5d0
@@ -2602,7 +2639,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
   else if (ESTATE .EQ. 3) then  !Ground state triplet
      select case (ISTATE)
 
-     case (1:2) !Rubidium
+     case (1:2) !Rubidium triplet
         N = 13
         allocate(A(N))
         RSR = 5.07d0
@@ -2625,8 +2662,19 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
              -0.221166468149940465d4, 0.165443726445793004d4, -0.596412188910614259d4, &
              0.654481694231538040d4, 0.261413416681972012d5, -0.349701859112702878d5,&
              -0.328185277155018630d5,0.790208849885562522d5, -0.398783520249289213d5 /)
+        if(ISTATE.eq.1) then !Rb 87
+           Scorr = 0d0!4.90d-8 * HartreePerInvcm/(BohrPerAngstrom**2)  ! TripletCorrection
+           write(6,'(A,d16.8,A)') "Rb87 Triplet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
+           
 
-     case (3:4) !Potassium
+        else if(ISTATE.eq.2) then ! Rb 85
+           Scorr = 0d0!5.8d-8 * HartreePerInvcm/(BohrPerAngstrom**2)  ! TripletCorrection
+           write(6,'(A,d16.8,A)') "Rb85 Triplet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
+        endif
+
+
+        
+     case (3:4) !Potassium triplet
         N = 21
         allocate(A(N))
         RSR = 4.750d0
@@ -2652,7 +2700,17 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
         nu0 = 0.23803737d0
         nu1 = 0.0d0
 
-     case (5) !Sodium
+        if(ISTATE.eq.4) then
+           Scorr = 1.4d-8 * HartreePerInvcm/(BohrPerAngstrom**2)  ! Triplet Correction
+           write(6,'(A,d16.8,A)') "K40 Triplet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
+
+        else if(ISTATE.eq.3) then
+           Scorr =1.4d-8 * HartreePerInvcm/(BohrPerAngstrom**2)  ! Triplet Correction
+           write(6,'(A,d16.8,A)') "K39 Triplet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
+        endif
+
+        
+     case (5) !Sodium triplet
         N = 9
         allocate(A(N))
         RSR = 4.2780d0
@@ -2675,7 +2733,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
              -0.460619207631179620d3, 0.910227086296958532d3, -0.296064051187991117d4, &
              -0.496106499110302684d4, 0.147539144920038962d5, -0.819923776793683828d4/)
 
-     case (6) !Lithium-6
+     case (6) !Lithium-6 triplet
         IMN1 = 6
         IMN2 = IMN1
 
@@ -2695,7 +2753,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
            endif
         enddo
 
-     case (7) !Lithium-7
+     case (7) !Lithium-7 triplet
         IMN1 = 7
         IMN2 = IMN1
 
@@ -2714,7 +2772,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
            endif
         enddo
 
-     case (8) !Cesium 
+     case (8) !Cesium triplet
         N = 5
         allocate(A(N))
         p = 5d0
@@ -2775,7 +2833,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
 
      else  ! All others
         do i = 1, NPP
-           if(XO(i) .LE. RSR) then
+           if(XO(i) .LT. RSR) then
               VV(i) = U1 + U2/(XO(i)**NS)
               
            else if ((XO(i) .GE. RSR) .AND. (XO(i) .LE. RLR)) then
@@ -2796,6 +2854,9 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
                  Write(6,*) "Invalid ESTATE value"
               endif
 
+           endif
+           if(XO(i) .LE. RM) then
+              VV(i) = VV(i) + Scorr*(XO(i) - RM)**2
            endif
            !VV(i) = VV(i) + (nu0 + nu1*((XO(i) - RM)/(XO(i) + B*RM)))*(1 - MU/MUREF)*((2*RM)/(XO(i)+RM))**6 !!!!NPM MOVE THIS TO ONLY R<RLR
         enddo
