@@ -1,13 +1,18 @@
 # This is a parameter file for input into AlkaliScattering.x
-# ISTATE (for Rb-85)  SYM (+1 for boson)	  CALCTYPE (1 for logder, 2 for MQDT, 3 for FT) 
-  2	      	      1	           	 	  1	   
+# ISTATE (for Rb-87)  SYM (+1 for boson)	  CALCTYPE (1 for logder, 2 for MQDT, 3 for FT) 	MQDTMODE
+  2	      	      1	           	 	  1	      	  	    	      	    		1
 # L (partial wave)    2*MFtot (twice total F projection) writepot
   0 	     	      8	      	     	     		 .false.
-# Rmin		      Rmidmax		Rmax  		 RX     (all in bohr except RX which is in vdw units.  Converted to bohr in the code.)
-  0.03d0	      40d0		1000d0		 0.1d0
-# Nsr		      Nlr
-  200000	      400000
+# Rmin		      Rmidmax  		 RX    		 RF (all in bohr except RX and RF which is in vdw units.  Converted to bohr in the code.)
+  2.0d0		      45d0  		 0.07d0		 20d0
+# NXM		      NXF 		 Nsr		 NAll
+   400000  	      4000000		 400000		 4000000	
 # NEgrid	      Emin		Emax (enter energy range in mK)
-  10		      1d-6		50d0
-# NBgrid	      Bmin		Bmax (enter B-field range in gauss)
-  200		      1d0		1200d0
+  10		      10d-6		50d0
+# NBgrid	      Bmin		Bmax              	 Bhuge (largest possible field)  NBGridFine
+  20		      850d0		852d0			 1200d0   		 	 100000
+# Grid for calculating MQDT functions (must be 'linear', 'quadratic', 'cubic', or 'log')		      
+   'log'
+
+
+# Rmidmax = 35d0 is best for the MQDT calculation

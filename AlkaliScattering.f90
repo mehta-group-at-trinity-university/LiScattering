@@ -1116,8 +1116,8 @@ program main
   call SetLogderWeights(wAll,NAll)
   call SetLogderWeights(wHalf,NHalf)
     
-  !call testlogder()  
-  !stop
+!  call testlogder()  
+!  stop
   
   ESTATE = 1
   call SetupPotential(ISTATE,ESTATE,mu,muref,NAll+1,VLIM,RAll(0:NAll)*BohrPerAngstrom,VAllSinglet(0:NAll),Cvals)
@@ -1135,10 +1135,10 @@ program main
   asext = (hratio**4 * as1 - as2)/(hratio**4 - 1d0)  !Richardson extrapolation
   atext = (hratio**4 * at1 - at2)/(hratio**4 - 1d0)
 !  write(6,'(A,f10.5,A)') " Energy = ",energy/nKPerHartree,"nK"
-  write(6,*) "Scattering Lengths:"
+  write(6,*) "Scattering Lengths:  ---more accurate-->"
   write(6,*) "-------------------"
-  write(6,*) "Singlet:", as1,as2,asext
-  write(6,*) "Triplet:", at1,at2,atext
+  write(6,*) "Singlet:", as2,as1,asext
+  write(6,*) "Triplet:", at2,at1,atext
   write(60,*) asext, atext
 
   write(51,*)
@@ -1192,7 +1192,7 @@ program main
            !write(51,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*muref*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
            ascat = -SD%K(1,1)/dsqrt(2d0*mu*(Energy-Eth(1)))
            write(51,*) Bgrid(iB), ascat, 8d0*pi*ascat**2*(Bohrpercm**2)
-           write(6,'(f10.3,f10.3,d14.5,A,f10.3,A)') Bgrid(iB), ascat, 8d0*pi*ascat**2*(Bohrpercm**2), &
+           write(6,'(f10.3,f15.3,d14.5,A,f10.3,A)') Bgrid(iB), ascat, 8d0*pi*ascat**2*(Bohrpercm**2), &
                 "  Estimated time remaining = ", (NBgrid-iB)*(t2-t1)/60d0, " min."
            
            !write(6,*) Bgrid(iB),  ascat, 8d0*pi*ascat**2*(Bohrpercm**2),  2d0*SD%sigma*(Bohrpercm**2)
@@ -2442,6 +2442,7 @@ end subroutine smoothgamma
 !  *MUREF is the reduced mass of the reference isotopologue (used for BOB correction terms)
 !     for Rb2, 87 is the reference
 !     for K2, 39 is the reference
+!     The BOB correction vanishes for the reference isotopologue
 !  *integer NPP is the number of radial points
 !  *X0(i) is an array of dimension NPP with the radial distances (in Angstrom) at which
 !   the potential energy function is to be calculated
@@ -2470,39 +2471,40 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
      case (1:2)  !Rubidium singlet
         N = 26
         allocate(A(N))
-        RSR = 3.126d0
-        NS = 4.53389d0
-        U1 = -0.638904880d4
-        U2 = 0.112005361d7
-        B = -0.13d0
-        RLR = 11.00d0
-        RM = 4.209912706d0
-        C6 = 0.2270032d8
-        C8 = 0.7782886d9
-        C10 = 0.2868869d11
-        C26 = 0.2819810d26
-        Aex = 0.1317786d5
-        gamma = 5.317689d0
-        beta = 2.093816d0
+        RSR = 3.126d0  !3.126
+        NS = 4.53389d0  !4.533 89
+        U1 = -0.638904880d4  !−0.638904880×104
+        U2 = 0.112005361d7  !0.112005361×107
+        B = -0.13d0  !−0.13
+        RLR = 11.00d0  !11.000
+        RM = 4.209912760d0  !4.209 912 760 A ̊
+        C6 = 0.2270032d8  !0.227 003 2 × 108 
+        C8 = 0.7782886d9  !0.778 288 6 × 109
+        C10 = 0.2868869d11  !0.286 886 9 × 1011
+        C26 = 0.2819810d26  !0.281 981 0 × 1026 
+        Aex = 0.1317786d5  !0.131 778 6 × 105 
+        gamma = 5.317689d0  !5.317 689
+        beta = 2.093816d0  !2.093 816 
         nu0 = 0d0
         nu1 = 0d0
-        A = (/-3993.592873d0, 0.0d0, 0.282069372972346137d5, 0.560425000209256905d4, -0.423962138510562945d5, &
-             -0.598558066508841584d5, &
-             -0.162613532034769596d5,-0.405142102246254944d5, 0.195237415352729586d6, 0.413823663033582852d6, &
-             -0.425543284828921501d7, 0.546674790157210198d6, 0.663194778861331940d8,-0.558341849704095051d8, &
-             -0.573987344918535471d9, 0.102010964189156187d10, 0.300040150506311035d10,-0.893187252759830856d10, &
-             -0.736002541483347511d10, 0.423130460980355225d11,-0.786351477693491840d10,-0.102470557344862152d12, &
-             0.895155811349267578d11,0.830355322355692902d11,-0.150102297761234375d12,0.586778574293387070d11 /)
 
+
+        A = (/ -3993.592873d0, 0.d0, 0.282069372972346137d5, 0.560425000209256905d4, -0.423962138510562945d5, &
+             -0.598558066508841584d5, -0.162613532034769596d5, -0.405142102246254944d5, 0.195237415352729586d6, &
+             0.413823663033582852d6, -0.425543284828921501d7, 0.546674790157210198d6, 0.663194778861331940d8, &
+             -0.558341849704095051d8, -0.573987344918535471d9, 0.102010964189156187d10, 0.300040150506311035d10, &
+             -0.893187252759830856d10, -0.736002541483347511d10, 0.423130460980355225d11, -0.786351477693491840d10, &
+             -0.102470557344862152d12, 0.895155811349267578d11, 0.830355322355692902d11, -0.150102297761234375d12, &
+             0.586778574293387070d11 /)
 
         if(ISTATE.eq.1) then !Rb 87
            Scorr = 0d0!3.25d-7 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
-           write(6,'(A,d16.8,A)') "Rb87 Singlet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
+           write(6,'(A,d16.8,A)') "Rb87 Singlet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
            
 
         else if(ISTATE.eq.2) then ! Rb 85
            Scorr = 0d0!1.94d-7 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
-           write(6,'(A,d16.8,A)') "Rb85 Singlet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
+           write(6,'(A,d16.8,A)') "Rb85 Singlet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         endif
         
 
@@ -2510,40 +2512,93 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
      case (3:4)  !Potassium singlet
         N = 32
         allocate(A(N))
+!!$        RSR = 2.870d0
+!!$        NS = 12d0
+!!$        U1 = -0.263145571d4
+!!$        U2 = 0.813723194d9  
+!!$        B = -0.400d0
+!!$        RLR = 12.00d0
+!!$        RM = 3.92436437d0
+!!$        C6 = 0.1892652670d8   
+!!$        C8 =  0.5706799527d9
+!!$        C10 = 0.1853042722d11
+!!$        C26 = 0.0d0
+!!$        Aex = 0.90092159d4
+!!$        gamma = 5.19500d0
+!!$        beta = 2.13539d0
+!!$        
+!!$        A = (/-4450.899484d0, 0.30601009538111d-1, 0.13671217000518d5,0.10750910095361d5, &
+!!$             -0.20933401680991d4,-0.19385874804675d5,-0.49208915890513d5,0.11026639220148d6, &
+!!$             0.72867339500920d6,-0.29310679369135d7,-0.12407070106619d8,0.40333947198094d8, &
+!!$             0.13229848871390d9, -0.37617673798775d9,-0.95250413275787d9,0.24655585744641d10, &
+!!$             0.47848257695164d10,-0.11582132109947d11,-0.17022518297651d11,0.39469335034593d11, &
+!!$             0.43141949844339d11,-0.97616955325128d11,-0.77417530685917d11,0.17314133615879d12, &
+!!$             0.96118849114926d11,-0.21425463041449d12,-0.78513081754125d11, 0.17539493131251d12, &
+!!$             0.37939637008662d11,-0.85271868691526d11,-0.82123523240949d10,0.18626451751424d11/)
+!!$        nu0 = 0d0 !0.13148609d0  ! Set the BO corrections to zero since they would modify the C6
+!!$        nu1 = 0d0 !2.08523853d0
+
+        !THE FOLLOWING FOR NO BORN OPPENHEIMER CORRECTION
         RSR = 2.870d0
         NS = 12d0
-        U1 = -0.263145571d4
-        U2 = 0.813723194d9  
-        B = -0.400d0
+        U1 = -0.262878738d4
+        U2 = 0.8129033720d9  
+        B = -0.4d0
         RLR = 12.00d0
         RM = 3.92436437d0
-        C6 = 0.1892652670d8   
-        C8 =  0.5706799527d9
-        C10 = 0.1853042722d11
-        C26 = 0.0d0
-        Aex = 0.90092159d4
+        C6 = 0.1892046304d8   
+        C8 =  0.5700273275d9
+        C10 = 0.1866135374d11
+        C26 = 0d0
+        Aex = 0.97014411d4
         gamma = 5.19500d0
         beta = 2.13539d0
-        
-        A = (/-4450.899484d0, 0.30601009538111d-1, 0.13671217000518d5,0.10750910095361d5, &
-             -0.20933401680991d4,-0.19385874804675d5,-0.49208915890513d5,0.11026639220148d6, &
-             0.72867339500920d6,-0.29310679369135d7,-0.12407070106619d8,0.40333947198094d8, &
-             0.13229848871390d9, -0.37617673798775d9,-0.95250413275787d9,0.24655585744641d10, &
-             0.47848257695164d10,-0.11582132109947d11,-0.17022518297651d11,0.39469335034593d11, &
-             0.43141949844339d11,-0.97616955325128d11,-0.77417530685917d11,0.17314133615879d12, &
-             0.96118849114926d11,-0.21425463041449d12,-0.78513081754125d11, 0.17539493131251d12, &
-             0.37939637008662d11,-0.85271868691526d11,-0.82123523240949d10,0.18626451751424d11/)
-        nu0 = 0.13148609d0
-        nu1 = 2.08523853d0
 
+        A = (/-4450.899108d0 , &
+         0.027435192082021d0, &
+         0.13671215240591d5, &
+         0.10750901039993d5, &
+         -0.20933147904789d4, &
+         -0.19385880603136d5, &
+         -0.49208904259548d5, &
+         0.11026640034823d6, &
+         0.72867340031285d6, &
+         -0.29310679230619d7, &
+         -0.12407070105941d8, &
+         0.40333947204823d8, &
+         0.13229848870507d9, &
+         -0.37617673800749d9, &
+         -0.95250413278553d9, &
+         0.24655585743928d10, &
+         0.47848257694561d10, &
+         -0.11582132110109d11, &
+         -0.17022518297748d11, &
+         0.39469335034300d11, &
+         0.43141949844175d11, &
+         -0.97616955325590d11, &
+         -0.77417530686085d11, &
+         0.17314133615815d12, &
+         0.96118849114885d11, &
+         -0.21425463041524d12, &
+         -0.78513081753454d11, &
+         0.17539493131261d12, &
+         0.37939637010974d11, &
+         -0.85271868689619d11, &
+         -0.82123523177698d10, &
+         0.18626451758590d11 /)
+
+        nu0 = 0d0 
+        nu1 = 0d0 
+
+        
         if(ISTATE.eq.4) then
-           Scorr = 3.0d-7 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
-           write(6,'(A,d16.8,A)') "K40 Singlet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
+           Scorr = 0d0!3.0d-7 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
+           write(6,'(A,d16.8,A)') "K40 Singlet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
            
 
         else if(ISTATE.eq.3) then
-           Scorr = 4d-7 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
-           write(6,'(A,d16.8,A)') "K39 Singlet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
+           Scorr = 0d0!4d-7 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
+           write(6,'(A,d16.8,A)') "K39 Singlet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         endif
 
      case (5)   !Sodium singlet
@@ -2588,8 +2643,8 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
         call POTGENLI2(1,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)!,.FALSE.)
         
         re = 2.6729932d0
-        Scorr = 3.62d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
-        write(6,'(A,d16.8,A)') "Li6 Singlet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
+        Scorr = 3.68d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
+        write(6,'(A,d16.8,A)') "Li6 Singlet Correction Scorr = ", Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         do i=1,NPP
            if(XO(i).lt.re) then
               VV(i) = VV(i) + Scorr*(XO(i) - re)**2
@@ -2605,8 +2660,8 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
         call POTGENLI2(1,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)!,.FALSE.)
         ! No short-range correction needed for Li-7 in the singlet state.  This already gives a scattering length of 34.331 bohr
         re=2.672993d0
-        Scorr =  4.03d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  !Singlet Correction
-        write(6,'(A,d16.8,A)') "Li7 Singlet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
+        Scorr =  4.11d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  !Singlet Correction
+        write(6,'(A,d16.8,A)') "Li7 Singlet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         do i=1,NPP
            if(XO(i).lt.re) then
               VV(i) = VV(i) + Scorr*(XO(i) - re)**2
@@ -2642,20 +2697,20 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
      case (1:2) !Rubidium triplet
         N = 13
         allocate(A(N))
-        RSR = 5.07d0
-        NS = 4.5338950d0
-        U1 = -0.619088543d3
-        U2 = 0.956231677d6
-        B = -0.33d0
-        RLR = 11.00d0
-        RM = 6.093345d0
-        C6 = 0.2270032d8
-        C8 = 0.7782886d9
-        C10 = 0.2868869d11
-        C26 = 0.2819810d26
-        Aex = 0.1317786d5
-        gamma = 5.317689d0
-        beta = 2.093816d0
+        RSR = 5.07d0  !5.07
+        NS = 4.5338950d0  !4.533 895 0
+        U1 = -0.619088543d3  !-0.619 088 543 × 103
+        U2 = 0.956231677d6 !0.956231677×106
+        B = -0.33d0 !-0.33
+        RLR = 11.00d0 !11.00
+        RM = 6.0933451d0  !6.093 345 1
+        C6 = 0.2270032d8  !0.227 003 2 × 108 
+        C8 = 0.7782886d9 !0.778 288 6 × 109
+        C10 = 0.2868869d11  !0.286 886 9 × 1011
+        C26 = 0.2819810d26  !0.281 981 0 × 1026
+        Aex = 0.1317786d5   !0.1317786×105
+        gamma = 5.317689d0  !5.317 689
+        beta = 2.093816d0   !2.093 816
         nu0 = 0d0
         nu1 = 0d0
         A = (/-241.503352d0, -0.672503402304666542d0, 0.195494577140503543d4, -0.141544168453406223d4,&
@@ -2664,12 +2719,12 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
              -0.328185277155018630d5,0.790208849885562522d5, -0.398783520249289213d5 /)
         if(ISTATE.eq.1) then !Rb 87
            Scorr = 0d0!4.90d-8 * HartreePerInvcm/(BohrPerAngstrom**2)  ! TripletCorrection
-           write(6,'(A,d16.8,A)') "Rb87 Triplet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
+           write(6,'(A,d16.8,A)') "Rb87 Triplet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
            
 
         else if(ISTATE.eq.2) then ! Rb 85
            Scorr = 0d0!5.8d-8 * HartreePerInvcm/(BohrPerAngstrom**2)  ! TripletCorrection
-           write(6,'(A,d16.8,A)') "Rb85 Triplet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
+           write(6,'(A,d16.8,A)') "Rb85 Triplet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         endif
 
 
@@ -2677,36 +2732,82 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
      case (3:4) !Potassium triplet
         N = 21
         allocate(A(N))
+!!$        RSR = 4.750d0
+!!$        NS = 6d0
+!!$        U1 = -0.6948000684d3
+!!$        U2 = 0.7986755824d7
+!!$        B = -0.300d0
+!!$        RLR = 12.00d0
+!!$        RM = 5.73392370d0
+!!$        C6 = 0.1892652670d8
+!!$        C8 =  0.5706799527d9
+!!$        C10 = 0.1853042722d11
+!!$        C26 = 0.0d0
+!!$        Aex =0.90092159d4
+!!$        gamma = 5.19500d0
+!!$        beta = 2.13539d0
+!!$        A = (/-255.015289d0, -0.84057856111142d0, 0.20960112217307d4, -0.17090298954603d4, &
+!!$             -0.17873773359495d4, 0.29451253739583d4, -0.20200089247397d5, &
+!!$             -0.35699524005434d5, 0.59869055371895d6, -0.71054353363636d6,&
+!!$             -0.61711841390175d7,0.19365507566961d8, 0.67930587059121d7, &
+!!$             -0.12020061704172d9, 0.21603959986951d9,-0.63531969223760d8,-0.52391212820709d9, &
+!!$             0.15913304648629d10,-0.24792546567713d10,0.20326031881106d10,-0.68044508325774d9/)
+!!$        nu0 = 0d0! 0.23803737d0  ! Set the BO corrections to zero since they effectively modify the asymptotic C6
+!!$        nu1 = 0.0d0
+
         RSR = 4.750d0
         NS = 6d0
-        U1 = -0.6948000684d3
-        U2 = 0.7986755824d7
+        U1 = -0.672898984d3
+        U2 = 0.7735201466d7
         B = -0.300d0
         RLR = 12.00d0
         RM = 5.73392370d0
-        C6 = 0.1892652670d8
-        C8 =  0.5706799527d9
-        C10 = 0.1853042722d11
+        C6 = 0.1892046304d8
+        C8 =  0.5700273275d9
+        C10 = 0.1866135374d11
         C26 = 0.0d0
-        Aex =0.90092159d4
+        Aex = 0.97014411d4
         gamma = 5.19500d0
         beta = 2.13539d0
-        A = (/-255.015289d0, -0.84057856111142d0, 0.20960112217307d4, -0.17090298954603d4, &
-             -0.17873773359495d4, 0.29451253739583d4, -0.20200089247397d5, &
-             -0.35699524005434d5, 0.59869055371895d6, -0.71054353363636d6,&
-             -0.61711841390175d7,0.19365507566961d8, 0.67930587059121d7, &
-             -0.12020061704172d9, 0.21603959986951d9,-0.63531969223760d8,-0.52391212820709d9, &
-             0.15913304648629d10,-0.24792546567713d10,0.20326031881106d10,-0.68044508325774d9/)
-        nu0 = 0.23803737d0
+!!$        A = (/-255.016075d0, -0.83437034991917d0, 0.20960239701879d4, -0.17090691582228d4, &
+!!$             -0.17873986188680d4, 0.29450770829461d4, -0.20200111692363d5, &
+!!$             -0.35699427038012d5, 0.59869069169566d6, -0.71054314902491d6,&
+!!$             -0.61711835715388d7,0.19365507918230d8, 0.67930591036665d7, &
+!!$             -0.12020061749490d9, 0.21603960091887d9,-0.63531970658436d8,-0.52391212911571d9, &
+!!$             0.15913304556368d10,-0.24792546801660d10,0.20326032002627d10,-0.68044505933607d9/)
+
+        A = (/-255.016075d0,&
+        -0.83437034991917d0,&
+        0.20960239701879d4,&
+        -0.17090691582228d4,&
+        -0.17873986188680d4,&
+        0.29450770829461d4,&
+        -0.20200111692363d5,&
+        -0.35699427038012d5,&
+        0.59869069169566d6,&
+        -0.71054314902491d6,&
+         -0.61711835715388d7,&
+         0.19365507918230d8,&
+         0.67930591036665d7,&
+         -0.12020061749490d9,&
+         0.21603960091887d9,&
+         -0.63531970658436d8,&
+         -0.52391212911571d9,&
+         0.15913304556368d10,&
+         -0.24792546801660d10,&
+         0.20326032002627d10,&
+         -0.68044505933607d9 /)
+        
+        nu0 = 0d0
         nu1 = 0.0d0
 
         if(ISTATE.eq.4) then
-           Scorr = 1.4d-8 * HartreePerInvcm/(BohrPerAngstrom**2)  ! Triplet Correction
-           write(6,'(A,d16.8,A)') "K40 Triplet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
+           Scorr = 0d0!1.4d-8 * HartreePerInvcm/(BohrPerAngstrom**2)  ! Triplet Correction
+           write(6,'(A,d16.8,A)') "K40 Triplet Correction Scorr = ", Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
 
         else if(ISTATE.eq.3) then
-           Scorr =1.4d-8 * HartreePerInvcm/(BohrPerAngstrom**2)  ! Triplet Correction
-           write(6,'(A,d16.8,A)') "K39 Triplet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
+           Scorr =0d0!1.4d-8 * HartreePerInvcm/(BohrPerAngstrom**2)  ! Triplet Correction
+           write(6,'(A,d16.8,A)') "K39 Triplet Correction Scorr = ", Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         endif
 
         
@@ -2745,8 +2846,8 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
         ! The Le Roy potentials generated by the subroutine above do not produce the correct scattering lengths
         ! We therefore add a quadratic term a*(r-re)**2 for all r inside the minimum.
         re = 4.17005000d0
-        Scorr =  1.5542d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  !Triplet Correction
-        write(6,'(A,d16.8,A)') "Li6 Triplet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
+        Scorr =   1.5546d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  !Triplet Correction
+        write(6,'(A,d16.8,A)') "Li6 Triplet Correction Scorr = ", Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         do i=1,NPP
            if(XO(i).lt.re) then
               VV(i) = VV(i) + Scorr*(XO(i) - re)**2
@@ -2764,8 +2865,8 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
         C10 = 2.78683d9
         
         re = 4.17005000d0
-        Scorr =  1.85d-6 * HartreePerInvcm/(BohrPerAngstrom**2) !Triplet Correction
-        write(6,'(A,d16.8,A)') "Li7 Triplet Correction Scorr = ", Scorr, "cm^(-1)/Angstrom^2"
+        Scorr =   1.861d-6 * HartreePerInvcm/(BohrPerAngstrom**2) !Triplet Correction
+        write(6,'(A,d16.8,A)') "Li7 Triplet Correction Scorr = ", Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         do i=1,NPP
            if(XO(i).lt.re) then
               VV(i) = VV(i) + Scorr*(XO(i) - re)**2
@@ -2843,7 +2944,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
                  VV(i) = VV(i) + A(j+1)*xi**j
               enddo
               
-           else
+           else if (XO(i) .GT. RLR) then
               VV(i) = -C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0)  - C26/(XO(i)**26.0d0)
               
               if(ESTATE.EQ.1) then
@@ -2858,7 +2959,8 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
            if(XO(i) .LE. RM) then
               VV(i) = VV(i) + Scorr*(XO(i) - RM)**2
            endif
-           !VV(i) = VV(i) + (nu0 + nu1*((XO(i) - RM)/(XO(i) + B*RM)))*(1 - MU/MUREF)*((2*RM)/(XO(i)+RM))**6 !!!!NPM MOVE THIS TO ONLY R<RLR
+           ! Comment out to remove BO Corrections since they change the long-range potential  (NPM 8-2-21)
+           VV(i) = VV(i) + (nu0 + nu1*((XO(i) - RM)/(XO(i) + B*RM)))*(1 - MU/MUREF)*((2*RM)/(XO(i)+RM))**6 
         enddo
 
      endif
@@ -2907,7 +3009,7 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      write(6,'(A)') "Setting up the potential for Rb-87"
      gi = -0.000995141410d0
      i = 3
-     AHf = 3417.3413064215d0
+     AHf = 3417.34130642d0
      mass = 86.909180527*amuAU
      MU = mass/2
      MUREF = MU
@@ -2916,7 +3018,7 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      write(6,'(A)') "Setting up the potential for Rb-85"
      gi = -0.00029364006d0
      i = 5
-     AHf = 1011.9108132d0
+     AHf = 1011.910813d0
      mass = 84.911789738*amuAU
      MU = mass/2  
      MUREF = (86.909180527*amuAU)/2 !Reference reduced mass is 87-Rb2
@@ -2925,7 +3027,7 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      write(6,'(A)') "Setting up the potential for K-39"
      gi = -0.00014193489d0
      i = 3
-     AHf = 230.85986013d0
+     AHf = 230.8598601d0
      mass = 38.963708d0*amuAU
      MU = mass/2
      MUREF = MU
@@ -2934,7 +3036,7 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      write(6,'(A)') "Setting up the potential for K-40"
      gi = 0.00017649034d0
      i = 8
-     AHf = -285.730824d0
+     AHf = -285.7308d0
      mass = 39.964008d0*amuAU
      MU = mass/2
      MUREF = (38.963708d0*amuAU)/2 !Reference reduced mass is 39-K2
@@ -2943,7 +3045,7 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      write(6,'(A)') "Setting up the potential for Na-23"
      gi =  -0.00080461088d0
      i = 3
-     AHf = 885.81306445d0
+     AHf = 885.8130644d0
      mass = 22.98976928*amuAU
      MU = mass/2
      MUREF = MU
@@ -2952,8 +3054,8 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      write(6,'(A)') "Setting up the potential for Li-6"
      gi = -0.00044765403d0
      i = 2
-     AHf = 152.136840720d0
-     mass = 6.0151223*amuAU
+     AHf = 152.1368407d0
+     mass = 6.015122795*amuAU
      MU = mass/2
      MUREF = (7.016004*amuAU)/2 !Reference reduced mass is 7-Li2
 
@@ -2961,8 +3063,8 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      write(6,'(A)') "Setting up the potential for Li-7"
      gi =  -0.0011822136d0
      i = 3
-     AHf = 401.75204335d0
-     mass = (7.016004*amuAU)
+     AHf = 401.7520433d0
+     mass = (7.01600455*amuAU)
      MU = mass/2
      MUREF = MU
 
@@ -3263,10 +3365,12 @@ subroutine logderScatLengths1(lwave,mu,N,R,w,VSinglet,VTriplet,a1,a3)
      
      x = k*R(N)
      !call hyperrjry(3,1d0,0d0,x,f,g,fp,gp)
-     call sphbesjy(lwave,x,f,g,fp,gp) ! These are the Ricatti functions kr*j_n(kr)
+     !call sphbesjy(lwave,x,f,g,fp,gp) ! These are the Ricatti functions kr*j_n(kr)
      
-     td1 = (yf(1,1)*f - k*fp) / (yf(1,1)*g - k*gp)
-     td2 = (yf(2,2)*f - k*fp) / (yf(2,2)*g - k*gp)
+     !td1 = (yf(1,1)*f - k*fp) / (yf(1,1)*g - k*gp)
+     !td2 = (yf(2,2)*f - k*fp) / (yf(2,2)*g - k*gp)
+     td1 = (yf(1,1)*sin(x) - k*cos(x)) / (-yf(1,1)*cos(x) + k*(-sin(x)))
+     td2 = (yf(2,2)*sin(x) - k*cos(x)) / (-yf(2,2)*cos(x) + k*(-sin(x)))
      ere1(iE) = k/td1
      ere3(iE) = k/td2
      write(302,*) E(iE), ere1(iE), ere3(iE)
@@ -3289,16 +3393,24 @@ subroutine testlogder()
   use scattering
   implicit none
   TYPE(ScatData) :: SD
-  integer iN,n1, n2, N,lwave,iE,mult
-  double precision mass,DD1,DD2,Ri,Rf,C12,C6,A,b,Ehf,kappa,Eth(2)
-  double precision norm, k, energy,td1,td2, Ustart,psistart,s,mu
-  double precision, allocatable :: R(:),W(:), VMAT(:,:,:)
+  integer iN,n1, n2, N,lwave,iE,mult,istart,Nh
+  double precision mass,DD1,DD2,Ri,Rf,C12,C6,A,b,Ehf,kappa,Eth(2),lvdw
+  double precision norm, k, energy,td1,td2, Ustart,psistart,s,mu,h,x
+  double precision, allocatable :: R(:),W(:), VMAT(:,:,:),hvals(:)
   double precision, allocatable :: VSinglet(:),VTriplet(:),V1(:),V2(:)
-  double precision ystart(2,2)
-  double precision identity(2,2),ym(2,2),yf(2,2),a1,a3,KBEST,K1,K2,Kext!
-  double precision f, fp, g, gp,x,del1,del2,h
+  double precision ystart(2,2),MYKBEST,abest
+  double precision identity(2,2),ym(2,2),yf(2,2),a1,a3,KBEST,K1,K2,Kext,aext!
+ 
+  character(len=20), external :: str
+
   
   call allocateScat(SD,2)
+
+  Nh=20
+  allocate(hvals(Nh))
+  call GridMaker(hvals, Nh, -4d0, -1d0, "linear")  ! this is reall log10(h)
+  hvals = 10**hvals  !exponentiate
+  
   !The following are potential parameters from Rawitscher et al [J. Chem. Phys. 111 10418 (1999)]
   mass = 22.9897680d0*1822.888506d0!amuAU!1d0  (Sodium mass)
   mu = mass/2d0
@@ -3310,25 +3422,36 @@ subroutine testlogder()
   Eth(1) = 0d0
   Eth(2) = Ehf
   energy = 3.1668293d-12! Should be 1 microK in Hartree
+  energy = energy*1d-8 ! 1 pK
+  lvdw = (2d0*mu*C6)**0.25d0
 !  k = 3.643004224146145d-4
   ! energy = k**2/mass!
   k = sqrt(mass*energy)
   kappa = sqrt(-mass*(energy-Ehf))
+  Ri=4d0
+  
+  Rf = 40d0*lvdw!500d0
+  open(unit = 300, file = "RawitscherTest-"//trim(str(NINT(Rf/lvdw)))//".dat")  
   write(6,*) "---------------------------"
   write(6,*) "k = ", k
   write(6,*) "kappa = ", kappa
+  write(6,*) "RF = ", RF
   write(6,*) "---------------------------"
-  KBEST = -0.312333983d0
-  do iN = 20000, 1000000, 40000
 
+        
+  
+  !KBEST = -0.3123339834d0 ! at Rmax = 500 bohr
+  KBEST = -0.31232334394d0 ! at Rmax -> infinity
+  abest = 851.9817157362d0 ! at Rmax -> infinity
+  istart=2000
+  do iN = 1, Nh
      do mult = 1,2
-        N = iN*mult
+        !N = (istart + 2**iN)*mult!iN*mult
+        N = NINT( (Rf-Ri)/hvals(iN) ) * mult
         !     write(6,*) "Running N = ", N, "   out of ", 500000
         allocate(V1(0:N),V2(0:N))
         allocate(R(0:N),W(0:N))
         allocate(VMAT(2,2,0:N))
-        Ri=4d0
-        Rf=500d0
         call GridMaker(R(0:N), N+1, Ri, Rf, "linear")
         h = R(2)-R(1)
         
@@ -3352,7 +3475,8 @@ subroutine testlogder()
         call logderpropA(mu,energy,identity,W,N,ystart,yf,R,VMAT(:,:,:),2)
         !call logderpropANew(mu,energy,identity,W,N,ystart,yf,R,VMAT(:,:,:),2)
         
-        x = k*R(N)
+        !x = k*R(N)
+        x = k*Rf
         
         lwave = 0
         !     call CalcK(yf,RF,SD,mu,3d0,1d0,energy,Eth,2,1)
@@ -3366,19 +3490,24 @@ subroutine testlogder()
         !     td2 = (yf(2,2)*sin(x) - k*cos(x)) / (-yf(2,2)*cos(x) + k*(-sin(x)))
         !     del1 = atan(td1)
         !     del2 = atan(td2)
-        !     a1 = -td1/k
-        !     a3 = -td2/k
         if(mult.eq.2) then
            K1 = td1  ! Smaller step size case
+
            !Kext = (0.5d0*h*K2 - h*K1) / (-0.5d0*h)  !Test of B-S extrapolation
            Kext = (16*K1 - K2)/15d0  ! Test of Richardson Extrapolation
-           write(300,*) h, abs((Kext - KBEST)/KBEST)
-           write(6,*) N, K2,K1,Kext,abs((td1 - KBEST)/KBEST)
+           a1 = -K1/k
+           aext = -Kext/k
+
+           !write(300,*) h, abs((K1 - KBEST)/KBEST), abs((Kext - KBEST)/KBEST)
+           write(300,*) h, abs((a1 - abest)/abest), abs((aext - abest)/abest)
+           write(6,*) h, a1, aext, abest
+           !write(6,*) N, K2, K1, Kext,abs((td1 - KBEST)/KBEST)
+
         else if (mult.eq.1) then
-           K2 = td1
+           K2 = td1 ! Larger step size
         endif
-        write(6,*) N, abs((td1 - KBEST)/KBEST)
-        !write(300,*) h, abs((td1 - KBEST)/KBEST)
+!        write(6,*) N, abs((td1 - KBEST)/KBEST), td1
+
 !!$     write(6,*) "h = ",h
 !!$     write(6,*) "TEST: "
 !!$     write(6,*) "--------------------"
