@@ -2488,13 +2488,31 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
         nu0 = 0d0
         nu1 = 0d0
 
-
-        A = (/ -3993.592873d0, 0.d0, 0.282069372972346137d5, 0.560425000209256905d4, -0.423962138510562945d5, &
-             -0.598558066508841584d5, -0.162613532034769596d5, -0.405142102246254944d5, 0.195237415352729586d6, &
-             0.413823663033582852d6, -0.425543284828921501d7, 0.546674790157210198d6, 0.663194778861331940d8, &
-             -0.558341849704095051d8, -0.573987344918535471d9, 0.102010964189156187d10, 0.300040150506311035d10, &
-             -0.893187252759830856d10, -0.736002541483347511d10, 0.423130460980355225d11, -0.786351477693491840d10, &
-             -0.102470557344862152d12, 0.895155811349267578d11, 0.830355322355692902d11, -0.150102297761234375d12, &
+     A = (/  -3993.592873d0, &
+             0.000000000000000000d0, & 
+             0.282069372972346137d5, & 
+             0.560425000209256905d4, & 
+             -0.423962138510562945d5, & 
+             -0.598558066508841584d5, & 
+             -0.162613532034769596d5, & 
+             -0.405142102246254944d5, & 
+             0.195237415352729586d6, & 
+             0.413823663033582852d6, & 
+             -0.425543284828921501d7, & 
+             0.546674790157210198d6, & 
+             0.663194778861331940d8, & 
+             -0.558341849704095051d8, & 
+             -0.573987344918535471d9, & 
+             0.102010964189156187d10, & 
+             0.300040150506311035d10, & 
+             -0.893187252759830856d10, & 
+             -0.736002541483347511d10, & 
+             0.423130460980355225d11, & 
+             -0.786351477693491840d10, & 
+             -0.102470557344862152d12, & 
+             0.895155811349267578d11, & 
+             0.830355322355692902d11, & 
+             -0.150102297761234375d12, & 
              0.586778574293387070d11 /)
 
         if(ISTATE.eq.1) then !Rb 87
@@ -2713,10 +2731,22 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
         beta = 2.093816d0   !2.093 816
         nu0 = 0d0
         nu1 = 0d0
-        A = (/-241.503352d0, -0.672503402304666542d0, 0.195494577140503543d4, -0.141544168453406223d4,&
-             -0.221166468149940465d4, 0.165443726445793004d4, -0.596412188910614259d4, &
-             0.654481694231538040d4, 0.261413416681972012d5, -0.349701859112702878d5,&
-             -0.328185277155018630d5,0.790208849885562522d5, -0.398783520249289213d5 /)
+
+       A=(/ -241.503352d0, &
+        -0.672503402304666542d0, &
+        0.195494577140503543d4, &
+        -0.141544168453406223d4, &
+        -0.221166468149940465d4, &
+        0.165443726445793004d4, &
+        -0.596412188910614259d4, &
+        0.654481694231538040d4, &
+        0.261413416681972012d5, &
+        -0.349701859112702878d5, &
+         -0.328185277155018630d5, &
+         0.790208849885562522d5, &
+         -0.398783520249289213d5 /)
+
+
         if(ISTATE.eq.1) then !Rb 87
            Scorr = 0d0!4.90d-8 * HartreePerInvcm/(BohrPerAngstrom**2)  ! TripletCorrection
            write(6,'(A,d16.8,A)') "Rb87 Triplet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
@@ -3343,7 +3373,7 @@ subroutine logderScatLengths1(lwave,mu,N,R,w,VSinglet,VTriplet,a1,a3)
   double precision f, fp, g, gp,x,sig
 
   mwt=0
-  call GridMaker(E,5,nkPerHartree,20*nkPerHartree,'linear')
+  call GridMaker(E,5,0.1d0*nkPerHartree,1*nkPerHartree,'linear')
   E(:) = 2d0*mu*E(:)
   identity = 0d0
   identity(1,1) = 1d0
@@ -3398,7 +3428,7 @@ subroutine testlogder()
   double precision norm, k, energy,td1,td2, Ustart,psistart,s,mu,h,x
   double precision, allocatable :: R(:),W(:), VMAT(:,:,:),hvals(:)
   double precision, allocatable :: VSinglet(:),VTriplet(:),V1(:),V2(:)
-  double precision ystart(2,2),MYKBEST,abest
+  double precision ystart(2,2),MYKBEST,abest,yf1(2,2),yf2(2,2),yfext(2,2),tdext
   double precision identity(2,2),ym(2,2),yf(2,2),a1,a3,KBEST,K1,K2,Kext,aext!
  
   character(len=20), external :: str
@@ -3430,7 +3460,7 @@ subroutine testlogder()
   kappa = sqrt(-mass*(energy-Ehf))
   Ri=4d0
   
-  Rf = 40d0*lvdw!500d0
+  Rf = 100d0*lvdw!500d0
   open(unit = 300, file = "RawitscherTest-"//trim(str(NINT(Rf/lvdw)))//".dat")  
   write(6,*) "---------------------------"
   write(6,*) "k = ", k
@@ -3474,8 +3504,10 @@ subroutine testlogder()
         
         call logderpropA(mu,energy,identity,W,N,ystart,yf,R,VMAT(:,:,:),2)
         !call logderpropANew(mu,energy,identity,W,N,ystart,yf,R,VMAT(:,:,:),2)
+        if(mult.eq.1) yf2=yf  ! larger step size
+        if(mult.eq.2) yf1=yf  ! smaller step size
         
-        !x = k*R(N)
+        
         x = k*Rf
         
         lwave = 0
@@ -3492,9 +3524,11 @@ subroutine testlogder()
         !     del2 = atan(td2)
         if(mult.eq.2) then
            K1 = td1  ! Smaller step size case
-
+           yfext = (16*yf1 - yf2)/15d0
+           tdext = (yfext(1,1)*sin(x) - k*cos(x)) / (-yfext(1,1)*cos(x) + k*(-sin(x)))
            !Kext = (0.5d0*h*K2 - h*K1) / (-0.5d0*h)  !Test of B-S extrapolation
-           Kext = (16*K1 - K2)/15d0  ! Test of Richardson Extrapolation
+           !Kext = (16*K1 - K2)/15d0  ! Test of Richardson Extrapolation
+           Kext = tdext
            a1 = -K1/k
            aext = -Kext/k
 
