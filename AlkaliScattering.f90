@@ -2990,7 +2990,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
               VV(i) = VV(i) + Scorr*(XO(i) - RM)**2
            endif
            ! Comment out to remove BO Corrections since they change the long-range potential  (NPM 8-2-21)
-           VV(i) = VV(i) + (nu0 + nu1*((XO(i) - RM)/(XO(i) + B*RM)))*(1 - MU/MUREF)*((2*RM)/(XO(i)+RM))**6 
+           !VV(i) = VV(i) + (nu0 + nu1*((XO(i) - RM)/(XO(i) + B*RM)))*(1 - MU/MUREF)*((2*RM)/(XO(i)+RM))**6 
         enddo
 
      endif
@@ -3041,7 +3041,7 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      i = 3
      AHf = 3417.34130642d0
      mass = 86.909180527*amuAU
-     MU = mass/2
+     MU = mass/2d0
      MUREF = MU
 
   case (2) !Rb-85
@@ -3050,8 +3050,8 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      i = 5
      AHf = 1011.910813d0
      mass = 84.911789738*amuAU
-     MU = mass/2  
-     MUREF = (86.909180527*amuAU)/2 !Reference reduced mass is 87-Rb2
+     MU = mass/2d0  
+     MUREF = (86.909180527*amuAU)/2d0 !Reference reduced mass is 87-Rb2
 
   case (3) !K-39
      write(6,'(A)') "Setting up the potential for K-39"
@@ -3059,7 +3059,7 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      i = 3
      AHf = 230.8598601d0
      mass = 38.963708d0*amuAU
-     MU = mass/2
+     MU = mass/2d0
      MUREF = MU
 
   case (4) !K-40
@@ -3068,8 +3068,8 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      i = 8
      AHf = -285.7308d0
      mass = 39.964008d0*amuAU
-     MU = mass/2
-     MUREF = (38.963708d0*amuAU)/2 !Reference reduced mass is 39-K2
+     MU = mass/2d0
+     MUREF = (38.963708d0*amuAU)/2d0 !Reference reduced mass is 39-K2
 
   case (5) !Na-23
      write(6,'(A)') "Setting up the potential for Na-23"
@@ -3077,7 +3077,7 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      i = 3
      AHf = 885.8130644d0
      mass = 22.98976928*amuAU
-     MU = mass/2
+     MU = mass/2d0
      MUREF = MU
 
   case (6) !Li-6
@@ -3086,8 +3086,8 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      i = 2
      AHf = 152.1368407d0
      mass = 6.015122795*amuAU
-     MU = mass/2
-     MUREF = (7.016004*amuAU)/2 !Reference reduced mass is 7-Li2
+     MU = mass/2d0
+     MUREF = (7.016004*amuAU)/2d0 !Reference reduced mass is 7-Li2
 
   case(7) !Li-7
      write(6,'(A)') "Setting up the potential for Li-7"
@@ -3095,7 +3095,7 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      i = 3
      AHf = 401.7520433d0
      mass = (7.01600455*amuAU)
-     MU = mass/2
+     MU = mass/2d0
      MUREF = MU
 
   case(8)  !Cs-133
@@ -3104,7 +3104,7 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      i = 7
      AHf = 2298.1579425
      mass = (132.905451933*amuAU)
-     MU = mass/2
+     MU = mass/2d0
      MUREF = MU
 
   case default
