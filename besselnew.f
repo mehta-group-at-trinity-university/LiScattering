@@ -143,7 +143,7 @@ c!
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       SUBROUTINE sphbesjy(n,x,sj,sy,sjp,syp) ! change norm
 !NB:  This is NOT the spherical bessel function jn(x), instead it is x*jn(x), the Riccati function
-!leaving a factor of sqrt(x) in the numerator of the prefactor
+!     leaving a factor of sqrt(x) in the numerator of the prefactor
       INTEGER n
       DOUBLE PRECISION sj,sjp,sy,syp,x
 !U    USES bessjy

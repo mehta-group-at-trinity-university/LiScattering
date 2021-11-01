@@ -60,7 +60,7 @@ C  (C) Copr. 1986-92 Numerical Recipes Software v%1jw#<0(9p#3.
       SUBROUTINE fit(x,y,ndata,sig,mwt,a,b,siga,sigb,chi2,q)
       INTEGER mwt,ndata
       DOUBLE PRECISION a,b,chi2,q,siga,sigb,sig(ndata),x(ndata),y(ndata)
-CU    USES gammq
+!C    USES gammq
       INTEGER i
       DOUBLE PRECISION sigdat,ss,st2,sx,sxoss,sy,t,wt,gammq
       sx=0.0d0
@@ -135,24 +135,24 @@ CU    USES gcf,gser
       END
 C  (C) Copr. 1986-92 Numerical Recipes Software v%1jw#<0(9p#3.
 cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-      FUNCTION gammln(xx)
-      DOUBLE PRECISION gammln,xx
-      INTEGER j
-      DOUBLE PRECISION ser,stp,tmp,x,y,cof(6)
-      SAVE cof,stp
-      DATA cof,stp/76.18009172947146d0,-86.50532032941677d0,
-     *24.01409824083091d0,-1.231739572450155d0,.1208650973866179d-2,
-     *-.5395239384953d-5,2.5066282746310005d0/
-      x=xx
-      y=x
-      tmp=x+5.5d0
-      tmp=(x+0.5d0)*log(tmp)-tmp
-      ser=1.000000000190015d0
-      do 11 j=1,6
-        y=y+1.d0
-        ser=ser+cof(j)/y
-11    continue
-      gammln=tmp+log(stp*ser/x)
-      return
-      END
-C  (C) Copr. 1986-92 Numerical Recipes Software v%1jw#<0(9p#3.
+c$$$      FUNCTION gammln(xx)
+c$$$      DOUBLE PRECISION gammln,xx
+c$$$      INTEGER j
+c$$$      DOUBLE PRECISION ser,stp,tmp,x,y,cof(6)
+c$$$      SAVE cof,stp
+c$$$      DATA cof,stp/76.18009172947146d0,-86.50532032941677d0,
+c$$$     *24.01409824083091d0,-1.231739572450155d0,.1208650973866179d-2,
+c$$$     *-.5395239384953d-5,2.5066282746310005d0/
+c$$$      x=xx
+c$$$      y=x
+c$$$      tmp=x+5.5d0
+c$$$      tmp=(x+0.5d0)*log(tmp)-tmp
+c$$$      ser=1.000000000190015d0
+c$$$      do 11 j=1,6
+c$$$        y=y+1.d0
+c$$$        ser=ser+cof(j)/y
+c$$$11    continue
+c$$$      gammln=tmp+log(stp*ser/x)
+c$$$      return
+c$$$      END
+c$$$C  (C) Copr. 1986-92 Numerical Recipes Software v%1jw#<0(9p#3.

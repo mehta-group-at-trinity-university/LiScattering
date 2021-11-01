@@ -1,7 +1,8 @@
 # This is a parameter file for input into AlkaliScattering.x
-# ISTATE (for Li-7)  SYM (+1 for boson)  CALCTYPE (1 for logder, 2 for MQDT, 3 for FT) 
-  7	      	      1     	 	   1	   
+# ISTATE (for Li-6)  SYM (-1 for fermion)  CALCTYPE (1 for logder, 2 for MQDT, 3 for FT) 	MQDTMODE
+  7	      	      1     	 	   1	   	   	     	       	     		1
 # L (partial wave)    2*MFtot (twice total F projection) writepot
+<<<<<<< HEAD
   0 	     	      4	      	     	     		 .true.
 # Rmin		      Rmidmax  		 RX    		 RF (all in bohr except RX and RF which is in vdw units.  Converted to bohr in the code.)
   0.02d0	      30.0d0  		 0.1d0		 10d0
@@ -24,3 +25,17 @@
 #Observed two resonances with atoms in the (1 0) spin state -- a narrow one at 831(4) G with
 #width 7 G and a wider one at 884 G with width 34 G. They also found a zero crossing occurs
 #between these two resonances near 836 G. 
+=======
+  0 	     	      4      	     	     		 .false.
+# Rmin		      Rmidmax  		 RX    		 RF (all in bohr except RX and RF which is in vdw units.  Converted to bohr in the code.)
+  0.2d0		      100d0  		 0.1d0		 20d0
+# NXM		      NXF 		 Nsr		 Nlr
+   10000000  	      100000000		 4000000	 40000000
+# NEgrid	      Emin		Emax (enter energy range in mK)
+  10		      10d-6		50d0
+# NBgrid	      Bmin		Bmax (enter B-field range in gauss)	 Bhuge (largest possible field)  NBGridFine
+  200		      0.1d0		1200d0 	    	    	     		 1200d0   		 	 100000
+# Grid for calculating MQDT functions (must be 'linear', 'quadratic', 'cubic', or 'log')		      
+  'quadratic'
+
+>>>>>>> Nirav

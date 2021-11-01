@@ -2302,7 +2302,7 @@ end module bspline
   ! ----------------------------------------------------------------------------------
 
 module InterpType
-  use bspline
+  use bspline ! USE THE BSPLINE MODULES ABOVE
   implicit none
   TYPE InterpolatingFunction
      
@@ -2310,6 +2310,13 @@ module InterpType
      integer nx, kx
      
   END TYPE InterpolatingFunction
+  
+  TYPE InterpolatingMatrix
+     
+     DOUBLE PRECISION, ALLOCATABLE :: x(:),M(:,:,:),knots(:),b(:,:,:)
+     integer nx, kx, nr, nc
+     
+  END TYPE InterpolatingMatrix
   
 contains
   ! NPM: The following routine allocates memory for the arrays in the interpolant
@@ -2330,6 +2337,37 @@ contains
   
   ! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   
+  subroutine AllocateInterpolatingMatrix(nx,kx,NR,NC,interpolant)
+    implicit none
+    integer nx, kx, NR, NC, ir,ic
+    !type(InterpolatingFunction) :: interpolant(NR,NC)
+    type(InterpolatingMatrix) :: interpolant
+    interpolant%nx = nx
+    interpolant%kx = kx
+    interpolant%nr = nr
+    interpolant%nc = nc
+    allocate(interpolant%M(nx,nr,nc),Interpolant%b(nx,nr,nc),interpolant%knots(nx+kx),interpolant%x(nx))
+    interpolant%M=0d0
+    interpolant%b=0d0
+    interpolant%knots=0d0
+    interpolant%x=0d0
+    
+!!$    do ir = 1, NR
+!!$       do ic = 1, NC
+!!$          interpolant(ir,ic)%nx=nx
+!!$          interpolant(ir,ic)%kx=kx
+!!$          allocate(interpolant(ir,ic)%x(nx),interpolant(ir,ic)%y(nx),interpolant(ir,ic)%knots(nx+kx),interpolant(ir,ic)%b(nx))
+!!$          interpolant(ir,ic)%y=0d0
+!!$          interpolant(ir,ic)%x=0d0
+!!$          interpolant(ir,ic)%knots=0d0
+!!$          interpolant(ir,ic)%b=0d0
+!!$       enddo
+!!$    enddo
+    
+  end subroutine AllocateInterpolatingMatrix
+  
+  ! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  
   ! NPM: This routine calls dbsnak and dbsint to setup the interpolant
   subroutine SetupInterpolatingFunction(interpolant)
     implicit none
@@ -2339,21 +2377,58 @@ contains
     call dbsint(interpolant%nx,interpolant%x,interpolant%y,interpolant%kx,interpolant%knots,interpolant%b)
     
   end subroutine SetupInterpolatingFunction
-  
+! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+  subroutine SetupInterpolatingMatrix(interpolant)
+    implicit none
+    integer ir,ic
+    type(InterpolatingMatrix) :: interpolant
+    call dbsnak(interpolant%nx,interpolant%x,interpolant%kx,interpolant%knots)
+    do ir=1,interpolant%nr
+       do ic=1,interpolant%nc
+          call dbsint(interpolant%nx,interpolant%x,interpolant%M(:,ir,ic),&
+               interpolant%kx,interpolant%knots,interpolant%b(:,ir,ic))
+       enddo
+    enddo
+!!$    do ir=1, NR
+!!$       do ic = 1, NC
+!!$          call dbsnak(interpolant(ir,ic)%nx,interpolant(ir,ic)%x,interpolant(ir,ic)%kx,interpolant(ir,ic)%knots)
+!!$          call dbsint(interpolant(ir,ic)%nx,interpolant(ir,ic)%x,interpolant(ir,ic)%y,&
+!!$               interpolant(ir,ic)%kx,interpolant(ir,ic)%knots,interpolant(ir,ic)%b)
+!!$       enddo
+!!$    enddo
+  end subroutine SetupInterpolatingMatrix
+
   ! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
   
   double precision function Interpolated(x,interpolant)
     implicit none
     double precision x
     type(InterpolatingFunction) :: interpolant
-!    write(6,*) "here"
-    Interpolated = dbsval(x,interpolant%kx,interpolant%knots,interpolant%nx,interpolant%b)
- !   write(6,*) "here"
-  end function Interpolated
-  ! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-  
-end module InterpType
 
+    Interpolated = dbsval(x,interpolant%kx,interpolant%knots,interpolant%nx,interpolant%b)
+
+  end function Interpolated
+
+  ! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+  function InterpolatedMatrix(x,interpolant)
+      implicit none
+      integer ir, ic
+      double precision x
+      type(InterpolatingMatrix) :: interpolant
+      double precision, dimension(interpolant%nr,interpolant%nc) :: InterpolatedMatrix
+
+      InterpolatedMatrix = 0d0
+      do ir=1,interpolant%nr
+         do ic = 1, interpolant%nc
+           InterpolatedMatrix(ir,ic) = dbsval(x,interpolant%kx,interpolant%knots,interpolant%nx,interpolant%b(:,ir,ic))
+         enddo
+      enddo
+
+    end function InterpolatedMatrix
+
+end module InterpType
+! %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 module MyCubicSpline
   implicit none
   

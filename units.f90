@@ -7,7 +7,7 @@ module units
   real*8, parameter :: Pi = 3.14159265358979323846264338328
   real*8, parameter :: KPerInvcm = 1.4387862961655296d0
   real*8, parameter :: mKPerInvcm = 1.4387862961655296d3
-  real*8, parameter :: InvcmPerHartree = 4.556335252912088d-6
+  real*8, parameter :: InvcmPerHartree = 4.5563352529120d-6
   real*8, parameter :: HartreePerInvcm = 219474.6313632043
   real*8, parameter :: InvcmPereV = 0.00012398425731484318d0
   real*8, parameter :: BohrPerAngstrom = 0.529177210903d0

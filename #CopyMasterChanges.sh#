@@ -34,9 +34,6 @@ cp *.mod $paperdir/Rb-87/FT/
 cp AlkaliScattering.x $paperdir/Rb-85/LD/
 cp *.mod $paperdir/Rb-85/LD/
 
-cp AlkaliScattering.x $paperdir/Rb-85/MQDT/
-cp *.mod $paperdir/Rb-85/MQDT/
-
 cp AlkaliScattering.x $paperdir/Rb-85/FT/
 cp *.mod $paperdir/Rb-85/FT/
 
@@ -55,7 +52,8 @@ cp *.mod $paperdir/K-40/LD/
 cp AlkaliScattering.x $paperdir/K-40/MQDT/
 cp *.mod $paperdir/K-40/MQDT/
 
-cp AlkaliScattering.x $paperdir/K-40/FT/
+
+xcp AlkaliScattering.x $paperdir/K-40/FT/
 cp *.mod $paperdir/K-40/FT/
 
 cp AlkaliScattering.x $paperdir/Na-23/LD/

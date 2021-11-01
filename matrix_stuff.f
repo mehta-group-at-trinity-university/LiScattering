@@ -518,7 +518,8 @@ c iparam(3) : Max number of Arnoldi iterations
          print *, ' '
         else if ( info .eq. 3) then
          print *, ' '
-         print *, ' No shifts could be applied during implicit Arnoldi update, try increasing NCV.'
+         print *, 'No shifts could be applied during '
+         print*, 'implicit Arnoldi update, try increasing NCV.'
          print *, ' '
         end if
         if (iparam(5) .gt. 0) then
@@ -1400,3 +1401,223 @@ c
  9000 continue
 c
       end
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      SUBROUTINE SYMINL(A, IA, N, INERT)
+C  Copyright (C) 2019 J. M. Hutson & C. R. Le Sueur
+C  Distributed under the GNU General Public License, version 3
+C
+C  SIMULATES SYMINV SYMMETRIC MATRIX INVERTER WITH LAPACK CALLS
+C  THIS VERSION USES ONLY THE UPPER TRIANGLE OF A:
+C  NOT COMPATIBLE WITH MOLSCAT VERSION 11.
+C  JM Hutson MAY 93
+C
+      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
+C
+      ALLOCATABLE::IPIV(:),WORK(:)
+      DIMENSION A(IA,N)
+C
+C  ILAENV WITH FIRST VARIABLE 1 RETURNS OPTIMAL BLOCKSIZE FOR ROUTINE
+C  NAMED IN VARIABLE 2 AND PARAMETERS AS NAMED IN OTHER VARIABLES
+      NB=ILAENV(1,'DSYTRF','L',N,-1,-1,-1)
+      LWORK=N*NB
+      ALLOCATE (IPIV(N),WORK(LWORK))
+C  DSYTRF FACTORISES A AS LDL^T.  IT USES ONLY THE LOWER PART OF A
+      CALL DSYTRF('L',N,A,IA,IPIV,WORK,LWORK,INFO)
+C
+      IF (INFO.NE.0) THEN
+        WRITE(6,120) INFO
+120     FORMAT(' *** ERROR IN DSYTRF: INFO =',I3)
+        STOP
+      ENDIF
+C
+C  DSYNEG (IN-HOUSE ROUTINE) FINDS THE NUMBER OF NEGATIVE EIGENVALUES OF A
+      INERT=0
+      CALL DSYNEG('L',A,IPIV,N,INERT)
+C
+C  DSYTRI COMPUTES THE INVERSE OF A WHICH HAS BEEN DECOMPOSED AS A=LDL^T
+      CALL DSYTRI('L',N,A,IA,IPIV,WORK,INFO)
+      DEALLOCATE(IPIV,WORK)
+C
+      IF (INFO.NE.0) THEN
+        WRITE(6,130) INFO
+130     FORMAT(' *** ERROR IN DSYTRI: INFO =',I3)
+        STOP
+      ENDIF
+      RETURN
+      END
+
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      SUBROUTINE SYMINV(A, IA, N, IFAIL)
+C  Copyright (C) 2019 J. M. Hutson & C. R. Le Sueur
+C  Distributed under the GNU General Public License, version 3
+      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
+      DIMENSION A(IA,N)
+C
+C  ON A TYPICAL SCALAR MACHINE, A LAPACK-BASED SYMINL IS FASTER
+C  THAN THE INLINE CODE HERE FOR MATRICES BIGGER THAN ABOUT 35*35.
+C  THESE 4 LINES COULD BE COMMENTED OUT IF LAPACK IS NOT AVAILABLE
+C
+      IF (N.GT.30) THEN
+        CALL SYMINL(A, IA, N, IFAIL)
+        RETURN
+      ENDIF
+C
+C  IN SITU INVERSION OF A REAL SYMMETRIC MATRIX BY L.D.L(T)
+C  DECOMPOSITION. KOUNT = NUMBER OF NEGATIVE EIGENVALUES.
+C  ROUTINE FAILS (IFAIL = N+1) IF THE DECOMPOSITION IS UNDEFINED.
+C  J.H.WILKINSON AND C.REINSCH, LINEAR ALGEBRA, I/1
+C
+      KOUNT = 0
+      X = A(1,1)
+      IF (X.LT.0.D0) KOUNT = KOUNT + 1
+      IF (X.EQ.0.D0) GOTO 320
+      A(1,1) = 1.D0/X
+      IF (N.EQ.1) GOTO 300
+C  FORM L
+      DO 100 I = 2,N
+         I1 = I - 1
+         IF (I1.LT.2) GOTO 60
+         DO 40 J = 2,I1
+            J1 = J - 1
+            X = A(I,J)
+            DO 20 K = 1,J1
+               X = X - A(I,K)*A(J,K)
+  20        CONTINUE
+            A(I,J) = X
+  40     CONTINUE
+  60     X = A(I,I)
+         DO 80 K = 1,I1
+            Y = A(I,K)
+            Z = Y*A(K,K)
+            A(I,K) = Z
+            X = X - Y*Z
+  80     CONTINUE
+         IF (X.LT.0.D0) KOUNT = KOUNT + 1
+         IF (X.EQ.0.D0) GOTO 320
+         A(I,I) = 1.D0/X
+ 100  CONTINUE
+C  INVERT L
+      N1 = N - 1
+      DO 160 I = 1,N1
+         I1 = I + 1
+         A(I1,I) = - A(I1,I)
+         IF (I1.GT.N1) GOTO 160
+         DO 140 J = I1,N1
+            J1 = J + 1
+            X = - A(J1,I)
+            DO 120 K = I1,J
+               X = X - A(J1,K)*A(K,I)
+ 120        CONTINUE
+            A(J1,I) = X
+ 140     CONTINUE
+ 160  CONTINUE
+C  FORM INVERSE OF A
+      DO 240 I = 1,N1
+         I1 = I + 1
+         X = A(I,I)
+         DO 180 K = I1,N
+            Y = A(K,I)
+            Z = Y*A(K,K)
+            A(K,I) = Z
+            X = X + Y*Z
+ 180     CONTINUE
+         A(I,I) = X
+         IF (I1.GT.N1) GOTO 240
+         DO 220 J = I1,N1
+            J1 = J + 1
+            X = A(J,I)
+            DO 200 K = J1,N
+               X = X + A(K,J)*A(K,I)
+ 200        CONTINUE
+            A(J,I) = X
+ 220     CONTINUE
+ 240  CONTINUE
+C  COPY INVERSE INTO UPPER TRIANGLE
+      DO 280 I = 2,N
+         I1 = I - 1
+         DO 260 J = 1,I1
+            A(J,I) = A(I,J)
+ 260     CONTINUE
+ 280  CONTINUE
+ 300  IFAIL = KOUNT
+      RETURN
+ 320  IFAIL = N + 1
+      RETURN
+      END
+
+      SUBROUTINE DSYNEG(UPLO,A,KPVT,N,INERT)
+C  Copyright (C) 2019 J. M. Hutson & C. R. Le Sueur
+C  Distributed under the GNU General Public License, version 3
+C
+C  SUBROUTINE BY J. M. HUTSON, APRIL 1994
+C  BASED ON LINPACK ROUTINE DSIDI
+      IMPLICIT DOUBLE PRECISION (A-H,O-Z)
+      LOGICAL UPPER,LSAME
+      CHARACTER(1) UPLO
+      DIMENSION A(N,N), KPVT(N)
+C
+C  SUBROUTINE TO FIND THE NUMBER OF NEGATIVE EIGENVALUES OF A
+C  SYMMETRIC INDEFINITE MATRIX AFTER BUNCH-KAUFMAN DECOMPOSITION
+C  USING LAPACK ROUTINE DSYTRF
+C
+      UPPER = LSAME (UPLO , 'U')
+      IF (UPPER) THEN
+         INERT=0
+         T = 0.0D0
+         DO 190 K = 1, N
+            D = A(K,K)
+C
+C  CHECK IF 1 BY 1
+C
+            IF (KPVT(K).GT.0) GOTO 150
+C
+C  2 BY 2 BLOCK
+C  USE DET (D  S)  =  (D/T * C - T) * T  ,  T = ABS(S)
+C          (S  C)
+C  TO AVOID UNDERFLOW/OVERFLOW TROUBLES.
+C  TAKE TWO PASSES THROUGH SCALING.  USE  T  FOR FLAG.
+C
+               IF (T.NE.0.0D0) GOTO 130
+                  T = ABS(A(K,K+1))
+                  D = (D/T)*A(K+1,K+1) - T
+               GOTO 140
+  130          CONTINUE
+                  D = T
+                  T = 0.0D0
+  140          CONTINUE
+  150       CONTINUE
+C
+               IF (D.LT.0.0D0) INERT = INERT + 1
+  190    CONTINUE
+      ELSE
+         INERT=0
+         T = 0.0D0
+         DO 290 K = N, 1, -1
+            D = A(K,K)
+C
+C  CHECK IF 1 BY 1
+C
+            IF (KPVT(K).GT.0) GOTO 250
+C
+C  2 BY 2 BLOCK
+C  USE DET (D  S)  =  (D/T * C - T) * T  ,  T = ABS(S)
+C          (S  C)
+C  TO AVOID UNDERFLOW/OVERFLOW TROUBLES.
+C  TAKE TWO PASSES THROUGH SCALING.  USE  T  FOR FLAG.
+C
+               IF (T.NE.0.0D0) GOTO 230
+                  T = ABS(A(K,K-1))
+                  D = (D/T)*A(K-1,K-1) - T
+               GOTO 240
+  230          CONTINUE
+                  D = T
+                  T = 0.0D0
+  240          CONTINUE
+  250       CONTINUE
+C
+               IF (D.LT.0.0D0) INERT = INERT + 1
+  290    CONTINUE
+      ENDIF
+C
+      RETURN
+      END

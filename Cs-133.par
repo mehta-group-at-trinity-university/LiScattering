@@ -1,3 +1,4 @@
+
 # This is a parameter file for input into AlkaliScattering.x
 # ISTATE (for Cs-133)  SYM (+1 for boson)	  CALCTYPE (1 for logder, 2 for MQDT, 3 for FT) 
   8	      	      1	           	 	  1	   
@@ -6,11 +7,13 @@
 # Rmin		      Rmidmax  		 RX    		 RF (all in bohr except RX and RF which is in vdw units.  Converted to bohr in the code.)
   0.02d0	      30.0d0  		 0.1d0		 10d0
 # NXM		      NXF 		 Nsr		 Nlr
-  100000  	      2000000		 1000000	 10000000
+  1000000  	      2000000		 400000		 4000000
 # NEgrid	      Emin		Emax (enter energy range in mK)
   10		      1d-6		50d0
 # NBgrid	      Bmin		Bmax (enter B-field range in gauss)
   1000	     	       0d0		1000d0
+# Grid for calculating MQDT functions (must be 'linear', 'quadratic', 'cubic', or 'log')		      
+  'log'
 
 
 #COMMENT:
