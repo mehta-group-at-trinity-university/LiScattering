@@ -1134,7 +1134,7 @@ program main
 
   asext = (hratio**4 * as1 - as2)/(hratio**4 - 1d0)  !Richardson extrapolation
   atext = (hratio**4 * at1 - at2)/(hratio**4 - 1d0)
-!  write(6,'(A,f10.5,A)') " Energy = ",energy/nKPerHartree,"nK"
+  write(6,'(A,f10.5,A)') " Energy = ",energy/nKPerHartree,"nK"
   write(6,*) "Scattering Lengths:  ---more accurate-->"
   write(6,*) "-------------------"
   write(6,*) "Singlet:", as2,as1,asext
