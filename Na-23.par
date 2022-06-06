@@ -1,0 +1,46 @@
+# This is a parameter file for input into AlkaliScattering.x
+# ISTATE (for Na-23)  SYM (+1 for boson)	  CALCTYPE (1 for logder, 2 for MQDT, 3 for FT)		MQDTMODE
+  5	      	      1	           	 	  1							2
+# L (partial wave)    2*MFtot (twice total F projection) writepot
+  0 	     	      4	      	     	     		 .false.
+# Rmin		      Rmidmax  		 RX    		 RF (all in bohr except RX and RF which is in vdw units.  Converted to bohr in the code.)
+  0.3d0		      45d0  		 0.1d0		 20d0
+# NXM		      NXF 		 Nsr		 Nlr
+  1000000  	      10000000		 1000000	 10000000	
+# NEgrid	      Emin		Emax (enter energy range in mK)
+  10		      1d-6		50d0
+# NBgrid	      Bmin		Bmax		 Bhuge (largest possible field)  NBGridFine
+  100		     840d0		940d0	    	 1200d0   		 	 10000
+# Grid 
+  'quadratic'
+
+
+#Grid:  (for MQDT functions must be 'linear', 'quadratic', 'cubic', or 'log')
+#ISTATE (for Na-23)  SYM (+1 for boson)
+CALCTYPE (1 for logder, 2 for MQDT, 3 for FT)
+MQDTMODE=1 recalculate gamma(E) on a fine grid, as well as and Ksr(B), mu(E) on a coarse grid.
+MQDTMode=2 Do NOT recalculate gamma(E), but go head and calculate Ksr(B) on a coarse grid before doing the rest of the calculation.
+MQDTMode=3 read all MQDT parameters from file and mnove forward with the fine grid calculation using interpolated functions for everything.
+ISTATE (Which atomic species/isotope.  See the subroutine "AtomData" for the full key.)
+SYM (+1 for bosons, -1 for fermions)
+CALCTYPE (1 for log-derivative FCC)
+
+
+
+#COMMENT:
+#Inouye et al., Nature 392, 151-154 (1998):
+#Inouye et al. located two Feshbach resonances in an optically trapped BEC of
+#Na-23 atoms in the lowest hyperfine state (i.e., f1 = f2 = 1 and m_f1 = m_f2 =
+#1) at 907 and 853 G. Figure 2 shows the normalized scattering length as a
+#function of magnetic field around the 907 G resonance. No resonances were
+#observed when the atoms were prepared in the (f1 = f2 = 1, m_f1 = m_f2 = -1)
+#state at any field up to 1000 G. 
+#Stenger et al., (1999):
+#Using the same experimental technique as Inouye et al. (1998), Stenger et al.,
+#identified one Feshbach resonance in the (f1 = f2 = 1, m_f1 = m_f2 = -1)
+#hyperfine state near 1195 G. Figure 1 shows the experimental results (i.e.,
+#number of atoms, normalized scattering length, and density as functions of
+#field) for this resonance.
+
+Potential parameters and additional resonance positions taken from:
+Knoop et al PHYSICAL REVIEW A 83, 042704 (2011)

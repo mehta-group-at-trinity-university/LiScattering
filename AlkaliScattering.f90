@@ -628,7 +628,8 @@ program main
   double precision, allocatable :: VHZ(:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:),Ksr(:,:)!,RmidArray(:)
   double precision, allocatable :: KsrEIFT(:,:),Ktemp1EIFT(:,:),Ktemp2EIFT(:,:)
   double precision, allocatable :: KQPEIFT(:,:),KPQEIFT(:,:)
-  double precision VLIM,Rmin,dR,phiL,stepsize,Vmin,ascat,h1,h2,hdiff,as1,as2,at1,at2,asext,atext
+  double precision VLIM,Rmin,dR,phiL,stepsize,Vmin,ascat,h1,h2,hdiff,as1,as2,at1,at2,asext,atext,rs1,rs2,rt1,rt2
+  double precision rsext,rtext
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2,EvdW
   double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw,wavek
   integer iE, iRmid,NRmid,Ndum,NXM,NXF,multnsr, multnlr,ith,NQD,NBGridFine,NAll,NHalf
@@ -719,7 +720,8 @@ program main
   CGhf = SUM(EVAL)!/dble(size1) ! hyperfine "center of gravity"
 
   ! Calculate and print the hyperfine/Zeeman one-atom levels
-  write(6,*) "See fort.90 for the one-atom hyperfine/zeeman levels in MHz vs. Gauss..."
+  open(unit = 90, file = "ZeemanEnergy-"//trim(str(ISTATE))//".dat")
+  write(6,'(A)') "See file ZeemanEnergy.dat for the field dependence of the scattering thresholds."
   write(6,*)
   write(90,*) "# One-atom hyperfine/zeeman levels in MHz vs. Gauss..."
   do iB = 1, 1000!NBgrid
@@ -813,7 +815,6 @@ program main
   open(unit = 51, file = "ScatLenFieldDependence-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))// &
        "-"//trim(str(NINT(Bmin)))//"G-"//trim(str(NINT(Bmax)))//"G.dat")
   open(unit = 60, file = "vdWLengthEnergy-"//trim(str(ISTATE))//".dat")
-  
   write(6,'(A)') "See file CollisionThresholds.dat for the field dependence of the scattering thresholds."
   write(6,'(A)') "See file SigmaEnergyDependence.dat for the energy-dependent cross section"
   write(6,'(A)') "See file ScatLenFieldDependence.dat for the field-dependent scattering length at threshold"
@@ -1138,20 +1139,23 @@ program main
   call SetupPotential(ISTATE,ESTATE,mu,muref,NAll+1,VLIM,RAll(0:NAll)*BohrPerAngstrom,VAllTriplet(0:NAll),Cvals)
   call SetupPotential(ISTATE,ESTATE,mu,muref,NHalf+1,VLIM,RHalf(0:NHalf)*BohrPerAngstrom,VHalfTriplet(0:NHalf),Cvals)
   
-  call logderScatLengths1(lwave,mu,NHalf,RHalf,wHalf,VHalfSinglet,VHalfTriplet,as2,at2)  
-  call logderScatLengths1(lwave,mu,NAll,RAll,wAll,VAllSinglet,VAllTriplet,as1,at1)
+  call logderScatLengths1(lwave,mu,NHalf,RHalf,wHalf,VHalfSinglet,VHalfTriplet,as2,at2,rs2,rt2)  
+  call logderScatLengths1(lwave,mu,NAll,RAll,wAll,VAllSinglet,VAllTriplet,as1,at1,rs1,rt2)
   
 !  asext = (h1*as2 - h2*as1)/(h1 - h2) ! B-S Extrapolation
 !  atext = (h1*at2 - h2*at1)/(h1 - h2) ! B-S Extrapolation
 
   asext = (hratio**4 * as1 - as2)/(hratio**4 - 1d0)  !Richardson extrapolation
   atext = (hratio**4 * at1 - at2)/(hratio**4 - 1d0)
+  rsext = (hratio**4 * rs1 - rs2)/(hratio**4 - 1d0)  !Richardson extrapolation
+  rtext = (hratio**4 * rt1 - rt2)/(hratio**4 - 1d0)
   write(6,'(A,f10.5,A)') " Energy = ",energy/nKPerHartree,"nK"
   write(6,*) "Scattering Lengths:  ---more accurate-->"
   write(6,*) "-------------------"
   write(6,*) "Singlet:", as2,as1,asext
   write(6,*) "Triplet:", at2,at1,atext
   write(60,*) asext, atext
+  write(60,*) rsext, rtext
 
   write(51,*)
   !stop
@@ -3372,7 +3376,7 @@ subroutine logderQD(lwave,mu,Eth,size2,NQD,NXM,Nsr,wsr,VSINGLET,VTRIPLET,R,&
 end subroutine LogderQD
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine logderScatLengths1(lwave,mu,N,R,w,VSinglet,VTriplet,a1,a3)
+subroutine logderScatLengths1(lwave,mu,N,R,w,VSinglet,VTriplet,a1,a3,r1,r3)
   use units
   implicit none
   integer n1, n2, N,lwave,iE,mwt
