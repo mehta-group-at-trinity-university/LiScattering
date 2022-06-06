@@ -333,6 +333,9 @@ contains
   end subroutine MakeHF2Basis
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
   subroutine MakeLambdaProj(s1,s2,S,MS,i1,i2,I,MI, hfsym, size,lambda)
+    ! this returns a matrix with elements:
+    ! <{f1 m1 f2 m2}|(i1 i2) I MI (s1 s2) S MS><(i1 i2) I MI (s1 s2) S MS|{f1p m1p f2p m2p}>
+    ! Note that these are with respect to the symmetrized states hyperfine states.
     implicit none
     integer S, MS,I,MI,i1, i2, s1, s2
     integer bra, ket, size
@@ -368,10 +371,11 @@ contains
     ! I = total nuclear spin
     ! s1 = electronic spin of atom 1
     ! s2 = electronic spin of atom 2
+    ! fi = total nuclear + electron spin of atom i
     ! S = total electronic spin
     ! mS, mI = z-projections of total nuclear and electronic spins
     ! hf2bra and hf2ket contain f1p m1p f2p m2p and f1 m1 f2 m2m respectively. 
-    ! f = S+I = total spin of atom
+    ! F = S+I = total nuclear + electron spin of two-atom system
     ! S = 0 for singlet, 2 for triplet (since this is really 2S)
     integer S,I,mS,mI
     integer i1,i2,s1,s2!,f1p,m1p,f2p,m2p,f1,m1,f2,m2
@@ -610,8 +614,8 @@ program main
   integer nspin1, nspin2, espin1, espin2 !nspin is the nuclear spin and espin is the electronic spin
   integer i1,i2,s1,s2,S,sym,size1,size2,NBgrid,NEgrid,mtot, lwave,NumOpen
   integer Nsr, CALCTYPE,MQDTMODE
-  logical writepot
-  double precision, allocatable :: Rsr(:), Rlr(:),VsrSinglet(:),VsrTriplet(:),VlrSinglet(:),VlrTriplet(:)
+  logical writepot,CalcProjOp
+  double precision, allocatable :: Rsr(:), Rlr(:),VsrSinglet(:),VsrTriplet(:),VlrSinglet(:),VlrTriplet(:),lambdaProj(:,:)
   double precision, allocatable :: VAllTriplet(:),VAllSinglet(:),wAll(:),RAll(:)
   double precision, allocatable :: VHalfTriplet(:),VHalfSinglet(:),wHalf(:),RHalf(:)
   double precision, allocatable :: wSR(:),wLR(:),Vdum(:),Rdum(:)
@@ -624,11 +628,12 @@ program main
   double precision, allocatable :: VHZ(:,:), HHZ2(:,:),AsymChannels(:,:),Eth(:),Ksr(:,:)!,RmidArray(:)
   double precision, allocatable :: KsrEIFT(:,:),Ktemp1EIFT(:,:),Ktemp2EIFT(:,:)
   double precision, allocatable :: KQPEIFT(:,:),KPQEIFT(:,:)
-  double precision VLIM,Rmin,dR,phiL,stepsize,Vmin,ascat,h1,h2,hdiff,as1,as2,at1,at2,asext,atext
+  double precision VLIM,Rmin,dR,phiL,stepsize,Vmin,ascat,h1,h2,hdiff,as1,as2,at1,at2,asext,atext,rs1,rs2,rt1,rt2
+  double precision rsext,rtext
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2,EvdW
   double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw,wavek
   integer iE, iRmid,NRmid,Ndum,NXM,NXF,multnsr, multnlr,ith,NQD,NBGridFine,NAll,NHalf
-  double precision RX, Rmid, RF, Cvals(4), Ktilde,t1,t2,hratio
+  double precision RX, Rmid, RF, Cvals(4), Ktilde,t1,t2,hratio,Btemp
   double precision SingletQD, TripletQD, x,Bhuge,Ebar1,Ebar3,trace1, trace3,ascatEIFT,KtildeEIFT
   double precision, external :: VLR, rint, abar
   character(len=20), external :: str
@@ -695,7 +700,7 @@ program main
   call setupam
   ! initialize the Cash-Karp RK parameters (this may not even be used)
   call initCashKarp
-
+  
   !------------------------------------------------------------------
   ! determine the size of the one-atom hyperfine/zeeman hamiltonian
   !call once with size1 = 0 to determine the size of the basis.
@@ -715,16 +720,18 @@ program main
   CGhf = SUM(EVAL)!/dble(size1) ! hyperfine "center of gravity"
 
   ! Calculate and print the hyperfine/Zeeman one-atom levels
-  write(6,*) "See fort.90 for the one-atom hyperfine/zeeman levels in MHz vs. Gauss..."
+  open(unit = 90, file = "ZeemanEnergy-"//trim(str(ISTATE))//".dat")
+  write(6,'(A)') "See file ZeemanEnergy.dat for the field dependence of the scattering thresholds."
   write(6,*)
   write(90,*) "# One-atom hyperfine/zeeman levels in MHz vs. Gauss..."
-  do iB = 1, NBgrid
+  do iB = 1, 1000!NBgrid
+     Btemp = 0d0 + (dble(iB)-1d0)/999d0 * 1200d0
      EVEC=0d0
      EVAL=0d0
      HHZ=0d0
-     call MakeHHZ1(HHZ,Bgrid(iB),size1,hf1,gs,gi1,AHf1,espin1,nspin1)
+     call MakeHHZ1(HHZ,Btemp,size1,hf1,gs,gi1,AHf1,espin1,nspin1)
      call MyDSYEV(HHZ,size1,EVAL,EVEC)
-     write(90,*) Bgrid(iB), EVAL - CGhf
+     write(90,*) Btemp, EVAL - CGhf
   enddo
   write(6,'(A)') '-----------------------------------'
   write(6,'(A,f6.1,A)') "Bmax = ", Bgrid(NBgrid), " gauss"
@@ -741,7 +748,7 @@ program main
   write(6,'(A,I3)') "size of the symmetrized 2-atom hyperfine basis = ", size2
   write(6,*)
 !  stop
-  allocate(SPmat(size2,size2), TPmat(size2,size2))
+  allocate(SPmat(size2,size2), TPmat(size2,size2),lambdaProj(size2,size2))
   allocate(Sdressed(size2,size2), Tdressed(size2,size2))
   allocate(EThreshMat(size2,size2),Ksr(size2,size2))
   allocate(Ktemp1EIFT(size2,size2),Ktemp2EIFT(size2,size2),KsrEIFT(size2,size2))
@@ -808,7 +815,6 @@ program main
   open(unit = 51, file = "ScatLenFieldDependence-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))// &
        "-"//trim(str(NINT(Bmin)))//"G-"//trim(str(NINT(Bmax)))//"G.dat")
   open(unit = 60, file = "vdWLengthEnergy-"//trim(str(ISTATE))//".dat")
-  
   write(6,'(A)') "See file CollisionThresholds.dat for the field dependence of the scattering thresholds."
   write(6,'(A)') "See file SigmaEnergyDependence.dat for the energy-dependent cross section"
   write(6,'(A)') "See file ScatLenFieldDependence.dat for the field-dependent scattering length at threshold"
@@ -834,13 +840,14 @@ program main
 !  write(6,'(A,I10)') "The minimum value of Nsr = ", int((Rmidmax - Rmin)/stepsize)
   call VdWLength(Cvals,betavdw,mu)
   EvdW = 1d0/(2d0*mu*betavdw**2)
+  write(6,'(A,4d16.8)') "The Cvalues are = ", Cvals
   write(6,'(A,d16.8)') "The van der Waals length is rvdw = ", betavdw
   write(6,'(A,d16.8)') "The van der Waals energy is EvdW = ", EvdW
   write(60,*) betavdw, EvdW
   RX = RX*betavdw
   RF = RF*betavdw
   !Nsr = multnsr!*int(Rmidmax/stepsize)
-  !Nlr = multnlr!Nsr*(int(RF/Rmidmax))
+  !Nlr = multnlr!Nsr*(int(RF/Rmidmax))  !Nlr is NOT CURRENTLY USED.
   
   write(6,*) "Rmin = ", Rmin
   write(6,*) "RX = ", RX
@@ -897,8 +904,8 @@ program main
 
   if(writepot) then
      do iR = 0, Nsr
-        write(11,*) Rsr(iR), VsrSinglet(iR), -abs(Eth(size2)-Eth(1))
-        write(31,*) Rsr(iR), VsrTriplet(iR), -abs(Eth(size2)-Eth(1))
+        write(11,*) Rsr(iR), VsrSinglet(iR), (-(Eth(i)-Eth(1)), i=2,size2)
+        write(31,*) Rsr(iR), VsrTriplet(iR), (-(Eth(i)-Eth(1)), i=2,size2)
      enddo
   endif        
   
@@ -972,7 +979,7 @@ program main
         !           write(6,*) "done."
         if((CALCTYPE.eq.2).and.(iE.eq.1)) then
 
-           call logderpropB(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,Sdressed,Tdressed,EthreshMat,VsrSinglet,VsrTriplet,size2)
+           call logderpropB(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,Sdressed,Tdressed,EthreshMat,VsrSinglet,VsrTriplet,size2,writepot)
            call CalcKsr(ym, Ksr, size2, NXM, RX, Rsr(Nsr), energy, Eth, lwave, mu, Cvals, betavdw, phiL,scale)
            write(53,'(100d20.10)') Bgrid(iB), ((Ksr(i,j), j=1,i), i=1,size2)
            
@@ -1043,8 +1050,8 @@ program main
      if(CalcType.eq.2) then
         Ksr = InterpolatedMatrix(Bgrid(iB),InterpKsr)
      else if (CALCTYPE.eq.3) then
-             !----- Rotate into the asymptotic eigenstates (Use the B-field dressed states) -------!
-     !Rotate the singlet projection operator
+        !----- Rotate into the asymptotic eigenstates (Use the B-field dressed states) -------!
+        !Rotate the singlet projection operator
         TEMP = 0d0
         call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,SPmat,size2,0d0,TEMP,size2)
         call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Sdressed,size2)
@@ -1052,10 +1059,19 @@ program main
         !Rotate the triplet projection operator
         call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,TPmat,size2,0d0,TEMP,size2)
         call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Tdressed,size2)
-
+        !        CalcProjOp = .false.
+        !if(iB.eq.1)
+        CalcProjOp = .true.
         call CalcEDFTKSR(nspin1,nspin1,espin1,espin1,hf2symTempGlobal,energy,Eth,&
-             AsymChannels,size2,Ksr,InterpQDSinglet,InterpQDTriplet)
-
+                     AsymChannels,size2,Ksr,InterpQDSinglet,InterpQDTriplet,CalcProjOp,KsrEIFT)
+!!$        Ebar1 = 0d0
+!!$        Ebar3 = 0d0
+!!$        do i = 1, size2
+!!$           Ebar1 = Ebar1 + Sdressed(i,i)*(energy-Eth(i))
+!!$           Ebar3 = Ebar3 + Tdressed(i,i)*(energy-Eth(i))
+!!$        enddo
+!!$        Ksr = tan(pi*Interpolated(Ebar1,InterpQDSinglet)) * Sdressed(:,:) &
+!!$             + tan(pi*Interpolated(Ebar3,InterpQDTriplet)) * Tdressed(:,:)
      endif
      KsrEIFT(:,:) = tan(pi*Interpolated(0d0,InterpQDTriplet)) * Tdressed(:,:) &
           + tan(pi*Interpolated(0d0,InterpQDSinglet)) * Sdressed(:,:)
@@ -1092,16 +1108,13 @@ program main
         write(51,*) Bgrid(iB), ascat , 8d0*pi*ascat**2*(Bohrpercm**2)
      endif
   enddo
-
-
-  
   
   stop
   !----------------------------------------------------------------------------------------------------
-11 continue
+11 continue   !This does the full log-derivative calculation
   allocate(RAll(0:NAll),wAll(0:NAll),VAllSinglet(0:NAll),VAllTriplet(0:NAll))
   allocate(RHalf(0:NAll),wHalf(0:NAll),VHalfSinglet(0:NAll),VHalfTriplet(0:NAll))
-  !This next loop is does the full log-derivative calculation
+
   ! prepare some arrays for the log-derivative propagator
 
   call GridMaker(RAll(0:NAll),NAll+1,Rmin,RF,'linear')
@@ -1116,8 +1129,8 @@ program main
   call SetLogderWeights(wAll,NAll)
   call SetLogderWeights(wHalf,NHalf)
     
-!  call testlogder()  
-!  stop
+  !call testlogder()  ! Test the log-der propagator against the Rawitscher 2-channel model
+  !stop
   
   ESTATE = 1
   call SetupPotential(ISTATE,ESTATE,mu,muref,NAll+1,VLIM,RAll(0:NAll)*BohrPerAngstrom,VAllSinglet(0:NAll),Cvals)
@@ -1126,23 +1139,26 @@ program main
   call SetupPotential(ISTATE,ESTATE,mu,muref,NAll+1,VLIM,RAll(0:NAll)*BohrPerAngstrom,VAllTriplet(0:NAll),Cvals)
   call SetupPotential(ISTATE,ESTATE,mu,muref,NHalf+1,VLIM,RHalf(0:NHalf)*BohrPerAngstrom,VHalfTriplet(0:NHalf),Cvals)
   
-  call logderScatLengths1(lwave,mu,NHalf,RHalf,wHalf,VHalfSinglet,VHalfTriplet,as2,at2)  
-  call logderScatLengths1(lwave,mu,NAll,RAll,wAll,VAllSinglet,VAllTriplet,as1,at1)
+  call logderScatLengths1(lwave,mu,NHalf,RHalf,wHalf,VHalfSinglet,VHalfTriplet,as2,at2,rs2,rt2)  
+  call logderScatLengths1(lwave,mu,NAll,RAll,wAll,VAllSinglet,VAllTriplet,as1,at1,rs1,rt2)
   
 !  asext = (h1*as2 - h2*as1)/(h1 - h2) ! B-S Extrapolation
 !  atext = (h1*at2 - h2*at1)/(h1 - h2) ! B-S Extrapolation
 
   asext = (hratio**4 * as1 - as2)/(hratio**4 - 1d0)  !Richardson extrapolation
   atext = (hratio**4 * at1 - at2)/(hratio**4 - 1d0)
-!  write(6,'(A,f10.5,A)') " Energy = ",energy/nKPerHartree,"nK"
+  rsext = (hratio**4 * rs1 - rs2)/(hratio**4 - 1d0)  !Richardson extrapolation
+  rtext = (hratio**4 * rt1 - rt2)/(hratio**4 - 1d0)
+  write(6,'(A,f10.5,A)') " Energy = ",energy/nKPerHartree,"nK"
   write(6,*) "Scattering Lengths:  ---more accurate-->"
   write(6,*) "-------------------"
   write(6,*) "Singlet:", as2,as1,asext
   write(6,*) "Triplet:", at2,at1,atext
   write(60,*) asext, atext
+  write(60,*) rsext, rtext
 
   write(51,*)
-  
+  !stop
   do iB = 1, NBgrid
      yi = ystart
      call cpu_time(t1)
@@ -1177,9 +1193,9 @@ program main
         enddo
 
 !        call logderpropB(mu,Energy,identity,wHalf,NHalf,yi,yfHalf,RHalf,Sdressed,Tdressed,&
-!             EthreshMat,VHalfSinglet,VHalfTriplet,size2)
+!             EthreshMat,VHalfSinglet,VHalfTriplet,size2,writepot)
         call logderpropB(mu,Energy,identity,wAll,NAll,yi,yfAll,RAll,Sdressed,Tdressed,&
-             EthreshMat,VAllSinglet,VAllTriplet,size2)
+             EthreshMat,VAllSinglet,VAllTriplet,size2,writepot)
         call CalcK(yfAll,RF,SD,mu,3d0,1d0,Energy,Eth,size2,NumOpen)
         !yf = (h1*yfHalf - h2*yfAll)/(h1 - h2)
         !yf =  (hratio**4 * yfAll - yfHalf)/(hratio**4 - 1d0)  !Richardson extrapolation
@@ -1314,7 +1330,7 @@ end subroutine logderpropBNew
 
 !!$
 !!$
-subroutine logderpropB(mu,Energy,identity,weights,NPP,yi,yf,XO,Sdressed,Tdressed,EthreshMat,Vsinglet,Vtriplet,size)
+subroutine logderpropB(mu,Energy,identity,weights,NPP,yi,yf,XO,Sdressed,Tdressed,EthreshMat,Vsinglet,Vtriplet,size,writepot)
   implicit none
   integer i,j,step,NPP,size
   double precision h,Energy,mu
@@ -1328,7 +1344,7 @@ subroutine logderpropB(mu,Energy,identity,weights,NPP,yi,yf,XO,Sdressed,Tdressed
   double precision vtemp1(size,size), vtemp2(size,size), un(size,size)
   double precision, parameter :: onesixth = 0.166666666666666666666d0
   double precision, parameter :: onethird = 0.333333333333333333333d0
-
+  logical writepot
   h=XO(2)-XO(1)
   pottemp = Vsinglet(0)*Sdressed + Vtriplet(0)*Tdressed + EthreshMat
   vtemp1 = 2d0*mu*(identity*Energy-pottemp)
@@ -3048,7 +3064,7 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      AHf = 1011.910813d0
      mass = 84.911789738*amuAU
      MU = mass/2d0  
-     MUREF = (86.909180527*amuAU)/2d0 !Reference reduced mass is 87-Rb2
+     MUREF = (86.909180527*amuAU)/2d0 !Reference reduced mass is 87-Rb2 (This actually appears to make no difference since there is no mass scaling in the Strauss potential)
 
   case (3) !K-39
      write(6,'(A)') "Setting up the potential for K-39"
@@ -3357,7 +3373,7 @@ subroutine logderQD(lwave,mu,Eth,size2,NQD,NXM,Nsr,wsr,VSINGLET,VTRIPLET,R,&
 end subroutine LogderQD
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine logderScatLengths1(lwave,mu,N,R,w,VSinglet,VTriplet,a1,a3)
+subroutine logderScatLengths1(lwave,mu,N,R,w,VSinglet,VTriplet,a1,a3,r1,r3)
   use units
   implicit none
   integer n1, n2, N,lwave,iE,mwt
@@ -3370,7 +3386,7 @@ subroutine logderScatLengths1(lwave,mu,N,R,w,VSinglet,VTriplet,a1,a3)
   double precision f, fp, g, gp,x,sig
 
   mwt=0
-  call GridMaker(E,5,0.1d0*nkPerHartree,1*nkPerHartree,'linear')
+  call GridMaker(E,5,0.01d0*nkPerHartree,0.1d0*nkPerHartree,'linear')
   E(:) = 2d0*mu*E(:)
   identity = 0d0
   identity(1,1) = 1d0
@@ -3608,20 +3624,21 @@ subroutine plotQDs(InterpQDSinglet,InterpQDTriplet)
   enddo
 end subroutine plotQDs
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine CalcEDFTKSR(i1,i2,s1,s2,hf2sym,energy,Eth,AsymC,size2,Ksr,InterpQDSinglet,InterpQDTriplet)
+subroutine CalcEDFTKSR(i1,i2,s1,s2,hf2sym,energy,Eth,AsymC,size2,Ksr,InterpQDSinglet,InterpQDTriplet,CalcProjOp,KsrEIFT)
   use units
   use hyperfine
   use InterpType
   
   implicit none
+  logical CalcProjOp
   integer size2,j
   type(symhf2atom) hf2sym(size2)
-  double precision energy, Eth(size2),AsymC(size2,size2),Ebar,lambda(size2,size2)
+  double precision energy, Eth(size2),AsymC(size2,size2),Ebar,lambda(size2,size2),KsrEIFT(size2,size2)
   double precision Ksr(size2,size2),temp1(size2,size2), temp2(size2,size2)
-!  double precision dressedLambda(size2,size2)
   type(InterpolatingFunction) ::  InterpQDSinglet,InterpQDTriplet
   integer i1,i2,s1,s2,S,MS,I,MI
   Ksr = 0d0
+  KsrEIFT = 0d0
   temp1=0d0
   temp2=0d0
   
@@ -3629,22 +3646,24 @@ subroutine CalcEDFTKSR(i1,i2,s1,s2,hf2sym,energy,Eth,AsymC,size2,Ksr,InterpQDSin
      do I = iabs(i1-i2), i1+i2, 2
         do mS = -S, S, 2
            do mI = -I, I, 2
-              lambda=0d0
-              call MakeLambdaProj(s1,s2,S,MS,i1,i2,I,MI, hf2sym, size2, lambda)
-              temp1 = MATMUL(TRANSPOSE(AsymC),lambda)
-              temp2 = MATMUL(temp1,AsymC)
-              
+              if(CalcProjOp) then
+                 lambda=0d0
+                 call MakeLambdaProj(s1,s2,S,MS,i1,i2,I,MI, hf2sym, size2, lambda) !Calculate <{alpha,beta}|lambda><lambda|{alphap, betap}>
+                 temp1 = MATMUL(TRANSPOSE(AsymC),lambda) !Rotate to the field-dressed states.
+                 temp2 = MATMUL(temp1,AsymC) !Rotate to the field-dressed states.
+                 lambda = temp2
+              endif
+              Ebar = 0d0
               do j=1,size2
-                 Ebar = (energy - Eth(j))*temp2(j,j)
+                 Ebar = Ebar + (energy - Eth(j))*temp2(j,j)
               enddo
-
-!              temp1 = MATMUL(TRANSPOSE(AsymC),lambda)              
-!              dressedLambda = MATMUL(temp1,AsymC)
               
               if(S.eq.0) then
-                 Ksr(:,:) = Ksr(:,:) + tan(pi*Interpolated(Ebar,InterpQDsinglet))*temp2(:,:)!*dressedLambda(:,:)
+                 Ksr(:,:) = Ksr(:,:) + tan(pi*Interpolated(Ebar,InterpQDsinglet))*temp2(:,:)
+                 KsrEIFT(:,:) = KsrEIFT(:,:) + tan(pi*Interpolated(0d0,InterpQDsinglet))*temp2(:,:)
               else if(S.eq.2) then
-                 Ksr(:,:) = Ksr(:,:) + tan(pi*Interpolated(Ebar,InterpQDTriplet))*temp2(:,:)!*dressedLambda(:,:)
+                 Ksr(:,:) = Ksr(:,:) + tan(pi*Interpolated(Ebar,InterpQDTriplet))*temp2(:,:)
+                 KsrEIFT(:,:) = KsrEIFT(:,:) + tan(pi*Interpolated(0d0,InterpQDTriplet))*temp2(:,:)
               endif
            enddo
         enddo
@@ -3652,6 +3671,7 @@ subroutine CalcEDFTKSR(i1,i2,s1,s2,hf2sym,energy,Eth,AsymC,size2,Ksr,InterpQDSin
   enddo
 
 end subroutine CalcEDFTKSR
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 double precision function UniversalGamma(Energy,EvdW)
   implicit none
   double precision Energy,EvdW

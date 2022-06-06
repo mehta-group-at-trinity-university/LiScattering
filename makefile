@@ -8,8 +8,8 @@ DEBUG   = -fcheck=bounds -fbounds-check # -Wall
 FORCEDP = #-fdefault-real-8 -fdefault-double-
 LAPACK =   -framework accelerate
 PROMOTEQUAD = #-freal-8-real-16
-ARPACK =  -L/usr/local/lib/ -larpack
-INCLUDE =  -I/usr/local/include
+ARPACK =  -L/opt/homebrew/lib/ -larpack
+INCLUDE =  -I/opt/homebrew/include
 OBJS  = bspline90_22.o linfit.o besselnew.o threejsixj.o Bsplines.o quadrature.o POTGENLI2.o AlkaliScattering.o units.o matrix_stuff.o 
 
 AlkaliScattering.x: ${OBJS} 
