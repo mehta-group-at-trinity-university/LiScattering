@@ -633,7 +633,7 @@ program main
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2,EvdW
   double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw,wavek
   integer iE, iRmid,NRmid,Ndum,NXM,NXF,multnsr, multnlr,ith,NQD,NBGridFine,NAll,NHalf
-  double precision RX, Rmid, RF, Cvals(4), Ktilde,t1,t2,hratio,Btemp
+  double precision RX, Rmid, RF, Cvals(4), Ktilde,t1,t2,hratio,Btemp,Sval(2)
   double precision SingletQD, TripletQD, x,Bhuge,Ebar1,Ebar3,trace1, trace3,ascatEIFT,KtildeEIFT
   double precision, external :: VLR, rint, abar
   character(len=20), external :: str
@@ -665,7 +665,7 @@ program main
   read(5,*)
   read(5,*) ISTATE, sym, CALCTYPE, MQDTMODE
   read(5,*)
-  read(5,*) lwave, mtot, writepot
+  read(5,*) lwave, mtot, writepot, Sval(1), Sval(2)
   read(5,*)
   read(5,*) Rmin, Rmid, RX, RF
   read(5,*)
@@ -801,6 +801,8 @@ program main
   endif
   cotgamfile = 49
   STQDfile = 54
+  open(unit = 10, file = "PotsConvergence-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))//".dat")
+  open(unit = 11, file = "LRPotsData-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))//"-"//trim(str(NINT(Bhuge)))//"G.dat")
   if(CALCTYPE.ne.1) then
      open(unit = cotgamfile, file = "Gammaphase-"//trim(str(ISTATE))//"-"//&
           trim(str(NINT(RF)))//"a0.dat",ACTION=act)
@@ -822,9 +824,6 @@ program main
 
   ! None of the code above this line depends on the radial grid.
   !----------------------------------------------------------------------------------------------------
-!  NRmid = 10
-!  allocate(RmidArray(NRmid))
-!  call GridMaker(RmidArray,NRmid,15d0,Rmidmax,'linear')
 
   ! This is just a "dummy" call to SetupPotential to obtain the discpersion C6/C8/C10 coefficients
   ! and to calculate the van der waals length.
@@ -832,22 +831,23 @@ program main
   Ndum = 100
   allocate(Vdum(Ndum),Rdum(Ndum))
   call GridMaker(Rdum,Ndum,3d0,20d0,'linear')
-  call SetupPotential(ISTATE,1,mu,muref,Ndum,VLIM,Rdum*BohrPerAngstrom,Vdum,Cvals)
+  call SetupPotential(ISTATE,1,mu,muref,Ndum,VLIM,Rdum*BohrPerAngstrom,Vdum,Cvals,Sval)
   Vmin = MINVAL(Vdum,1)
   write(6,'(A,f12.5)') "Vmin = ", Vmin
   !stepsize = 2d0*pi*0.1d0*(2d0*mu*(Emax - Vmin))**(-0.5d0)
   !write(6,'(A,f12.5)') "The suggested maximum step size is ", stepsize
-!  write(6,'(A,I10)') "The minimum value of Nsr = ", int((Rmidmax - Rmin)/stepsize)
+
   call VdWLength(Cvals,betavdw,mu)
   EvdW = 1d0/(2d0*mu*betavdw**2)
+
   write(6,'(A,4d16.8)') "The Cvalues are = ", Cvals
   write(6,'(A,d16.8)') "The van der Waals length is rvdw = ", betavdw
   write(6,'(A,d16.8)') "The van der Waals energy is EvdW = ", EvdW
   write(60,*) betavdw, EvdW
   RX = RX*betavdw
   RF = RF*betavdw
-  !Nsr = multnsr!*int(Rmidmax/stepsize)
-  !Nlr = multnlr!Nsr*(int(RF/Rmidmax))  !Nlr is NOT CURRENTLY USED.
+
+
   
   write(6,*) "Rmin = ", Rmin
   write(6,*) "RX = ", RX
@@ -872,15 +872,15 @@ program main
   call SetLogderWeights(wSR,Nsr)
   
   ESTATE = 1
-  call SetupPotential(ISTATE,ESTATE,mu,muref,Nsr+1,VLIM,Rsr(0:Nsr)*BohrPerAngstrom,VsrSinglet(0:Nsr),Cvals)
+  call SetupPotential(ISTATE,ESTATE,mu,muref,Nsr+1,VLIM,Rsr(0:Nsr)*BohrPerAngstrom,VsrSinglet(0:Nsr),Cvals,Sval)
   ESTATE = 3
-  call SetupPotential(ISTATE,ESTATE,mu,muref,Nsr+1,VLIM,Rsr(0:Nsr)*BohrPerAngstrom,VsrTriplet(0:Nsr),Cvals)
+  call SetupPotential(ISTATE,ESTATE,mu,muref,Nsr+1,VLIM,Rsr(0:Nsr)*BohrPerAngstrom,VsrTriplet(0:Nsr),Cvals,Sval)
   
   if(writepot) then
      write(6,'(A)') "See fort.10 and fort.30 for the singlet/triplet potentials"
      do iR=0, Nsr
-        write(10,*) Rsr(iR), abs((VsrSinglet(iR) - VLR(mu,lwave,Rsr(iR),Cvals))/VsrSinglet(iR))
-        write(30,*) Rsr(iR), abs((VsrTriplet(iR) - VLR(mu,lwave,Rsr(iR),Cvals))/VsrTriplet(iR))
+        write(10,*) Rsr(iR), abs((VsrSinglet(iR) - VLR(mu,lwave,Rsr(iR),Cvals))/VsrSinglet(iR)), &
+             abs((VsrTriplet(iR) - VLR(mu,lwave,Rsr(iR),Cvals))/VsrTriplet(iR))
      enddo
   endif
 
@@ -901,11 +901,9 @@ program main
   write(6,'(A,d14.6,d14.6)') "RANGE of energies for QD calcualtion = ", -abs(Eth(size2)-Eth(1)), abs(Eth(size2)-Eth(1))
   
   !Now that we know Eth at the largest field value, we can compute an interpolated function for cot(gamma)
-
   if(writepot) then
-     do iR = 0, Nsr
-        write(11,*) Rsr(iR), VsrSinglet(iR), (-(Eth(i)-Eth(1)), i=2,size2)
-        write(31,*) Rsr(iR), VsrTriplet(iR), (-(Eth(i)-Eth(1)), i=2,size2)
+     do iR = Nsr-Nsr/2, Nsr
+        write(11,*) Rsr(iR), (VLR(mu,lwave,Rsr(iR),Cvals) + Eth(i), i=1,size2)
      enddo
   endif        
   
@@ -1115,6 +1113,7 @@ program main
   allocate(RAll(0:NAll),wAll(0:NAll),VAllSinglet(0:NAll),VAllTriplet(0:NAll))
   allocate(RHalf(0:NAll),wHalf(0:NAll),VHalfSinglet(0:NAll),VHalfTriplet(0:NAll))
 
+  
   ! prepare some arrays for the log-derivative propagator
 
   call GridMaker(RAll(0:NAll),NAll+1,Rmin,RF,'linear')
@@ -1133,11 +1132,11 @@ program main
   !stop
   
   ESTATE = 1
-  call SetupPotential(ISTATE,ESTATE,mu,muref,NAll+1,VLIM,RAll(0:NAll)*BohrPerAngstrom,VAllSinglet(0:NAll),Cvals)
-  call SetupPotential(ISTATE,ESTATE,mu,muref,NHalf+1,VLIM,RHalf(0:NHalf)*BohrPerAngstrom,VHalfSinglet(0:NHalf),Cvals)
+  call SetupPotential(ISTATE,ESTATE,mu,muref,NAll+1,VLIM,RAll(0:NAll)*BohrPerAngstrom,VAllSinglet(0:NAll),Cvals,Sval)
+  call SetupPotential(ISTATE,ESTATE,mu,muref,NHalf+1,VLIM,RHalf(0:NHalf)*BohrPerAngstrom,VHalfSinglet(0:NHalf),Cvals,Sval)
   ESTATE = 3
-  call SetupPotential(ISTATE,ESTATE,mu,muref,NAll+1,VLIM,RAll(0:NAll)*BohrPerAngstrom,VAllTriplet(0:NAll),Cvals)
-  call SetupPotential(ISTATE,ESTATE,mu,muref,NHalf+1,VLIM,RHalf(0:NHalf)*BohrPerAngstrom,VHalfTriplet(0:NHalf),Cvals)
+  call SetupPotential(ISTATE,ESTATE,mu,muref,NAll+1,VLIM,RAll(0:NAll)*BohrPerAngstrom,VAllTriplet(0:NAll),Cvals,Sval)
+  call SetupPotential(ISTATE,ESTATE,mu,muref,NHalf+1,VLIM,RHalf(0:NHalf)*BohrPerAngstrom,VHalfTriplet(0:NHalf),Cvals,Sval)
   
   call logderScatLengths1(lwave,mu,NHalf,RHalf,wHalf,VHalfSinglet,VHalfTriplet,as2,at2,rs2,rt2)  
   call logderScatLengths1(lwave,mu,NAll,RAll,wAll,VAllSinglet,VAllTriplet,as1,at1,rs1,rt2)
@@ -1157,6 +1156,37 @@ program main
   write(60,*) asext, atext
   write(60,*) rsext, rtext
 
+  ! Diagonalize the HF-Zeeman Hamiltonian for the largest field values so we know the range
+  ! of energies needed for the closed channel MQDT parameter cot(gamma)
+  call MakeHHZ2(Bhuge,AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
+  HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
+  call MyDSYEV(HHZ2,size2,Eth,AsymChannels)
+    write(6,*) "---------------------------------------------------------"
+  write(6,*) "The lowest collision channel corresponds to the following "
+  write(6,*) "superposition of symmetrized two-atom states:"
+  write(6,*) "---------------------------------------------------------"
+  do i = 1, size2
+     write(6,'(f10.5,A,I4,A,f5.2,A,4I3,A,I3,A,4I3,A)') AsymChannels(i,1), ' x ', i," : ", hf2symTempGlobal(i)%norm, &
+          " ( |", hf2symTempGlobal(i)%state1," > +", hf2symTempGlobal(i)%phase,"|", hf2symTempGlobal(i)%state2," > )"
+  enddo
+
+  if(writepot) then
+     write(6,'(A)') "See LRPotsData files for long-range potentials with zeeman offsets."
+     write(6,'(A)') "See PotsConvergence files for convergence to long-range potential."
+     do iR=1, NHalf, 200
+        write(10,*) RHalf(iR), abs((VHalfSinglet(iR) - VLR(mu,lwave,RHalf(iR),Cvals))/VHalfSinglet(iR)), &
+             abs((VHalfTriplet(iR) - VLR(mu,lwave,RHalf(iR),Cvals))/VHalfTriplet(iR))
+        !write(10,*) RHalf(iR),abs(RHalf(iR)**6d0 * VHalfSinglet(iR)),abs(RHalf(iR)**6d0 * VHalfTriplet(iR)), &
+        !     abs(RHalf(iR)**6d0 * VLR(mu,lwave,RHalf(iR),Cvals))
+     enddo
+
+     do iR = 1, NHalf/4, 200
+        write(11,*) RHalf(iR), (VLR(mu,lwave,RHalf(iR),Cvals) + Eth(i), i=1,size2)
+     enddo
+
+  endif        
+
+  
   write(51,*)
   !stop
   do iB = 1, NBgrid
@@ -1723,15 +1753,8 @@ double precision function VLR(mu,lwave,R,Cvals)
   integer lwave
   double precision R, mu
   double precision Cvals(4)
-  ! in atomic units
-  !  double precision, parameter :: C6=1393.39D0, C8=83425.5D0, C10=7.37211D6
-  ! in van der Waals units
-  !double precision, parameter :: C6=0.985829, C8=0.0138825, C10=0.000288538516
-  !  double precision, parameter :: C6=1d0, C8=0d0, C10=0d0
 
-  VLR = -Cvals(1)/R**6 - Cvals(2)/R**8 - Cvals(3)/R**10 - Cvals(4)/R**26 + lwave*(lwave+1)/(2*mu*R*R)
-  ! van der Waals units (mu->1/2)
-  !VLRLi = -C6/R**6 - C8/R**8 - C10/R**10 + lwave*(lwave+1)/(R*R)
+  VLR = lwave*(lwave+1)/(2*mu*R*R) - Cvals(1)/R**6 - Cvals(2)/R**8 - Cvals(3)/R**10 - Cvals(4)/R**26 
 
 end function VLR
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -1739,15 +1762,8 @@ double precision function VLRPrime(mu,lwave,R,Cvals)
   implicit none
   integer lwave
   double precision R, mu, Cvals(4)
-  ! in atomic units
-  !  double precision, parameter :: C6=1393.39D0, C8=83425.5D0, C10=7.37211D6
-  ! in van der Waals units
-  !double precision, parameter :: C6=0.985829, C8=0.0138825, C10=0.000288538516
-  !  double precision, parameter :: C6=1d0, C8=0d0, C10=0d0
 
   VLRPrime = 6*Cvals(1)/R**7 + 8*Cvals(2)/R**9 + 10*Cvals(3)/R**11 - 2*lwave*(lwave+1)/(2*mu*R*R*R)
-  ! van der Waals units (mu->1/2)
-  !VLR = -C6/R**6 - C8/R**8 - C10/R**10 + lwave*(lwave+1)/(R*R)
 
 end function VLRPrime
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -2467,19 +2483,21 @@ end subroutine smoothgamma
 ! ON OUTPUT:
 !  *VV(i) is an array of the potential function values (in cm-1)
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
+SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals,Sval)
   use units
   implicit none
   integer NPP, ISTATE, ESTATE, i, j, N, IMN1, IMN2, iphi
-  double precision, intent(in) :: XO(NPP)
+  double precision, intent(in) :: XO(NPP),Sval(2)
   double precision VV(NPP), RM2(NPP), Cvals(4)
   double precision MU, VLIM, RSR, RLR, NS, U1, U2, B, RM, xi, MUREF
   double precision C6, C8, C10, C26, Aex, gamma, beta, nu0, nu1
   double precision, allocatable :: A(:)
   double precision De, re, ref, alpha, p, q, s, bds, cds, rhoAB
   double precision yqref, ypref, ypeq, uLR, phiMLR, phiMLRtemp
+  double precision XITEMP,VMID,DXIDR,DVDR,U1OLD,U2OLD
   double precision phiinf, uLRre, DDS6, DDS8, DDS10, DDS6re, DDS8re, DDS10re
   double precision Scorr ! the strength of the short-range correction for Li
+  double precision, external :: POWER, DPOWER
   
   if (ESTATE .EQ. 1) then  !Ground state singlet 
      select case (ISTATE)  
@@ -2531,17 +2549,31 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
              -0.150102297761234375d12, & 
              0.586778574293387070d11 /)
 
-        if(ISTATE.eq.1) then !Rb 87
-           Scorr = 0d0!3.25d-7 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
-           write(6,'(A,d16.8,A)') "Rb87 Singlet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
-           
+     if(ISTATE.eq.1) then !Rb 87
+        Scorr = Sval(1)* HartreePerInvcm/(BohrPerAngstrom**2)!3.25d-7 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
+        write(6,'(A,d16.8,A)') "Rb87 Singlet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"   
+     else if(ISTATE.eq.2) then ! Rb 85
+        Scorr = Sval(1)* HartreePerInvcm/(BohrPerAngstrom**2)!1.94d-7 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
+        write(6,'(A,d16.8,A)') "Rb85 Singlet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
+     endif
 
-        else if(ISTATE.eq.2) then ! Rb 85
-           Scorr = 0d0!1.94d-7 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
-           write(6,'(A,d16.8,A)') "Rb85 Singlet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
-        endif
         
-
+!!$!  MATCH AT SHORT-RANGE POINT
+!!$!  GET VALUES OF ASR AND U2 FROM THE POTENTIAL AND ITS DERIVATIVE
+!!$      XITEMP = (RSR - RM)/(RSR+B*RM)
+!!$      VMID = POWER(XI,A,N)
+!!$!  DERIVATIVE OF XI
+!!$      DXIDR = (B+1.D0) * RM / (RSR+B*RM)**2
+!!$      DVDR = DXIDR*DPOWER(XITEMP,A,N)
+!!$      
+!!$      U2OLD=U2
+!!$      !IF (MATCHD)
+!!$      !U2 = -DVDR*RSR**(NS+1.D0)/NS
+!!$      U1OLD = U1
+!!$      U1 = VMID - U2/RSR**NS
+!!$      write(6,*) "New values for U1 and U2: ", U1, U2
+!!$      write(6,*) "Press enter to continue"
+!!$      read(5,*) 
         
      case (3:4)  !Potassium singlet
         N = 32
@@ -2626,12 +2658,12 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
 
         
         if(ISTATE.eq.4) then
-           Scorr = 0d0!3.0d-7 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
+           Scorr = Sval(1)*HartreePerInvcm/(BohrPerAngstrom**2)!3.0d-7 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
            write(6,'(A,d16.8,A)') "K40 Singlet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
            
 
         else if(ISTATE.eq.3) then
-           Scorr = 0d0!4d-7 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
+           Scorr = Sval(1) * HartreePerInvcm/(BohrPerAngstrom**2)!4d-7 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
            write(6,'(A,d16.8,A)') "K39 Singlet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         endif
 
@@ -2667,17 +2699,17 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
      case (6) !Lithium-6 singlet
         IMN1 = 6
         IMN2 = IMN1
-        !C6 = 6.718500D+06
-        !C8 = 1.126290D+08
-        !C10 = 2.786830D+09
+        C6 = 6.718721d6
+        C8 = 1.1263189d8 
+        C10 = 2.7868873d9
+        C26 = 0d0
+        call POTGENLI2(1,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
+!!$        C6 = 0.5d0*(6.71527d6+6.7185d6)
+!!$        C8 = 0.5d0*(1.12588d8+1.12629d8)
+!!$        C10 = 0.5d0*(2.78604d9+2.78683d9)
 
-        C6 = 6.71527d6
-        C8 = 1.125880D+08
-        C10 = 2.786040D+09
-        call POTGENLI2(1,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)!,.FALSE.)
-        
         re = 2.6729932d0
-        Scorr = 3.68d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
+        Scorr = Sval(1) * HartreePerInvcm/(BohrPerAngstrom**2)!3.68d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
         write(6,'(A,d16.8,A)') "Li6 Singlet Correction Scorr = ", Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         do i=1,NPP
            if(XO(i).lt.re) then
@@ -2688,13 +2720,20 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
      case (7) !Lithium-7 singlet
         IMN1 = 7
         IMN2 = IMN1
-        C6 = 6.71527d6
-        C8 = 1.12588d8
-        C10 = 2.78604d9
+        !average values from Tang et al
+        C6 = 6.718721d6
+        C8 = 1.1263189d8 
+        C10 = 2.7868873d9
+        C26 = 0d0
+!!$        !Average values from singlet/triplet channels of POTGENLI
+!!$        C6 = 0.5d0*(6.71527d6+6.7185d6)
+!!$        C8 = 0.5d0*(1.12588d8+1.12629d8)
+!!$        C10 = 0.5d0*(2.78604d9+2.78683d9)        
         call POTGENLI2(1,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)!,.FALSE.)
-        ! No short-range correction needed for Li-7 in the singlet state.  This already gives a scattering length of 34.331 bohr
+
+
         re=2.672993d0
-        Scorr =  4.11d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  !Singlet Correction
+        Scorr = Sval(1) * HartreePerInvcm/(BohrPerAngstrom**2)!1.47d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  !Singlet Correction
         write(6,'(A,d16.8,A)') "Li7 Singlet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         do i=1,NPP
            if(XO(i).lt.re) then
@@ -2713,6 +2752,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
         C6 = 3.3164d7
         C8 = 1.38d9
         C10 = 6.01d10
+        C26 = 0d0
         ref = 6.2d0
         A = (/0.0949905d0, -0.372698d0, -0.04090736d0, 0.129657d0, &
              0.1486696d0, 0.171395d0, 0.295883d0, 0.547375d0, &
@@ -2764,12 +2804,10 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
 
 
         if(ISTATE.eq.1) then !Rb 87
-           Scorr = 0d0!4.90d-8 * HartreePerInvcm/(BohrPerAngstrom**2)  ! TripletCorrection
+           Scorr = Sval(2) * HartreePerInvcm/(BohrPerAngstrom**2)!0d0!4.90d-8 * HartreePerInvcm/(BohrPerAngstrom**2)  ! TripletCorrection
            write(6,'(A,d16.8,A)') "Rb87 Triplet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
-           
-
         else if(ISTATE.eq.2) then ! Rb 85
-           Scorr = 0d0!5.8d-8 * HartreePerInvcm/(BohrPerAngstrom**2)  ! TripletCorrection
+           Scorr = Sval(2) * HartreePerInvcm/(BohrPerAngstrom**2)!0d0!5.8d-8 * HartreePerInvcm/(BohrPerAngstrom**2)  ! TripletCorrection
            write(6,'(A,d16.8,A)') "Rb85 Triplet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         endif
 
@@ -2848,11 +2886,11 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
         nu1 = 0.0d0
 
         if(ISTATE.eq.4) then
-           Scorr = 0d0!1.4d-8 * HartreePerInvcm/(BohrPerAngstrom**2)  ! Triplet Correction
+           Scorr = Sval(2) * HartreePerInvcm/(BohrPerAngstrom**2) !0d0!1.4d-8 * HartreePerInvcm/(BohrPerAngstrom**2)  ! Triplet Correction
            write(6,'(A,d16.8,A)') "K40 Triplet Correction Scorr = ", Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
 
         else if(ISTATE.eq.3) then
-           Scorr =0d0!1.4d-8 * HartreePerInvcm/(BohrPerAngstrom**2)  ! Triplet Correction
+           Scorr =Sval(2) * HartreePerInvcm/(BohrPerAngstrom**2)!0d0!1.4d-8 * HartreePerInvcm/(BohrPerAngstrom**2)  ! Triplet Correction
            write(6,'(A,d16.8,A)') "K39 Triplet Correction Scorr = ", Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         endif
 
@@ -2883,16 +2921,18 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
      case (6) !Lithium-6 triplet
         IMN1 = 6
         IMN2 = IMN1
-
-        C6 = 6.7185d6
-        C8 = 1.12629d8
-        C10 = 2.78683d9
+        C6 = 6.718721d6
+        C8 = 1.1263189d8 
+        C10 = 2.7868873d9
         call POTGENLI2(2,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
-
-        ! The Le Roy potentials generated by the subroutine above do not produce the correct scattering lengths
+!!$        C6 = 0.5d0*(6.71527d6+6.7185d6)
+!!$        C8 = 0.5d0*(1.12588d8+1.12629d8)
+!!$        C10 = 0.5d0*(2.78604d9+2.78683d9)
+        
+        ! The Le Roy potentials generated by the subroutine above do not produce the "correct" scattering lengths
         ! We therefore add a quadratic term a*(r-re)**2 for all r inside the minimum.
         re = 4.17005000d0
-        Scorr =   1.5546d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  !Triplet Correction
+        Scorr = Sval(2) * HartreePerInvcm/(BohrPerAngstrom**2) !1.5546d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  !Triplet Correction
         write(6,'(A,d16.8,A)') "Li6 Triplet Correction Scorr = ", Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         do i=1,NPP
            if(XO(i).lt.re) then
@@ -2905,13 +2945,18 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
         IMN2 = IMN1
 
         call POTGENLI2(2,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
-        
-        C6 = 6.7185d6
-        C8 = 1.12629d8
-        C10 = 2.78683d9
-        
+
+        ! These updated C6 values are the  AVERAGE values of the Li-6 and Li-7 isotopes from PRA 79 062712 (2009)
+        C6 = 6.718721d6
+        C8 = 1.1263189d8 
+        C10 = 2.7868873d9
+!!$        C6 = 0.5d0*(6.71527d6+6.7185d6)
+!!$        C8 = 0.5d0*(1.12588d8+1.12629d8)
+!!$        C10 = 0.5d0*(2.78604d9+2.78683d9)
+
+        C26 = 0d0
         re = 4.17005000d0
-        Scorr =   1.861d-6 * HartreePerInvcm/(BohrPerAngstrom**2) !Triplet Correction
+        Scorr =  Sval(2) * HartreePerInvcm/(BohrPerAngstrom**2)!1.835d-6 * HartreePerInvcm/(BohrPerAngstrom**2) !Triplet Correction
         write(6,'(A,d16.8,A)') "Li7 Triplet Correction Scorr = ", Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         do i=1,NPP
            if(XO(i).lt.re) then
@@ -2926,10 +2971,11 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
         q = p
         phiinf = -3.971077022867d-1
         re = 6.226182057299d0
-        De = 279.2222367314d0
+        De = 279.2222367314d0        
         C6 = 3.3164d7
         C8 = 1.38d9
         C10 = 6.01d10
+        C26 = 0d0
         ref = 8.7005d0
         A = (/-4.324429443667d-1, -9.206933982533d-2, -6.845846740405d-2, &
              -1.308218973148d-2, 3.457944786933d-1/)
@@ -3017,7 +3063,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals)
   Cvals(3) = C10 * AngstromPerBohr**10 * InvcmPerHartree
   Cvals(4) = C26 * AngstromPerBohr**26 * InvcmPerHartree
   VV = VV*InvcmPerHartree
-
+  write(6,*) "Cvals = ", Cvals
 END SUBROUTINE SetupPotential
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Subroutine for retrieving the nuclear spin, electronic spin, hyperfine constant (in MHz),
@@ -3101,7 +3147,7 @@ Subroutine AtomData (ISTATE, AHf, i, s, gi, MU, MUREF, mass)
      gi = -0.00044765403d0
      i = 2
      AHf = 152.1368407d0
-     mass = 6.015122795*amuAU
+     mass = 6.015122795*amuAU  
      MU = mass/2d0
      MUREF = (7.016004*amuAU)/2d0 !Reference reduced mass is 7-Li2
 
@@ -3691,11 +3737,47 @@ double precision function UniversalGamma(Energy,EvdW)
   
 end function UniversalGamma
 
-subroutine VST(ISTATE,ESTATE,mu,muref,R,V)
+subroutine VST(ISTATE,ESTATE,mu,muref,R,V,Sval)
   !Calculates the singlet or triplet at one point (expensive, but useful sometimes)
   integer ISTATE, ESTATE
-  double precision mu,muref,V,R,VV(1),RR(1),C(4)
+  double precision mu,muref,V,R,VV(1),RR(1),C(4),Sval(2)
   RR(1)=R
-  call SetupPotential(ISTATE, ESTATE, MU, MUREF, 1, 0d0, RR, VV, C)
+  call SetupPotential(ISTATE, ESTATE, MU, MUREF, 1, 0d0, RR, VV, C,Sval)
   V=VV(1)
 end subroutine VST
+
+DOUBLE PRECISION FUNCTION POWER(X,A,N)
+  !
+  !  EVALUATE A POWER SERIES WITH COEFFICIENTS IN A
+  !
+  IMPLICIT NONE
+  INTEGER N,I
+  DOUBLE PRECISION X,A(N)
+  
+  POWER=0.D0
+  DO I=N,2,-1
+     POWER=POWER+A(I)
+     POWER=POWER*X
+  enddo
+  POWER=POWER+A(1)
+  
+  RETURN
+END FUNCTION POWER
+!
+DOUBLE PRECISION FUNCTION DPOWER(X,A,N)
+!
+!  EVALUATE DERIVATIVE OF A POWER SERIES WITH COEFFICIENTS IN A
+!
+  IMPLICIT NONE
+  INTEGER N,I
+  DOUBLE PRECISION X,A(N)
+  
+  DPOWER=0.D0
+  DO I=N,3,-1
+     DPOWER=DPOWER+DBLE(I-1)*A(I)
+     DPOWER=DPOWER*X
+  ENDDO
+  DPOWER=DPOWER+A(2)
+  
+  RETURN
+END FUNCTION DPOWER
