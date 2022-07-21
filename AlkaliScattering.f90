@@ -846,8 +846,6 @@ program main
   write(60,*) betavdw, EvdW
   RX = RX*betavdw
   RF = RF*betavdw
-
-
   
   write(6,*) "Rmin = ", Rmin
   write(6,*) "RX = ", RX
@@ -864,6 +862,20 @@ program main
   NQD = 20
   call AllocateInterpolatingFunction(NQD,2,InterpQDSinglet)
   call AllocateInterpolatingFunction(NQD,2,InterpQDTriplet)
+  ! Diagonalize the HF-Zeeman Hamiltonian for the largest field values so we know the range
+  ! of energies needed for the closed channel MQDT parameter cot(gamma)
+  call MakeHHZ2(Bhuge/120d0,AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
+  HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
+  call MyDSYEV(HHZ2,size2,Eth,AsymChannels)
+  write(6,*) "---------------------------------------------------------"
+  write(6,*) "The lowest collision channel at 10G corresponds to the following "
+  write(6,*) "superposition of symmetrized two-atom states:"
+  write(6,*) "---------------------------------------------------------"
+  do i = 1, size2
+     write(6,'(f10.5,A,I4,A,f5.2,A,4I3,A,I3,A,4I3,A)') AsymChannels(i,1), ' x ', i," : ", hf2symTempGlobal(i)%norm, &
+          " ( |", hf2symTempGlobal(i)%state1," > +", hf2symTempGlobal(i)%phase,"|", hf2symTempGlobal(i)%state2," > )"
+  enddo
+  write(6,*) "---------------------------------------------------------"
   
   if(CALCTYPE.eq.1) goto 11
   
@@ -884,13 +896,11 @@ program main
      enddo
   endif
 
-  ! Diagonalize the HF-Zeeman Hamiltonian for the largest field values so we know the range
-  ! of energies needed for the closed channel MQDT parameter cot(gamma)
   call MakeHHZ2(Bhuge,AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
   HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
   call MyDSYEV(HHZ2,size2,Eth,AsymChannels)
-    write(6,*) "---------------------------------------------------------"
-  write(6,*) "The lowest collision channel corresponds to the following "
+  write(6,*) "---------------------------------------------------------"
+  write(6,*) "The lowest collision channel at 1200G corresponds to the following "
   write(6,*) "superposition of symmetrized two-atom states:"
   write(6,*) "---------------------------------------------------------"
   do i = 1, size2
@@ -1162,7 +1172,7 @@ program main
   HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
   call MyDSYEV(HHZ2,size2,Eth,AsymChannels)
     write(6,*) "---------------------------------------------------------"
-  write(6,*) "The lowest collision channel corresponds to the following "
+  write(6,*) "The lowest collision channel at 1200G corresponds to the following "
   write(6,*) "superposition of symmetrized two-atom states:"
   write(6,*) "---------------------------------------------------------"
   do i = 1, size2
@@ -1180,8 +1190,8 @@ program main
         !     abs(RHalf(iR)**6d0 * VLR(mu,lwave,RHalf(iR),Cvals))
      enddo
 
-     do iR = 1, NHalf/4, 200
-        write(11,*) RHalf(iR), (VLR(mu,lwave,RHalf(iR),Cvals) + Eth(i), i=1,size2)
+     do iR = 1, NHalf/10, 200
+        write(11,*) RHalf(iR), VHalfSinglet(iR),VHalfTriplet(iR)!(VLR(mu,lwave,RHalf(iR),Cvals) + Eth(i), i=1,size2)
      enddo
 
   endif        
@@ -2492,11 +2502,12 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals,Sv
   double precision MU, VLIM, RSR, RLR, NS, U1, U2, B, RM, xi, MUREF
   double precision C6, C8, C10, C26, Aex, gamma, beta, nu0, nu1
   double precision, allocatable :: A(:)
-  double precision De, re, ref, alpha, p, q, s, bds, cds, rhoAB
-  double precision yqref, ypref, ypeq, uLR, phiMLR, phiMLRtemp
+  double precision De, re, ref, alpha, p, q, s, bds, cds, rhoAB, aHC, mHC,rminHC,rmaxHC
+  double precision yqref, ypref, ypeq, uLR, phiMLR, phiMLRtemp,ypaeq,ymref
   double precision XITEMP,VMID,DXIDR,DVDR,U1OLD,U2OLD
   double precision phiinf, uLRre, DDS6, DDS8, DDS10, DDS6re, DDS8re, DDS10re
   double precision Scorr ! the strength of the short-range correction for Li
+  double precision drswitch
   double precision, external :: POWER, DPOWER
   
   if (ESTATE .EQ. 1) then  !Ground state singlet 
@@ -2699,9 +2710,16 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals,Sv
      case (6) !Lithium-6 singlet
         IMN1 = 6
         IMN2 = IMN1
-        C6 = 6.718721d6
-        C8 = 1.1263189d8 
-        C10 = 2.7868873d9
+        !Li-6 values from Tang et al
+        C6 = 6.71899d6
+        C8 = 1.12635d8
+        C10 = 2.78694d9
+        !Averages of thFore two isotopes from Tang et al.
+!!$        C6 = 6.718721d6
+!!$        C8 = 1.1263189d8 
+!!$        C10 = 2.7868873d9
+
+
         C26 = 0d0
         call POTGENLI2(1,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
 !!$        C6 = 0.5d0*(6.71527d6+6.7185d6)
@@ -2720,10 +2738,15 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals,Sv
      case (7) !Lithium-7 singlet
         IMN1 = 7
         IMN2 = IMN1
+        ! Values from Tang et al for lithium-7
+        C6 = 6.71846d6
+        C8 = 1.12629d8
+        C10 = 2.78683d9
+        
         !average values from Tang et al
-        C6 = 6.718721d6
-        C8 = 1.1263189d8 
-        C10 = 2.7868873d9
+!!$        C6 = 6.718721d6
+!!$        C8 = 1.1263189d8 
+!!$        C10 = 2.7868873d9
         C26 = 0d0
 !!$        !Average values from singlet/triplet channels of POTGENLI
 !!$        C6 = 0.5d0*(6.71527d6+6.7185d6)
@@ -2742,6 +2765,26 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals,Sv
         enddo
 
      case (8) !Cesium singlet
+        !****************************************************************************************************
+        ! Coxon and Hajigeurgiou MLR3 recommended parameters J. Chem. Phys 132 094105
+!!$        N = 18
+!!$        allocate(A(N))
+!!$        p = 5d0
+!!$        q = 4d0
+!!$        mHC = 6d0
+!!$        aHC = 1.79d0
+!!$        De = 3649.84d0
+!!$        re = 4.647972d0
+!!$        C6 = 3.31d7
+!!$        C8 = 1.29962d9
+!!$        C10 = 5.136d10
+!!$        ref = 5.47d0
+!!$        A = (/-2.48715027d0,-0.7250527d0,-1.988236d0,-0.671755d0,-1.202501d0,&
+!!$             -0.02015d0,-0.5414d0,0.2298d0,1.3964d0,0.687d0,-8.655d0,1.73d0,&
+!!$             32.2d0,-2.66d0,-61.0d0,6.1d0,65.6d0,-2.0d0,-28.0d0/)
+        !****************************************************************************************************
+        !BALDWIN PARAMETERS
+        
         N = 23
         allocate(A(N))
         p = 5d0
@@ -2749,6 +2792,8 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals,Sv
         phiinf = 0.9469102524695
         re = 4.647967771d0
         De = 3650.041851d0
+        !Aex=0d0
+        !BALDWIN PARAMETERS
         C6 = 3.3164d7
         C8 = 1.38d9
         C10 = 6.01d10
@@ -2759,7 +2804,14 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals,Sv
              -1.14615d0, -2.7883d0, 9.98557d0, 1.69149d1, -4.17899d1, &
              -5.76544d1, 1.08881d2, 1.24037d2, -1.716d2, -1.6159d2, &
              1.5781d2, 1.175d2, -7.5d1, -3.67d1, 1.3d1/)
+        !****************************************************************************************************
+        ! REPLACE THE BALDWIN PARAMETERS (ABOVE) WITH THOSE FROM M2012 BERNINGER ET AL
+!!$        C6 = 3.32078d7
+!!$        C8 = 1.3621d9
+!!$        C10 = 0d0
 
+        Scorr = Sval(1) * HartreePerInvcm/(BohrPerAngstrom**2)
+        write(6,'(A,d16.8,A)') "Cs133 singlet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
      case default
         write(6,*) "Invalid ISTATE value"
         stop
@@ -2816,26 +2868,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals,Sv
      case (3:4) !Potassium triplet
         N = 21
         allocate(A(N))
-!!$        RSR = 4.750d0
-!!$        NS = 6d0
-!!$        U1 = -0.6948000684d3
-!!$        U2 = 0.7986755824d7
-!!$        B = -0.300d0
-!!$        RLR = 12.00d0
-!!$        RM = 5.73392370d0
-!!$        C6 = 0.1892652670d8
-!!$        C8 =  0.5706799527d9
-!!$        C10 = 0.1853042722d11
-!!$        C26 = 0.0d0
-!!$        Aex =0.90092159d4
-!!$        gamma = 5.19500d0
-!!$        beta = 2.13539d0
-!!$        A = (/-255.015289d0, -0.84057856111142d0, 0.20960112217307d4, -0.17090298954603d4, &
-!!$             -0.17873773359495d4, 0.29451253739583d4, -0.20200089247397d5, &
-!!$             -0.35699524005434d5, 0.59869055371895d6, -0.71054353363636d6,&
-!!$             -0.61711841390175d7,0.19365507566961d8, 0.67930587059121d7, &
-!!$             -0.12020061704172d9, 0.21603959986951d9,-0.63531969223760d8,-0.52391212820709d9, &
-!!$             0.15913304648629d10,-0.24792546567713d10,0.20326031881106d10,-0.68044508325774d9/)
+
 !!$        nu0 = 0d0! 0.23803737d0  ! Set the BO corrections to zero since they effectively modify the asymptotic C6
 !!$        nu1 = 0.0d0
 
@@ -2853,12 +2886,6 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals,Sv
         Aex = 0.97014411d4
         gamma = 5.19500d0
         beta = 2.13539d0
-!!$        A = (/-255.016075d0, -0.83437034991917d0, 0.20960239701879d4, -0.17090691582228d4, &
-!!$             -0.17873986188680d4, 0.29450770829461d4, -0.20200111692363d5, &
-!!$             -0.35699427038012d5, 0.59869069169566d6, -0.71054314902491d6,&
-!!$             -0.61711835715388d7,0.19365507918230d8, 0.67930591036665d7, &
-!!$             -0.12020061749490d9, 0.21603960091887d9,-0.63531970658436d8,-0.52391212911571d9, &
-!!$             0.15913304556368d10,-0.24792546801660d10,0.20326032002627d10,-0.68044505933607d9/)
 
         A = (/-255.016075d0,&
         -0.83437034991917d0,&
@@ -2921,10 +2948,16 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals,Sv
      case (6) !Lithium-6 triplet
         IMN1 = 6
         IMN2 = IMN1
-        C6 = 6.718721d6
-        C8 = 1.1263189d8 
-        C10 = 2.7868873d9
+        !Li-6 values from Tang et al
+        C6 = 6.71899d6
+        C8 = 1.12635d8
+        C10 = 2.78694d9
+        !These are the average values from the 6/7 isotopes from Tang et al
+!!$        C6 = 6.718721d6
+!!$        C8 = 1.1263189d8 
+!!$        C10 = 2.7868873d9
         call POTGENLI2(2,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
+        !These are averages of the le Roy singlet/triplet parameters.
 !!$        C6 = 0.5d0*(6.71527d6+6.7185d6)
 !!$        C8 = 0.5d0*(1.12588d8+1.12629d8)
 !!$        C10 = 0.5d0*(2.78604d9+2.78683d9)
@@ -2945,11 +2978,15 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals,Sv
         IMN2 = IMN1
 
         call POTGENLI2(2,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
+        ! Values from Tang et al for lithium-7
+        C6 = 6.71846d6
+        C8 = 1.12629d8
+        C10 = 2.78683d9
 
         ! These updated C6 values are the  AVERAGE values of the Li-6 and Li-7 isotopes from PRA 79 062712 (2009)
-        C6 = 6.718721d6
-        C8 = 1.1263189d8 
-        C10 = 2.7868873d9
+!!$        C6 = 6.718721d6
+!!$        C8 = 1.1263189d8 
+!!$        C10 = 2.7868873d9
 !!$        C6 = 0.5d0*(6.71527d6+6.7185d6)
 !!$        C8 = 0.5d0*(1.12588d8+1.12629d8)
 !!$        C10 = 0.5d0*(2.78604d9+2.78683d9)
@@ -2965,6 +3002,23 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals,Sv
         enddo
 
      case (8) !Cesium triplet
+        !****************************************************************************************************
+        !Sovkov et al model J. Chem Phys 147 104301 (2017)
+!!$        N = 10
+!!$        allocate(A(N))
+!!$        p = 5
+!!$        mHC = 6
+!!$        q = 4
+!!$        De = 279.067d0
+!!$        re = 6.24d0
+!!$        aHC = 2.648d0
+!!$        C6 = 3.31d7
+!!$        C8 = 1.29962d9
+!!$        C10 = 5.136d10
+!!$        A = (/-2.4124d0,-0.2178d0,-0.4205d0,2.085d0,-4.192d0,-1.95d0,1.39d0,1.87d0,-0.18d0,1.11d0/)
+        
+        !****************************************************************************************************
+        !Baldwin Model
         N = 5
         allocate(A(N))
         p = 5d0
@@ -2972,14 +3026,24 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals,Sv
         phiinf = -3.971077022867d-1
         re = 6.226182057299d0
         De = 279.2222367314d0        
+        !BALDWIN CN PARAMETERS
         C6 = 3.3164d7
         C8 = 1.38d9
         C10 = 6.01d10
         C26 = 0d0
         ref = 8.7005d0
         A = (/-4.324429443667d-1, -9.206933982533d-2, -6.845846740405d-2, &
-             -1.308218973148d-2, 3.457944786933d-1/)
+             -1.308218973148d-2, 3.457944786933d-1/)  ! A_i = beta_i of Baldwin
+        !****************************************************************************************************
+        !        Aex=0d0
+        !BERNINGER ET AL CN PARAMETERS
+!!$        C6 = 3.32078d7
+!!$        C8 = 1.3621d9
+!!$        C10 = 0d0
+        
 
+        Scorr = Sval(2) * HartreePerInvcm/(BohrPerAngstrom**2)
+        write(6,'(A,d16.8,A)') "Cs133 triplet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
      case default
         write(6,*) "Invalid ISTATE value"
         stop 
@@ -2991,18 +3055,26 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals,Sv
 
   if((ISTATE.NE.6).AND.(ISTATE.NE.7))then  !Exclude Li-6 and Li-7 since those are generated by Le Roy routines
      if (ISTATE.EQ.8) then  ! Cesium only
+        !****************************************************************************************************
+        !BALDWIN
         s = -1d0
         bds = 3.30d0
         cds = 0.423d0
         rhoAB = 0.434d0
-
+        RLR = 39d0*BohrPerAngstrom
+        drswitch = 0.5d0*BohrPerAngstrom 
+        
         DDS6re = (1 - Exp(-(rhoAB*re)*((bds/6d0) + (cds*rhoAB*re)/Sqrt(6d0))))**(6d0+s)
         DDS8re = (1 - Exp(-(rhoAB*re)*((bds/8d0) + (cds*rhoAB*re)/Sqrt(8d0))))**(8d0+s)
         DDS10re = (1 - Exp(-(rhoAB*re)*((bds/10d0) + (cds*rhoAB*re)/Sqrt(10d0))))**(10d0+s)
-
         uLRre = DDS6re*(C6/(re**6.0d0)) + DDS8re*(C8/(re**8.0d0)) + DDS10re*(C10/(re**10.0d0))
+                !BALDWIN
+        !****************************************************************************************************
 
         do i = 1, NPP
+           !****************************************************************************************************
+           !BALDWIN
+           
            DDS6 = (1 - Exp(-(rhoAB*XO(i))*(bds/6d0 + (cds*rhoAB*XO(i))/Sqrt(6d0))))**(6d0+s)
            DDS8 = (1 - Exp(-(rhoAB*XO(i))*(bds/8d0 + (cds*rhoAB*XO(i))/Sqrt(8d0))))**(8d0+s)
            DDS10 = (1 - Exp(-(rhoAB*XO(i))*(bds/10d0 + (cds*rhoAB*XO(i))/Sqrt(10d0))))**(10d0+s)
@@ -3020,10 +3092,44 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals,Sv
 
            phiMLR = phiMLR + ypref*phiinf
 
-           VV(i) = De*(1-(uLR/uLRre)*Exp(-phiMLR*ypeq))**2 - De
+!           VV(i) = (De*(1-(uLR/uLRre)*Exp(-phiMLR*ypeq))**2 - De)
+!!$
+!!$
+           VV(i) = (De*(1-(uLR/uLRre)*Exp(-phiMLR*ypeq))**2 - De)*(1d0 - 0.5d0*(tanh( (XO(i) - RLR)/drswitch) + 1d0)) &
+                + 0.5d0*(tanh((XO(i)-RLR)/drswitch) + 1d0)* &
+                (-C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - &
+                C26/(XO(i)**26.0d0)) 
+           !BALDWIN
+           !****************************************************************************************************
+           !****************************************************************************************************
+           !MLR3 potential of Coxon Hajigeorgiou and Sovkov et al (No damping in their model):
+!!$           uLRre = C6/(re**6.0d0) + C8/(re**8.0d0) + C10/(re**10.0d0)
+!!$           uLR = C6/(XO(i)**6.0d0) + C8/(XO(i)**8.0d0) + C10/(XO(i)**10.0d0)
+!!$           phiinf = log(2d0*De/uLRre)
+!!$           
+!!$           ypref = (XO(i)**p - ref**p)/(XO(i)**p + ref**p)
+!!$           ypeq = (XO(i)**p - re**p)/(XO(i)**p + re**p)
+!!$           yqref = (XO(i)**q - ref**q)/(XO(i)**q + ref**q)
+!!$           ymref = (XO(i)**mHC - ref**mHC)/(XO(i)**mHC + ref**mHC)
+!!$           ypaeq= (XO(i)**p - re**p)/(XO(i)**p + aHC*re**p)
+!!$           phiMLR = 0d0
+!!$           phiMLRtemp = 0d0
+!!$
+!!$           do iphi = 0, N-1
+!!$              phiMlRtemp = (1 - ymref)*(A(iphi+1))*yqref**iphi
+!!$              phiMLR = phiMLR + phiMLRtemp
+!!$           enddo
+!!$
+!!$           phiMLR = phiMLR + ymref*phiinf
+!!$
+!!$           VV(i) = (De*(1-(uLR/uLRre)*Exp(-phiMLR*ypaeq))**2 - De)
+           !****************************************************************************************************           
+           if(XO(i).lt.re) then
+              VV(i) = VV(i) + Scorr*(XO(i) - re)**2
+           endif
 
         enddo
-
+        
      else  ! All others
         do i = 1, NPP
            if(XO(i) .LT. RSR) then
@@ -3058,12 +3164,13 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, Cvals,Sv
      endif
      
   endif
+
   Cvals(1) = C6 * AngstromPerBohr**6 * InvcmPerHartree
   Cvals(2) = C8 * AngstromPerBohr**8 * InvcmPerHartree
   Cvals(3) = C10 * AngstromPerBohr**10 * InvcmPerHartree
   Cvals(4) = C26 * AngstromPerBohr**26 * InvcmPerHartree
   VV = VV*InvcmPerHartree
-  write(6,*) "Cvals = ", Cvals
+
 END SUBROUTINE SetupPotential
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! Subroutine for retrieving the nuclear spin, electronic spin, hyperfine constant (in MHz),
@@ -3781,3 +3888,41 @@ DOUBLE PRECISION FUNCTION DPOWER(X,A,N)
   
   RETURN
 END FUNCTION DPOWER
+
+!!$subroutine VCesium(R,ESTATE,CvalsAU)
+!!$  use bspline
+!!$  implicit none
+!!$  implicit none
+!!$  integer nx, kx
+!!$  double precision x, CvalsAU(4)
+!!$  double precision R, R6VT(14), R6VS(14)
+!!$  integer ESTATE
+!!$  type(InterpolatingFunction) :: Vsinglet, Vtriplet
+!!$
+!!$  CvalsAU = 
+!!$  nx = 14
+!!$  kx = 2
+!!$  call AllocateInterpolatingFunction(nx,kx,Vsinglet)
+!!$  call AllocateInterpolatingFunction(nx,kx,Vtriplet)
+!!$  call GridMaker(Vsinglet%x, nx, 7.0d0, 20d0, "linear")
+!!$  call GridMaker(Vtriplet%x, nx, 7.0d0, 20d0, "linear")
+!!$
+!!$  Vsinglet%y = (/-0.007585d0, -0.012077d0, -0.01491d0, -0.016162d0, -0.016158d0, -0.015279d0, &
+!!$       -0.01383d0, -0.012072d0, -0.008436d0, -0.006811d0, -0.002501d0, -0.000872d0, &
+!!$       -0.000339d0, -0.000153d0 /)
+!!$  R6VS = Vsinglet%y*(Vsinglet%x)**6
+!!$  Vtriplet%y = (/ 0.018752d0, 0.013114d0, 0.00867d0, 0.005245d0, 0.002742d0, 0.00103d0, -0.00008d0, &
+!!$       -0.000753d0, -0.001275d0, -0.001296d0, -0.00088d0, -0.000481d0, -0.000253d0, &
+!!$       -0.000135d0/)
+!!$  R6VT = Vtriplet%y*(Vtriplet%x)**6
+!!$  
+!!$  call SetupInterpolatingFunction(Vsinglet)
+!!$  call SetupInterpolatingFunction(Vtriplet)
+!!$
+!!$  x=7.d0
+!!$  do while (x.lt.20d0)
+!!$     write(12,*) x, Interpolated(x,Vsinglet), Interpolated(x,Vtriplet)
+!!$     x = x + 0.1d0
+!!$  enddo
+!!$  
+!!$end subroutine VCesium

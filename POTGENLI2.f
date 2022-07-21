@@ -1,4 +1,3 @@
-      
 c***********************************************************************
       SUBROUTINE POTGENLI2(ISTATE,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
 c ***********************************************************************
@@ -52,7 +51,6 @@ c =======================================================================
      1  PAD,QAD,PNA,NU1,NU2,NT1,NT2,NCMAX,PPAR,QPAR,NCN,NSR,NLR,NVARB,
      2  NPP,LNPT,GNS,GEL, NCMM,IVSR,LVSR,IDSTT,KDER,MM1, MMLR(9)
       CHARACTER*2 NAME1,NAME2
-
       REAL*8  A0,A1,A2,A3,ALFA,Asw,Rsw,BETA,BINF,B1,B2,BT,CSAV,U1INF,
      1 U2INF,T1INF,T2INF,YPAD,YQAD,YQADSM,YPNA,YPNASM,ABUND,CNN,
      2 DSCM,DX,DX1,FCT,FC1,FC2,FG1,FG2,MASS1,MASS2,RMASS1,RMASS2,REQ,
@@ -90,15 +88,10 @@ c cc Specify parameter values for one of the four Li2 states of interest
       DATA DSCMA/8516.709d0,333.758d0,9353.167d0,7093.44d0/,
      1  REQA/2.672993d0,4.17005d0,3.107856d0,3.06514d0/,
      2  RrefA/3.85d0,8.0d0,4.4d0,3.6d0/, 
-c     ** specify the 4 C_m long-range coefficients for the 4 states
-c     NPM: CHANGE THESE TO (1) BE THE SAME FOR THE SINGLET/TRIPLET STATES AND
-C     (2) AGREE WITH AVERAGE VALUES FROM [TANG ET AL PRA 79 062712 (2009)]
-     4     CMMA/6.718721d6,1.1263189d8,2.7868873d9,0.d0,6.718721d6,
-     5    1.1263189d8,2.7868873d9,0.d0, 3.57829d5,0.335338d0,1.000045d7,
-     6    3.7020d8,3.57557d5,0.335338d0,1.00054d7,3.69953d8/,
-c$$$     4  CMMA/6.71527d6,1.12588d8,2.78604d9,0.d0, 6.7185d6,1.12629d8,
-c$$$     5    2.78683d9,0.d0, 3.57829d5,0.335338d0,1.000045d7,3.7020d8,
-c$$$     6    3.57557d5,0.335338d0,1.00054d7,3.69953d8/,
+c ** specify the 4 C_m long-range coefficients for the 4 states
+     4  CMMA/6.71527d6,1.12588d8,2.78604d9,0.d0, 6.7185d6,1.12629d8,
+     5    2.78683d9,0.d0, 3.57829d5,0.335338d0,1.000045d7,3.7020d8,
+     6    3.57557d5,0.335338d0,1.00054d7,3.69953d8/,
 c ** now specify 20 exponent parameters \beta_i for the 4 states
      7    PARMA/-2.89828701D0,-1.309265D0,-2.018507D0,-1.38162D0,
      8   -1.21933D0,3.463D-1,1.061D-1,-1.886D-1,1.6710D0,1.0943D1,
@@ -109,14 +102,29 @@ c ** now specify 20 exponent parameters \beta_i for the 4 states
      d  -2.826D1,-5.565D1,9.68D0,4.61D1,2.D0,-1.43D1, 3*0.d0,
      e   -1.6373863D0,2.9197D-1,-5.5544D-1,-2.794D-1,-1.5993D0,
      f   -6.73D-1,-1.23D0,-1.29D0,5.D-1,2.6D+0, 10*0.d0/
-c     ** Specify up to 10 'adiabatic' BOB parameters for up to 4 states
-c     These data are the original parameters.  Below, I'm commenting the original data out to zero out the BOB corrections as a test.
+c ** Specify up to 10 'adiabatic' BOB parameters for up to 4 states
 c$$$      DATA U1A/0.194d0,-0.01d0,0.39d0, 3*0.d0, 0.059d0, 5*0.d0,
-c$$$     1     1.066d0,2.98d0,-0.32d0,2.3d0,-7.5d0,3.3d0,
+c$$$     1    1.066d0,2.98d0,-0.32d0,2.3d0,-7.5d0,3.3d0,
 c$$$     2     1.367d0,2.7d0,-1.3d0,-1.8d0, 2*0.d0/
-      DATA U1A/0.0d0,0.0d0,0.0d0,3*0.d0,0.0d0,5*0.d0,
-     1     0.0d0,0.0d0,0.0d0,0.0d0,-7.5d0,3.3d0,
-     2     1.367d0,2.7d0,-1.3d0,-1.8d0, 2*0.d0/
+c ** ZERO OUT THE BOB CORRECTIONS (NPM-22)      
+      DATA U1A/24*0.d0/
+ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
+c     NPM: CHANGE THE Cn Coefficients TO (1) BE THE SAME FOR THE SINGLET/TRIPLET STATES AND
+C     (2) AGREE WITH VALUES FROM [TANG ET AL PRA 79 062712 (2009)]
+      IF((IMN1.eq.IMN2).and.(IMN1.eq.6)) THEN
+         CMMA=RESHAPE((/6.71899d6,1.12635d8,2.78694d9,0.d0,
+     2        6.71899d6,1.12635d8,2.78694d9,0.d0, 
+     3        3.57829d5,0.335338d0,1.000045d7,3.7020d8,
+     4        3.57557d5,0.335338d0,1.00054d7,3.69953d8/),SHAPE(CMMA))
+      ENDIF
+      IF ((IMN1.eq.IMN2).and.(IMN1.eq.7)) THEN
+         CMMA=RESHAPE((/6.71846d6,1.12629d8,2.78683d9,0.d0,
+     2        6.71846d6,1.12629d8,2.78683d9,0.d0,
+     3        3.57829d5,0.335338d0,1.000045d7,3.7020d8,
+     4        3.57557d5,0.335338d0,1.00054d7,3.69953d8/),SHAPE(CMMA))
+      ENDIF
+
       open(unit = 66, file = "LithiumPotentialParameters.dat")
       LNPT= 1
       IAN1= 3
