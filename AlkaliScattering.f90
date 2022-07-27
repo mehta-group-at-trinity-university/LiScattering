@@ -615,7 +615,7 @@ program main
   use datastructures
   implicit none
   type(LRData) :: LRD
-  integer iR, iB, ihf, n, i, j, k, A, nc, nr, ESTATE, ISTATE, IMN1,cotgamfile,STQDfile
+  integer iR, iB, ihf, n, i, j, k, nc, nr, ESTATE, ISTATE, IMN1,cotgamfile,STQDfile,AGEtafile
   integer nspin1, nspin2, espin1, espin2 !nspin is the nuclear spin and espin is the electronic spin
   integer i1,i2,s1,s2,S,sym,size1,size2,NBgrid,NEgrid,mtot, lwave,NumOpen
   integer Nsr, CALCTYPE,MQDTMODE
@@ -634,11 +634,11 @@ program main
   double precision, allocatable :: KsrEIFT(:,:),Ktemp1EIFT(:,:),Ktemp2EIFT(:,:)
   double precision, allocatable :: KQPEIFT(:,:),KPQEIFT(:,:)
   double precision VLIM,Rmin,dR,phiL,stepsize,Vmin,ascat,h1,h2,hdiff,as1,as2,at1,at2,asext,atext,rs1,rs2,rt1,rt2
-  double precision rsext,rtext
+  double precision rsext,rtext,mqdtA
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2,EvdW
-  double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw,wavek
+  double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw,wavek,mqdtG,KK,TanEta
   integer iE, iRmid,NRmid,Ndum,NXM,NXF,multnsr, multnlr,ith,NQD,NBGridFine,NAll,NHalf
-  double precision RX, Rmid, RF, Ktilde,t1,t2,hratio,Btemp,Sval(2),DM(3),DMP(3),DMPP(3)
+  double precision RX, Rmid, RF, Ktilde,t1,t2,hratio,Btemp,Sval(2),DM(3),DMP(3),DMPP(3),KKEIFT
   double precision SingletQD, TripletQD, x,Bhuge,Ebar1,Ebar3,trace1, trace3,ascatEIFT,KtildeEIFT
   double precision, external :: VLRNew, rint, abar
   character(len=20), external :: str
@@ -648,6 +648,7 @@ program main
   type(hf1atom), allocatable :: hf1(:) 
   TYPE(ScatData) :: SD
   type(InterpolatingFunction) :: InterpGammaphase, InterpQDSinglet,InterpQDTriplet
+  type(InterpolatingFunction) :: InterpA,InterpG,InterpTanEta
   type(InterpolatingMatrix) :: InterpKsr
   !  call testinterpolation
   !----------------------------------------------------------------------------------------------------
@@ -811,6 +812,8 @@ program main
   if(CALCTYPE.ne.1) then
      open(unit = cotgamfile, file = "Gammaphase-"//trim(str(ISTATE))//"-"//&
           trim(str(NINT(RF)))//"a0.dat",ACTION=act)
+     open(unit = AGEtafile, file = "AGTanEta-"//trim(str(ISTATE))//"-"//&
+          trim(str(NINT(RF)))//"a0.dat",ACTION=act)
      open(unit = 53, file = "KsrFieldDependence-"//trim(str(ISTATE))//".dat",ACTION=actksr)
      open(unit = STQDfile, file = "STQDFieldDependence-"//trim(str(ISTATE))//".dat",ACTION=actksr)
      open(unit = 52, file = "QDFieldDependence-"//trim(str(ISTATE))//".dat",ACTION=actksr)
@@ -926,6 +929,8 @@ program main
   call CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,LRD,phiL,scale) ! calculate the phase standardization for lwave = 0
   call CalcNewGammaphaseFunction(RX,RF,NXF,size2,lwave,mu,betavdw,LRD,phiL,Eth,&
        InterpGammaphase,scale,MQDTMODE,cotgamfile)
+  call CalcMQDTParameters(RX,RF,NXF,size2,lwave,mu,betavdw,LRD,phiL,Eth,&
+       InterpA,InterpG,InterpTanEta,scale,MQDTMODE,AGEtafile)
 
   EThreshMat(:,:) = 0d0
   
@@ -933,9 +938,11 @@ program main
        InterpQDTriplet,InterpQDSinglet,phiL,betavdw,RX,LRD,scale,MQDTMODE,STQDfile)  !RECALCULATE QDs if MQDTMODE is 1 or 3
   call SetupInterpolatingFunction(InterpQDSinglet)
   call SetupInterpolatingFunction(InterpQDTriplet)
+  write(6,*) "Setting zero-energy quantum defects from interpolated functions..."
   SingletQD = Interpolated(0d0,InterpQDSinglet)
   TripletQD = Interpolated(0d0,InterpQDTriplet)
   !call plotQDs(InterpQDSinglet,InterpQDTriplet)
+  write(6,*) "...Done."
 
   write(53,*)  "#   ", NBgrid
   do iB = 1, NBgrid
@@ -977,7 +984,7 @@ program main
      ! Start the energy loop
      do iE = 1, 1
         NumOpen=0        
-        Energy = Eth(1) + Egrid(iE)!*nKPerHartree
+        Energy = Eth(1) + Egrid(iE)
         wavek = sqrt(2*mu*Egrid(iE))
         !write(6,*) "energy = ", energy
         do j = 1, size2
@@ -987,9 +994,9 @@ program main
            write(6,*) "More than one open channel -- must modify the algorithm.  Stopping"
            stop
         endif
-        
+!        write(6,*) "Setting up the cot(gamma) matrix..."
         call SetupCotGamma(RX,RF,NXF,size2,lwave,mu,betavdw,LRD,phiL,Egrid,NEgrid,Eth,iE,cotgamma,InterpGammaphase,scale)  
-        !           write(6,*) "done."
+!        write(6,*) "...Done."
         if((CALCTYPE.eq.2).and.(iE.eq.1)) then
 
            call logderpropB(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,Sdressed,Tdressed,EthreshMat,VsrSinglet,VsrTriplet,size2,writepot)
@@ -1013,10 +1020,21 @@ program main
         Ktemp2 = MATMUL(KPQ,MATMUL(Ktemp1,KQP))
         !           write(6,*) "Ktemp2:"
         !           call printmatrix(Ktemp2,1,1,6)
-        
+
+        ! Use this expression if you're truly at threshold
+        !ascat = (1d0-Ktilde)*abar(lwave)*betavdw
+        ! Use this at any finite energy
+!        write(6,*) "Setting up the MQDT positive energy parameters..."
         Ktilde = Ksr(1,1) - Ktemp2(1,1)
-        ascat = (1d0-Ktilde)*abar(lwave)*betavdw
-        write(6,*) Bgrid(iB), ascat , 8d0*pi*ascat**2*(Bohrpercm**2)
+        mqdtG = interpolated(Egrid(iE),InterpG)  
+        mqdtA = interpolated(Egrid(iE),InterpA)        
+        TanEta = interpolated(Egrid(iE),InterpTanEta)
+
+!        TanEta = tan(-abar(lwave)*sqrt(Egrid(iE)/EvdW) - Pi/15d0 * (Egrid(iE)/EvdW)**2) 
+        KK = sqrt(mqdtA) * (1d0/Ktilde + mqdtG)**(-1d0) * sqrt(mqdtA)
+        ascat = (-1d0/wavek) * (TanEta + KK)/(1d0 - KK*TanEta)
+        !        write(6,*) Bgrid(iB), ascat , 8d0*pi*ascat**2*(Bohrpercm**2)
+        write(6,*) Bgrid(iB), Ktilde, mqdtG, mqdtA, TanEta, KK, ascat
         write(51,*) Bgrid(iB), ascat , 8d0*pi*ascat**2*(Bohrpercm**2)
         !           write(6,*) Bgrid(iB),  (1d0-Ktilde)*abar(lwave)*betavdw/(1d0 + (abar(lwave)*betavdw*wavek)**2 * Ktilde)
         !           write(51,*) Bgrid(iB), (1d0-Ktilde)*abar(lwave)*betavdw/(1d0 + (abar(lwave)*betavdw*wavek)**2 * Ktilde)
@@ -1030,6 +1048,8 @@ program main
   
   call CalcNewGammaphaseFunction(RX,RF,NXF,size2,lwave,mu,betavdw,LRD,phiL,Eth,&
        InterpGammaphase,scale,MQDTMODE,cotgamfile)
+  call CalcMQDTParameters(RX,RF,NXF,size2,lwave,mu,betavdw,LRD,phiL,Eth,&
+       InterpA,InterpG,InterpTanEta,scale,MQDTMODE,AGEtafile)
   call logderQD(lwave,mu,Eth,size2,NQD,NXM,Nsr,wsr,VsrSinglet,VsrTriplet,Rsr,&
        InterpQDTriplet,InterpQDSinglet,phiL,betavdw,RX,LRD,scale,MQDTMODE,STQDfile)
   call SetupInterpolatingFunction(InterpQDSinglet)
@@ -1053,6 +1073,7 @@ program main
   enddo
   call SetupInterpolatingMatrix(InterpKsr)
   iE=1
+  wavek = sqrt(2*mu*Egrid(iE))
   do iB = 1, NBgridfine
      call cpu_time(t1)
      call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
@@ -1077,14 +1098,7 @@ program main
         CalcProjOp = .true.
         call CalcEDFTKSR(nspin1,nspin1,espin1,espin1,hf2symTempGlobal,energy,Eth,&
                      AsymChannels,size2,Ksr,InterpQDSinglet,InterpQDTriplet,CalcProjOp,KsrEIFT)
-!!$        Ebar1 = 0d0
-!!$        Ebar3 = 0d0
-!!$        do i = 1, size2
-!!$           Ebar1 = Ebar1 + Sdressed(i,i)*(energy-Eth(i))
-!!$           Ebar3 = Ebar3 + Tdressed(i,i)*(energy-Eth(i))
-!!$        enddo
-!!$        Ksr = tan(pi*Interpolated(Ebar1,InterpQDSinglet)) * Sdressed(:,:) &
-!!$             + tan(pi*Interpolated(Ebar3,InterpQDTriplet)) * Tdressed(:,:)
+
      endif
      KsrEIFT(:,:) = tan(pi*Interpolated(0d0,InterpQDTriplet)) * Tdressed(:,:) &
           + tan(pi*Interpolated(0d0,InterpQDSinglet)) * Sdressed(:,:)
@@ -1106,12 +1120,26 @@ program main
           
      Ktilde = Ksr(1,1) - Ktemp2(1,1)
      KtildeEIFT = KsrEIFT(1,1) - Ktemp2EIFT(1,1)
-     ascat = (1d0-Ktilde)*abar(lwave)*betavdw
-     ascatEIFT = (1d0-KtildeEIFT)*abar(lwave)*betavdw
+     
+!     ascat = (1d0-Ktilde) * (abar(lwave)*betavdw)
+!!$     ascat = (1d0-Ktilde)*abar(lwave)*betavdw/(1d0 + (abar(lwave)*betavdw*wavek)**2*Ktilde)
+!!$     ascatEIFT = (1d0-KtildeEIFT) * (abar(lwave)*betavdw)
+
+     Ktilde = Ksr(1,1) - Ktemp2(1,1)
+     mqdtG = interpolated(Egrid(iE),InterpG)
+     mqdtA = interpolated(Egrid(iE),InterpA)
+     TanEta = interpolated(Egrid(iE),InterpTanEta)
+!     TanEta = tan(-abar(lwave)*sqrt(Egrid(iE)/EvdW) - Pi/15d0 * (Egrid(iE)/EvdW)**2) 
+
+     KK = sqrt(mqdtA) * (1d0/Ktilde + mqdtG)**(-1d0) * sqrt(mqdtA)
+     
+     ascat = (-1d0/wavek) * (TanEta + KK)/(1d0 - KK*TanEta)
+     KKEIFT = sqrt(mqdtA) * (1d0/KtildeEIFT + mqdtG)**(-1d0) * sqrt(mqdtA)
+     ascatEIFT =  -1d0/wavek * (TanEta + KKEIFT)/(1d0 - KKEIFT*TanEta)
 
      call cpu_time(t2)
-     write(6,'(f10.3,f14.5,d14.5,A,f10.3,A)') Bgrid(iB), ascat, 8d0*pi*ascat**2*(Bohrpercm**2), &
-          "  Estimated time remaining = ", (NBgridfine-iB)*(t2-t1)/60d0, " min."
+     write(6,'(f10.3,f14.5,d14.5,A,f10.3,A,A,d14.5)') Bgrid(iB), ascat, 8d0*pi*ascat**2*(Bohrpercm**2), &
+          "  Estimated time remaining = ", (NBgridfine-iB)*(t2-t1)/60d0, " min.", "   energy = ", Egrid(iE)*HartreePermK*1000d0
 
      if(CALCTYPE.eq.3) then
         write(51,*) Bgrid(iB), ascat , ascatEIFT, 8d0*pi*ascat**2*(Bohrpercm**2),8d0*pi*ascatEIFT**2*(Bohrpercm**2)
@@ -1163,7 +1191,7 @@ program main
   atext = (hratio**4 * at1 - at2)/(hratio**4 - 1d0)
   rsext = (hratio**4 * rs1 - rs2)/(hratio**4 - 1d0)  !Richardson extrapolation
   rtext = (hratio**4 * rt1 - rt2)/(hratio**4 - 1d0)
-  write(6,'(A,f10.5,A)') " Energy = ",energy/nKPerHartree,"nK"
+
   write(6,*) "Scattering Lengths:  ---more accurate-->"
   write(6,*) "-------------------"
   write(6,*) "Singlet:", as2,as1,asext
@@ -1196,8 +1224,8 @@ program main
      enddo
 
      do iR = 1, NHalf/10, 200
-        call dampF(RHalf(iR),0.434d0,3,(/6,8,10/),-2,1,1,DM,DMP,DMPP)
-        write(11,*) RHalf(iR), VHalfSinglet(iR),VHalfTriplet(iR), DM, DMP
+        !call dampF(RHalf(iR),0.434d0,3,(/6,8,10/),-2,1,1,DM,DMP,DMPP)
+        write(11,*) RHalf(iR), VHalfSinglet(iR),VHalfTriplet(iR)!, DM, DMP
         !(VLRNew(mu,lwave,RHalf(iR),LRD) + Eth(i), i=1,size2)
      enddo
 
@@ -1205,6 +1233,7 @@ program main
 
   write(51,*)
   !stop
+  write(6,'(A,f10.5,A)') " Emin = ",Egrid(1)/nKPerHartree,"nK"
   do iB = 1, NBgrid
      yi = ystart
      call cpu_time(t1)
@@ -1247,16 +1276,15 @@ program main
         !yf =  (hratio**4 * yfAll - yfHalf)/(hratio**4 - 1d0)  !Richardson extrapolation
         !call CalcK(yf,RF,SD,mu,3d0,1d0,Energy,Eth,size2,NumOpen)
 
-
         ! Various output statements:
         call cpu_time(t2)
         if(iE.eq.1) then ! Write the field dependence at the lowest energy (close to threshold)
-           !write(51,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*muref*(Energy-Eth(j))), j=1,NumOpen)!, SD%K(1,2), SD%K(2,1), SD%K(2,2)
+           !write(51,'(100f20.10)') Bgrid(iB), (-SD%K(j,j)/dsqrt(2d0*muref*(Energy-Eth(j))), j=1,NumOpen)! &
+           !, SD%K(1,2), SD%K(2,1), SD%K(2,2)
            ascat = -SD%K(1,1)/dsqrt(2d0*mu*(Energy-Eth(1)))
            write(51,*) Bgrid(iB), ascat, 8d0*pi*ascat**2*(Bohrpercm**2)
-           write(6,'(f10.3,f15.3,d14.5,A,f10.3,A)') Bgrid(iB), ascat, 8d0*pi*ascat**2*(Bohrpercm**2), &
-                "  Estimated time remaining = ", (NBgrid-iB)*(t2-t1)/60d0, " min."
-           
+           write(6,'(f10.3,f15.3,d14.5,A,f10.3,A,A,d14.5)') Bgrid(iB), ascat, 8d0*pi*ascat**2*(Bohrpercm**2), &
+                "  Estimated time remaining = ", (NBgrid-iB)*(t2-t1)/60d0, " min.", "   energy = ", Egrid(iE)*HartreePermK*1000d0
            !write(6,*) Bgrid(iB),  ascat, 8d0*pi*ascat**2*(Bohrpercm**2),  2d0*SD%sigma*(Bohrpercm**2)
         endif
         
@@ -2200,8 +2228,8 @@ subroutine MQDTNewfunctions(R1, R2, NA, scale, LRD, mu, lwave, energy, &
   !call CalcNewMilne2step(R,alpha,y,NA,energy,lwave,mu,LRD,phaseint)
   !call CalcNewMilne4step(R,alpha,y,NA,energy,lwave,mu,LRD,phaseint)
   !call CalcNewMilne6step(R,alpha,y,NA,energy,lwave,mu,LRD,phaseint)
-  !call CalcNewMilne4stepRichardson(R,alpha,y,NA,energy,lwave,mu,LRD,phaseint)
-  call CalcNewMilne6stepRichardson(R,alpha,y,NA,energy,lwave,mu,LRD,phaseint)
+  call CalcNewMilne4stepRichardson(R,alpha,y,NA,energy,lwave,mu,LRD,phaseint)
+  !call CalcNewMilne6stepRichardson(R,alpha,y,NA,energy,lwave,mu,LRD,phaseint)
   
 !  write(6,*) "y = ", y
   alphaf = alpha(NA,:)
@@ -2216,20 +2244,8 @@ subroutine MQDTNewfunctions(R1, R2, NA, scale, LRD, mu, lwave, energy, &
   g0p = ldg0*g0
   
   !write(501,'(100d15.5)') energy, f0,g0,f0p,g0p,ldf0,ldg0,R2!f0*g0p - g0*f0p, R2
-  write(501,'(100d15.5)') energy,sin(phir+phiL)*cos(phir+phiL)*(ldg0-ldf0)/pi,R2!f0*g0p - g0*f0p, R2
+  !write(501,'(100d15.5)') energy,sin(phir+phiL)*cos(phir+phiL)*(ldg0-ldf0)/pi,R2!f0*g0p - g0*f0p, R2
 
-!!$  do i=1,NA
-!!$
-!!$     phir = phaseint(i)
-!!$
-!!$     f0 = Pi**(-0.5d0)*alpha(i,1)*sin(phaseint(i)+phiL)
-!!$     g0 = -Pi**(-0.5d0)*alpha(i,1)*cos(phaseint(i)+phiL)
-!!$     f0p = alpha(i,2)/alpha(i,1) * f0 - g0/alpha(i,1)**2
-!!$     g0p = alpha(i,2)/alpha(i,1) * g0 + f0/alpha(i,1)**2
-!!$     
-!!$     write(6,*) R(i), f0*g0p - g0*f0p
-!!$  enddo
-!!$  stop
 end subroutine MQDTNewfunctions
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! This subroutine calculates the phase standardization according to the Ruzic scheme.
@@ -2333,8 +2349,8 @@ subroutine SetupCotGamma(RX,RF,NXF,size,lwave,mu,betavdw,LRD,phiL,Egrid,NEgrid,E
   implicit none
   type(LRData) :: LRD
   integer lwave, NEgrid, iE, ix,size,ith,NXF
-  double precision RX, RF, mu, betavdw, phiL, Egrid(NEgrid), cotgamma(size-1,size-1),EvdW
-  double precision x, xscale, si, sk, sip, skp, ldk, ldi, kappa, f0, f0p, g0, g0p,Eth(size)
+  double precision RX, RF, mu, betavdw, phiL, Erelth,Egrid(NEgrid), cotgamma(size-1,size-1),EvdW
+  double precision x, si, sk, sip, skp, ldk, ldi, kappa, f0, f0p, g0, g0p,Eth(size)
   double precision alpha0(2),alphaf(2),energy, tangamma, gam, phir, ldg0, ldf0 ,tp
   double precision, allocatable :: xgrid(:), Rgrid(:)
   double precision, allocatable :: phaseint(:)
@@ -2344,50 +2360,22 @@ subroutine SetupCotGamma(RX,RF,NXF,size,lwave,mu,betavdw,LRD,phiL,Egrid,NEgrid,E
   CHARACTER(LEN=*), INTENT(IN) :: scale
   
   EvdW = 1d0/(2d0*mu*betavdw**2)
-  alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLRNew(mu,lwave,RX,LRD))/RX**2))**(-0.25d0)
-  alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRNewPrime(mu, lwave, RX,LRD))) &
-       /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLRNew(mu,lwave,RX,LRD))**1.25d0)
+!  alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLRNew(mu,lwave,RX,LRD))/RX**2))**(-0.25d0)
+!  alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRNewPrime(mu, lwave, RX,LRD))) &
+!       /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLRNew(mu,lwave,RX,LRD))**1.25d0)
   
-  xscale=0d0
+
 
   cotgamma = 0d0
-
+  !Let Erelth = energy measured relative to the ith threshold
   do ith = 2, size
-     ! For gamma, the energy represents a binding, so     
-     energy = Egrid(iE) - (Eth(ith) - Eth(1))
-     !------------------------------------------
-     ! This part does the calculation of cot(gamma) from scratch
-!!$     kappa = sqrt(2*mu*abs(energy))
-!!$     alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLRNew(mu,lwave,RX,LRD))/RX**2))**(-0.25d0)
-!!$     alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRNewPrime(mu, lwave, RX,LRD))) &
-!!$          /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLRNew(mu,lwave,RX,LRD))**1.25d0)
-!!$     call MQDTNewfunctions(RX, RF, NXF, scale, LRD, mu, lwave, energy, &
-!!$          betavdw,phiL,phir, alpha0, alphaf,f0, g0, f0p, g0p,ldf0,ldg0)
-!!$     x = kappa*RF
-!!$     
-!!$     tp = tan(phir+phiL)
-!!$     call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
-!!$
-!!$     cotgamma(ith-1,ith-1)  = tp * (ldf0 + kappa)/(ldg0 + kappa)
-!     cotgamma(ith-1,ith-1) = tan(phir+phiL) * (ldf0 - kappa*ldk)/(ldg0 - kappa*ldk)! 1d0/tangamma
-
+     ! For gamma, the energy needed is Erelth
+     energy = Egrid(iE) + Eth(1)
+     Erelth = energy - Eth(ith)
      !-----------------------------------------
      ! This part uses the interpolated function
-     cotgamma(ith-1,ith-1) = 1d0/tan(Interpolated(energy, InterpGammaphase))
-!     write(6,*) "Compare full: ", energy, cotgamma(ith-1,ith-1)!,
-!     write(6,*) "Compare interp: ", ith, Interpolated(energy, InterpGammaphase)
-     !     write(6,*) "Compare: ", ith, energy, cotgamma(ith-1, ith-1), Interpolated(energy, InterpGammaphase)
-!     write(6,*) "Compare: ", ith, energy, cotgamma(ith-1, ith-1), cotan(Interpolated(energy, InterpGammaphase))
-     
-     !-----------------------------------------
-     ! Use this part if you want to try the "universal function"
-     !cotgamma(ith-1,ith-1) = 1d0/tan(UniversalGamma(energy, EvdW))
-     
-     !     write(400,*) xgrid(ix), ldk
-     !write(400,*) energy/EvdW, gam(iE)
+     cotgamma(ith-1,ith-1) = 1d0/tan(Interpolated(Erelth, InterpGammaphase))
   enddo
-
-
   
 end subroutine SetupCotGamma
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -2456,9 +2444,8 @@ end subroutine CalcCotGammaFunction
 subroutine CalcNewGammaphaseFunction(RX,RF,NXF,size,lwave,mu,betavdw,LRD,phiL,Eth,&
      InterpGammaphase,scale,MQDTMODE,cotgamfile)
   !This calculates the tan(gamma) MQDT parameter.  See Ruzic's PRA for details
-  ! While in principle this can be calculated once as a function of energy, interpolated and
-  ! evaluated at the relative energy for each channel, here I'm doing it the "brute force" way
-  ! I simply re-calculate tan(gamma) and setup the cot(gamma) matrix for each channel at each needed energy
+  ! This is the routine that calculates this function vs. (negative) energy,
+  ! then setupcotgamma will evaluate the interpolated function
   use InterpType
   use bspline
   use units
@@ -2482,7 +2469,6 @@ subroutine CalcNewGammaphaseFunction(RX,RF,NXF,size,lwave,mu,betavdw,LRD,phiL,Et
   If(MQDTMODE.eq.1) then
      xscale=0d0
      NE = 200
-     
      E1 =  - (Eth(size)-Eth(1))
      E2 = -1d-12
      
@@ -2499,16 +2485,15 @@ subroutine CalcNewGammaphaseFunction(RX,RF,NXF,size,lwave,mu,betavdw,LRD,phiL,Et
         alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLRNew(mu,lwave,RX,LRD))/RX**2))**(-0.25d0)
         alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRNewPrime(mu, lwave, RX,LRD))) &
              /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLRNew(mu,lwave,RX,LRD))**1.25d0)
-        write(501,'(A)',ADVANCE='No') "MQDTNewfuntions from CalcNewGammaPhaseFunction"
+
         call MQDTNewfunctions(RX, RF, NXF, scale, LRD, mu, lwave, energy, &
              betavdw,phiL,phir, alpha0, alphaf,f0, g0, f0p, g0p,ldf0,ldg0)
-        !x = kappa*RF
-!        call Mysphbesik(lwave,x,xscale,si,sk,sip,skp,ldk,ldi) ! change norm
         tp = tan(phir+phiL)
-        !       ct = tp * (ldf0 - kappa*ldk)/(ldg0 - kappa*ldk)
+        !       ct = tp * (ldf0 - kappa*ldk)/(ldg0 - kappa*ldk)  !This expression should work as well as others
         ct = tp * (ldf0 + kappa)/(ldg0 + kappa)
 
         InterpGammaphase%y(iE) = atan(1d0/ct)
+
         !        write(6,'(A)',ADVANCE='NO') "."
         call cpu_time(t2)
         write(6,'(A,i3,A,i3,A,f8.4,A)') "(",iE,"/",NE,").  Estimated time remaining = ", (NE-iE)*(t2-t1)/60d0," min."
@@ -2531,6 +2516,114 @@ subroutine CalcNewGammaphaseFunction(RX,RF,NXF,size,lwave,mu,betavdw,LRD,phiL,Et
   
 
 end subroutine CalcNewGammaphaseFunction
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine CalcMQDTParameters(RX,RF,NXF,size,lwave,mu,betavdw,LRD,phiL,Eth,&
+     InterpA,InterpG,InterpTanEta,scale,MQDTMODE,AGEtafile)
+  !This calculates the positive energy MQDT parameters, A, G, and tan(eta).  See Ruzic's PRA for details
+  use InterpType
+  use bspline
+  use units
+  use datastructures
+  implicit none
+  type(LRData) :: LRD
+  integer lwave, iE, NE,ix, NXF,size, kx,AGEtaFile,MQDTMODE
+  double precision RX, RF, mu, betavdw,phiL,EvdW,E1,E2,ldg0,ldf0,phir,tp
+  double precision x, fs,gs,fsp,gsp, knumber, f0, f0p, g0, g0p,Eth(size),ct
+  double precision Wfsf0,Wgsf0,Wfsg0,Wgsg0,Wfsgs,taneta
+  double precision alpha0(2),alphaf(2),energy,t1,t2,abar,G
+  double precision, allocatable :: xgrid(:), Rgrid(:)
+  CHARACTER(LEN=*), INTENT(IN) :: scale
+  CHARACTER(LEN=20) dum
+  double precision, external :: ksqrLR, VLRNew, VLRNewPrime
+  type(InterpolatingFunction) :: InterpA,InterpG,InterpTanEta
+  abar = 0.4779887974861251
+  EvdW = 1d0/(2d0*mu*betavdw**2)
+  kx=5
+  If(MQDTMODE.eq.1) then
+
+     NE = 200
+     ! Set the range of energies to be 2 van der Waals units
+     E1 =  1d-6*nKPerHartree ! start at 10^-6 nK
+     E2 = 2d0*EvdW
+     
+     write(6,*) "E1, E2 = ",E1, E2
+     write(6,*) "The energy range in van der Waals units is: ",E1/EvdW, E2/EvdW
+     write(6,*) "The energy range in nK: ",E1/nKPerHartree, E2/nKPerHartree
+     
+     call AllocateInterpolatingFunction(NE,kx,InterpA)
+     call AllocateInterpolatingFunction(NE,kx,InterpG)
+     call AllocateInterpolatingFunction(NE,kx,InterpTanEta)
+     
+     call GridMaker(InterpTanEta%x, nE, E1, E2, "log") ! hartree
+     InterpA%x = InterpTanEta%x
+     InterpG%x = InterpTanEta%x
+     write(6,'(A)') "Calculating the MQDT parameters G, A, and TanEta as a function of energy"
+     do iE = 1, NE
+        call cpu_time(t1)
+        energy = InterpTanEta%x(iE) ! in Hartree
+        knumber = sqrt(2*mu*energy)
+        
+        alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLRNew(mu,lwave,RX,LRD))/RX**2))**(-0.25d0)
+        alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRNewPrime(mu, lwave, RX,LRD))) &
+             /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLRNew(mu,lwave,RX,LRD))**1.25d0)
+        
+        call MQDTNewfunctions(RX, RF, NXF, scale, LRD, mu, lwave, energy, &
+             betavdw,phiL,phir, alpha0, alphaf,f0, g0, f0p, g0p,ldf0,ldg0)
+        CALL hyperrjry(3,1d0,0d0,knumber*RF,fs,gs,fsp,gsp)
+        
+        fs = fs/dsqrt(Pi*knumber)
+        gs = gs/dsqrt(Pi*knumber)  !NOTE: the minus sign convention different from Johnson's LD method
+        fsp = dsqrt(knumber/Pi)*fsp
+        gsp = dsqrt(knumber/Pi)*gsp
+
+        Wfsf0 = fs*f0p - fsp*f0
+        Wgsf0 = gs*f0p - gsp*f0
+        Wfsg0 = fs*g0p - fsp*g0
+        Wgsg0 = gs*g0p - gsp*g0
+        Wfsgs = fs*gsp - fsp*gs
+        InterpG%y(iE) = -(Wfsg0*Wfsf0 + Wgsg0*Wgsf0)/(Wfsf0**2 + Wgsf0**2)
+        taneta = Wfsf0/Wgsf0
+        InterpTanEta%y(iE) = taneta
+        !InterpA%y(iE) = -(Wfsg0 - taneta*Wgsg0 )/(Wgsf0 + taneta*Wfsf0)
+        InterpA%y(iE) = Wfsgs**2/(Wfsf0**2 + Wgsf0**2)        
+        !InterpG%y(iE) = -(Wgsg0 + taneta*Wfsg0)/(Wgsf0 + taneta*Wfsf0)
+        call cpu_time(t2)
+        write(6,'(A,i3,A,i3,A,f8.4,A)') "MQDTParams(",iE,"/",NE,").  Estimated time remaining = ", (NE-iE)*(t2-t1)/60d0," min."
+
+     enddo
+     write(6,*) "done."
+     write(AGEtafile, *) "#", NE
+     do iE = 1, NE
+        energy = InterpTanEta%x(iE)/EvdW !In vdW units
+        write(AGEtafile, *) energy, InterpA%y(iE), InterpG%y(iE), InterpTanEta%y(iE)  !Write in vdW units
+        write(101, *) sqrt(energy), sqrt(InterpA%y(iE)), InterpG%y(iE), atan(InterpTanEta%y(iE))
+        write(102, *) sqrt(energy), sqrt(abar*sqrt(energy)), &
+             energy*(1.d0/3.d0-abar**2),-abar*sqrt(energy) + Pi*energy**2/15d0
+        write(103, *) InterpTanEta%x(iE)*HartreePermK, sqrt(InterpA%y(iE)), &
+             InterpG%y(iE), atan(InterpTanEta%y(iE)) ! Write this in mK
+     enddo
+  else ! Should do this for MQDTMODE not equal to 1 (so both 2 and 3 cases should direct here)
+     read(AGEtafile,*) dum, NE
+     call AllocateInterpolatingFunction(NE,kx,InterpA)
+     call AllocateInterpolatingFunction(NE,kx,InterpG)
+     call AllocateInterpolatingFunction(NE,kx,InterpTanEta)
+     do iE = 1, NE
+        read(AGEtafile, *)  InterpTanEta%x(iE), InterpA%y(iE), InterpG%y(iE), InterpTanEta%y(iE)
+     enddo
+     InterpTanEta%x = InterpTanEta%x*EvdW  ! Convert back to Hartree
+     InterpA%x = InterpTanEta%x
+     InterpG%x = InterpTanEta%x
+  endif
+  call SetupInterpolatingFunction(InterpA)  !Interpolate in Hartree
+  call SetupInterpolatingFunction(InterpG)
+  call SetupInterpolatingFunction(InterpTanEta)
+  write(6,*) "Testing interpolation..."
+  do iE = 1, NE
+     
+     write(6,*) InterpG%x(iE), InterpG%y(iE), interpolated(InterpG%x(iE),InterpG)
+
+  enddo
+end subroutine CalcMQDTParameters
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine smoothgamma(gammaphase,NE)
   use units
@@ -3160,7 +3253,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
 !!$        cds = 0.423d0
         rhoAB = 0.434d0
         LRD%rhoAB=rhoAB
-        LRD%DAMP=.true.
+        LRD%DAMP=.false.
         RLR = 39d0*BohrPerAngstrom
         drswitch = 0.5d0*BohrPerAngstrom 
         call dampF(re,rhoAB,3,(/6,8,10/),-2,1,1,DM,DMP,DMPP)
@@ -3614,7 +3707,7 @@ subroutine logderQD(lwave,mu,Eth,size2,NQD,NXM,Nsr,wsr,VSINGLET,VTRIPLET,R,&
         
         !SingletQD = atan(td1)/pi
         !TripletQD = atan(td2)/pi
-        write(6,*) "Energy = ",energy, " Quantum Defects:"
+        write(6,*) "Energy = ",energy, "Hartree; Quantum Defects:"
         write(6,*) "-------------------------------------"
         write(6,*) "Singlet:", InterpQDSinglet%y(iE)
         write(6,*) "Triplet:", InterpQDTriplet%y(iE)
@@ -3658,7 +3751,10 @@ subroutine logderScatLengths1(lwave,mu,N,R,w,VSinglet,VTriplet,a1,a3,r1,r3)
 
   VMAT(1,1,:) = VSinglet(:)
   VMAT(2,2,:) = VTriplet(:)
-
+  x = 10d0
+!  call hyperrjry(3,1d0,0d0,x,f,g,fp,gp)
+!  write(6,*) "f,g,sin(x),-cos(x) = ", f, g, sin(x), -cos(x)
+!  stop
   do iE = 1,5
      energy = E(iE)/(2d0*mu)
      k = sqrt(2d0*mu*energy)
@@ -3676,7 +3772,7 @@ subroutine logderScatLengths1(lwave,mu,N,R,w,VSinglet,VTriplet,a1,a3,r1,r3)
      td2 = (yf(2,2)*sin(x) - k*cos(x)) / (-yf(2,2)*cos(x) + k*(-sin(x)))
      ere1(iE) = k/td1
      ere3(iE) = k/td2
-     write(302,*) E(iE), ere1(iE), ere3(iE)
+     write(302,*) E(iE), ere1(iE), ere3(iE), x, sin(x), -cos(x), f, g
      !a1 = -td1/k
      !a3 = -td2/k
   enddo
