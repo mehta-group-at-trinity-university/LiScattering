@@ -687,7 +687,6 @@ program main
   Emax = Emax/HartreePermK
   If((MQDTMODE.eq.1).and.(CALCTYPE.eq.2)) then
      write(6,*) "Using full B-field range for calculation of Ksr and QDs."
-
      Bmin = 0.1d0
      Bmax = Bhuge
   endif
@@ -832,7 +831,6 @@ program main
 
   ! None of the code above this line depends on the radial grid.
   !----------------------------------------------------------------------------------------------------
-
   ! This is just a "dummy" call to SetupPotential to obtain the discpersion C6/C8/C10 coefficients
   ! and to calculate the van der waals length.
   VLIM = 0d0
@@ -1030,7 +1028,7 @@ program main
         mqdtA = interpolated(Egrid(iE),InterpA)        
         TanEta = interpolated(Egrid(iE),InterpTanEta)
 
-!        TanEta = tan(-abar(lwave)*sqrt(Egrid(iE)/EvdW) - Pi/15d0 * (Egrid(iE)/EvdW)**2) 
+!        TanEta = tan(-abar(lwave)*sqrt(Egrid(iE)/EvdW) - Pi/15d0 * (Egrid(iE)/EvdW)**2) !This is the threshold expression in a pure -C6/R^6 potential.
         KK = sqrt(mqdtA) * (1d0/Ktilde + mqdtG)**(-1d0) * sqrt(mqdtA)
         ascat = (-1d0/wavek) * (TanEta + KK)/(1d0 - KK*TanEta)
         !        write(6,*) Bgrid(iB), ascat , 8d0*pi*ascat**2*(Bohrpercm**2)
@@ -2581,12 +2579,12 @@ subroutine CalcMQDTParameters(RX,RF,NXF,size,lwave,mu,betavdw,LRD,phiL,Eth,&
         Wfsg0 = fs*g0p - fsp*g0
         Wgsg0 = gs*g0p - gsp*g0
         Wfsgs = fs*gsp - fsp*gs
-        InterpG%y(iE) = -(Wfsg0*Wfsf0 + Wgsg0*Wgsf0)/(Wfsf0**2 + Wgsf0**2)
+        !InterpG%y(iE) = -(Wfsg0*Wfsf0 + Wgsg0*Wgsf0)/(Wfsf0**2 + Wgsf0**2)
         taneta = Wfsf0/Wgsf0
         InterpTanEta%y(iE) = taneta
-        !InterpA%y(iE) = -(Wfsg0 - taneta*Wgsg0 )/(Wgsf0 + taneta*Wfsf0)
-        InterpA%y(iE) = Wfsgs**2/(Wfsf0**2 + Wgsf0**2)        
-        !InterpG%y(iE) = -(Wgsg0 + taneta*Wfsg0)/(Wgsf0 + taneta*Wfsf0)
+        InterpA%y(iE) = -(Wfsg0 - taneta*Wgsg0 )/(Wgsf0 + taneta*Wfsf0)
+        !InterpA%y(iE) = Wfsgs**2/(Wfsf0**2 + Wgsf0**2)        
+        InterpG%y(iE) = -(Wgsg0 + taneta*Wfsg0)/(Wgsf0 + taneta*Wfsf0)
         call cpu_time(t2)
         write(6,'(A,i3,A,i3,A,f8.4,A)') "MQDTParams(",iE,"/",NE,").  Estimated time remaining = ", (NE-iE)*(t2-t1)/60d0," min."
 
@@ -2617,12 +2615,10 @@ subroutine CalcMQDTParameters(RX,RF,NXF,size,lwave,mu,betavdw,LRD,phiL,Eth,&
   call SetupInterpolatingFunction(InterpA)  !Interpolate in Hartree
   call SetupInterpolatingFunction(InterpG)
   call SetupInterpolatingFunction(InterpTanEta)
-  write(6,*) "Testing interpolation..."
-  do iE = 1, NE
-     
-     write(6,*) InterpG%x(iE), InterpG%y(iE), interpolated(InterpG%x(iE),InterpG)
-
-  enddo
+!!$  write(6,*) "Testing interpolation..."
+!!$  do iE = 1, NE
+!!$     write(6,*) InterpG%x(iE), InterpG%y(iE), interpolated(InterpG%x(iE),InterpG)
+!!$  enddo
 end subroutine CalcMQDTParameters
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine smoothgamma(gammaphase,NE)
@@ -3287,13 +3283,13 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
 
            phiMLR = phiMLR + ypref*phiinf
 
-           VV(i) = (De*(1-(uLR/uLRre)*Exp(-phiMLR*ypeq))**2 - De)
+!           VV(i) = (De*(1-(uLR/uLRre)*Exp(-phiMLR*ypeq))**2 - De)
 !!$
 !!$
-!           VV(i) = (De*(1-(uLR/uLRre)*Exp(-phiMLR*ypeq))**2 - De)*(1d0 - 0.5d0*(tanh( (XO(i) - RLR)/drswitch) + 1d0)) &
-!                + 0.5d0*(tanh((XO(i)-RLR)/drswitch) + 1d0)* &
-!                (-C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - &
-!                C26/(XO(i)**26.0d0)) 
+           VV(i) = (De*(1-(uLR/uLRre)*Exp(-phiMLR*ypeq))**2 - De)*(1d0 - 0.5d0*(tanh( (XO(i) - RLR)/drswitch) + 1d0)) &
+                + 0.5d0*(tanh((XO(i)-RLR)/drswitch) + 1d0)* &
+                (-C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - &
+                C26/(XO(i)**26.0d0)) 
            !BALDWIN
            !****************************************************************************************************
            !****************************************************************************************************
