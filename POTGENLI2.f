@@ -103,11 +103,11 @@ c ** now specify 20 exponent parameters \beta_i for the 4 states
      e   -1.6373863D0,2.9197D-1,-5.5544D-1,-2.794D-1,-1.5993D0,
      f   -6.73D-1,-1.23D0,-1.29D0,5.D-1,2.6D+0, 10*0.d0/
 c ** Specify up to 10 'adiabatic' BOB parameters for up to 4 states
-c$$$      DATA U1A/0.194d0,-0.01d0,0.39d0, 3*0.d0, 0.059d0, 5*0.d0,
-c$$$     1    1.066d0,2.98d0,-0.32d0,2.3d0,-7.5d0,3.3d0,
-c$$$     2     1.367d0,2.7d0,-1.3d0,-1.8d0, 2*0.d0/
+      DATA U1A/0.194d0,-0.01d0,0.39d0, 3*0.d0, 0.059d0, 5*0.d0,
+     1    1.066d0,2.98d0,-0.32d0,2.3d0,-7.5d0,3.3d0,
+     2     1.367d0,2.7d0,-1.3d0,-1.8d0, 2*0.d0/
 c ** ZERO OUT THE BOB CORRECTIONS (NPM-22)      
-      DATA U1A/24*0.d0/
+c      DATA U1A/24*0.d0/
 ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
 c     NPM: CHANGE THE Cn Coefficients TO (1) BE THE SAME FOR THE SINGLET/TRIPLET STATES AND

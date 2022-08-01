@@ -739,11 +739,16 @@ program main
      write(90,*) Btemp, EVAL - CGhf
   enddo
   write(6,'(A)') '-----------------------------------'
-  write(6,'(A,f6.1,A)') "Bmax = ", Bgrid(NBgrid), " gauss"
-  write(6,'(A,f10.3,A)') "The one atom ground state has E = ", EVAL(1), " MHz"
-  write(6,'(A)') "In the | f mf > basis, the ground state Eigenvector is: "
+  Btemp = 10d0
+  call MakeHHZ1(HHZ,Btemp,size1,hf1,gs,gi1,AHf1,espin1,nspin1)
+  call MyDSYEV(HHZ,size1,EVAL,EVEC)
+  write(6,'(A,f6.1,A)') "At B = ", Btemp, " gauss"
+  write(6,'(A,f10.3,A)') "the one atom ground state has E/h = ", EVAL(1), " MHz"
+  write(6,'(A)') "In the | f mf > basis, the ground state and 1st excited state eigenvectors are: "
+  write(6,'(A)') "|-------GS------------------>    |-------ES------------------>"
   do i = 1, size1
-     write(6,'(f12.6, A4,I3,A1,I3,A4)') EVEC(i,1),'   |', hf1(i)%f,' ', hf1(i)%m, '  >'
+     write(6,'(f12.6, A4,I3,A1,I3,A4,A4,f12.6, A4,I3,A1,I3,A4)') EVEC(i,1),'   |', hf1(i)%f,' ', hf1(i)%m, '  >', &
+          '    ',EVEC(i,2),'   |', hf1(i)%f,' ', hf1(i)%m, '  >'
   enddo
   write(6,'(A)') '-----------------------------------'
 
@@ -896,7 +901,7 @@ program main
   
   if(writepot) then
      write(6,'(A)') "See fort.10 and fort.30 for the singlet/triplet potentials"
-     do iR=0, Nsr
+     do iR=0, Nsr/10
         write(10,*) Rsr(iR), abs((VsrSinglet(iR) - VLRNew(mu,lwave,Rsr(iR),LRD))/VsrSinglet(iR)), &
              abs((VsrTriplet(iR) - VLRNew(mu,lwave,Rsr(iR),LRD))/VsrTriplet(iR))
      enddo
@@ -2901,6 +2906,9 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         C6 = 6.71899d6
         C8 = 1.12635d8
         C10 = 2.78694d9
+        RLR = 39d0*BohrPerAngstrom
+        drswitch = 0.5d0*BohrPerAngstrom 
+
         !Averages of thFore two isotopes from Tang et al.
 !!$        C6 = 6.718721d6
 !!$        C8 = 1.1263189d8 
@@ -2917,6 +2925,11 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         Scorr = Sval(1) * HartreePerInvcm/(BohrPerAngstrom**2)!3.68d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
         write(6,'(A,d16.8,A)') "Li6 Singlet Correction Scorr = ", Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         do i=1,NPP
+           VV(i) = VV(i)*(1d0 - 0.5d0*(tanh( (XO(i) - RLR)/drswitch) + 1d0)) &
+                + 0.5d0*(tanh((XO(i)-RLR)/drswitch) + 1d0)* &
+                (-C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - &
+                C26/(XO(i)**26.0d0)) 
+           
            if(XO(i).lt.re) then
               VV(i) = VV(i) + Scorr*(XO(i) - re)**2
            endif
@@ -2929,7 +2942,9 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         C6 = 6.71846d6
         C8 = 1.12629d8
         C10 = 2.78683d9
-        
+        RLR = 39d0*BohrPerAngstrom
+        drswitch = 0.5d0*BohrPerAngstrom 
+
         !average values from Tang et al
 !!$        C6 = 6.718721d6
 !!$        C8 = 1.1263189d8 
@@ -2946,6 +2961,11 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         Scorr = Sval(1) * HartreePerInvcm/(BohrPerAngstrom**2)!1.47d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  !Singlet Correction
         write(6,'(A,d16.8,A)') "Li7 Singlet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         do i=1,NPP
+           VV(i) = VV(i)*(1d0 - 0.5d0*(tanh( (XO(i) - RLR)/drswitch) + 1d0)) &
+                + 0.5d0*(tanh((XO(i)-RLR)/drswitch) + 1d0)* &
+                (-C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - &
+                C26/(XO(i)**26.0d0)) 
+
            if(XO(i).lt.re) then
               VV(i) = VV(i) + Scorr*(XO(i) - re)**2
            endif
@@ -3139,6 +3159,9 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         C6 = 6.71899d6
         C8 = 1.12635d8
         C10 = 2.78694d9
+        RLR = 39d0*BohrPerAngstrom
+        drswitch = 0.5d0*BohrPerAngstrom 
+
         !These are the average values from the 6/7 isotopes from Tang et al
 !!$        C6 = 6.718721d6
 !!$        C8 = 1.1263189d8 
@@ -3155,6 +3178,11 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         Scorr = Sval(2) * HartreePerInvcm/(BohrPerAngstrom**2) !1.5546d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  !Triplet Correction
         write(6,'(A,d16.8,A)') "Li6 Triplet Correction Scorr = ", Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         do i=1,NPP
+           VV(i) = VV(i)*(1d0 - 0.5d0*(tanh( (XO(i) - RLR)/drswitch) + 1d0)) &
+                + 0.5d0*(tanh((XO(i)-RLR)/drswitch) + 1d0)* &
+                (-C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - &
+                C26/(XO(i)**26.0d0)) 
+
            if(XO(i).lt.re) then
               VV(i) = VV(i) + Scorr*(XO(i) - re)**2
            endif
@@ -3169,6 +3197,8 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         C6 = 6.71846d6
         C8 = 1.12629d8
         C10 = 2.78683d9
+        RLR = 39d0*BohrPerAngstrom
+        drswitch = 0.5d0*BohrPerAngstrom 
 
         ! These updated C6 values are the  AVERAGE values of the Li-6 and Li-7 isotopes from PRA 79 062712 (2009)
 !!$        C6 = 6.718721d6
@@ -3183,11 +3213,16 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         Scorr =  Sval(2) * HartreePerInvcm/(BohrPerAngstrom**2)!1.835d-6 * HartreePerInvcm/(BohrPerAngstrom**2) !Triplet Correction
         write(6,'(A,d16.8,A)') "Li7 Triplet Correction Scorr = ", Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         do i=1,NPP
+           VV(i) = VV(i)*(1d0 - 0.5d0*(tanh( (XO(i) - RLR)/drswitch) + 1d0)) &
+                + 0.5d0*(tanh((XO(i)-RLR)/drswitch) + 1d0)* &
+                (-C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - &
+                C26/(XO(i)**26.0d0)) 
+           
            if(XO(i).lt.re) then
               VV(i) = VV(i) + Scorr*(XO(i) - re)**2
            endif
         enddo
-
+        
      case (8) !Cesium triplet
         !****************************************************************************************************
         !Sovkov et al model J. Chem Phys 147 104301 (2017)
@@ -3264,11 +3299,13 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         do i = 1, NPP
            !****************************************************************************************************
            !BALDWIN
+           ! Use Le Roy routine for the damping functions instead of ours (Both agree and work fine.)
            call dampF(XO(i),rhoAB,3,(/6,8,10/),-2,1,1,DM,DMP,DMPP)
 !!$           DDS6 = (1 - Exp(-(rhoAB*XO(i))*(bds/6d0 + (cds*rhoAB*XO(i))/Sqrt(6d0))))**(6d0+s)
 !!$           DDS8 = (1 - Exp(-(rhoAB*XO(i))*(bds/8d0 + (cds*rhoAB*XO(i))/Sqrt(8d0))))**(8d0+s)
 !!$           DDS10 = (1 - Exp(-(rhoAB*XO(i))*(bds/10d0 + (cds*rhoAB*XO(i))/Sqrt(10d0))))**(10d0+s)
 !!$           uLR = DDS6*(C6/(XO(i)**6.0d0)) + DDS8*(C8/(XO(i)**8.0d0)) + DDS10*(C10/(XO(i)**10.0d0))
+           
            uLR = DM(1)*(C6/(XO(i)**6.0d0)) + DM(2)*(C8/(XO(i)**8.0d0)) + DM(3)*(C10/(XO(i)**10.0d0))
            ypref = (XO(i)**p - ref**p)/(XO(i)**p + ref**p)
            ypeq = (XO(i)**p - re**p)/(XO(i)**p + re**p)
@@ -3282,10 +3319,11 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
            enddo
 
            phiMLR = phiMLR + ypref*phiinf
-
+           ! MLR potential
 !           VV(i) = (De*(1-(uLR/uLRre)*Exp(-phiMLR*ypeq))**2 - De)
-!!$
-!!$
+
+           ! USE THIS MODIFIED MLR BALDWIN POTENTIAL THAT FORCES V->VLR AT LONG RANGE!!!
+           ! NOTE THAT THE SVAL PARAMETERS IN THE INPUT FILE ARE TUNED SO THAT THIS POTENTIAL GIVES THE BERNINGER ET AL SCATTERING LENGTHS
            VV(i) = (De*(1-(uLR/uLRre)*Exp(-phiMLR*ypeq))**2 - De)*(1d0 - 0.5d0*(tanh( (XO(i) - RLR)/drswitch) + 1d0)) &
                 + 0.5d0*(tanh((XO(i)-RLR)/drswitch) + 1d0)* &
                 (-C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - &
