@@ -107,24 +107,27 @@ c ** Specify up to 10 'adiabatic' BOB parameters for up to 4 states
      1    1.066d0,2.98d0,-0.32d0,2.3d0,-7.5d0,3.3d0,
      2     1.367d0,2.7d0,-1.3d0,-1.8d0, 2*0.d0/
 c ** ZERO OUT THE BOB CORRECTIONS (NPM-22)      
-c      DATA U1A/24*0.d0/
+C      DATA U1A/24*0.d0/
 ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
 c     NPM: CHANGE THE Cn Coefficients TO (1) BE THE SAME FOR THE SINGLET/TRIPLET STATES AND
 C     (2) AGREE WITH VALUES FROM [TANG ET AL PRA 79 062712 (2009)]
+c     In atomic units, these values are for
+c     Li-6: C6=1394.16, C8=83460, C10=73745d2
+c     Li-7: C6=1394.05, C8=83456, C10=73742d2
       IF((IMN1.eq.IMN2).and.(IMN1.eq.6)) THEN
-         CMMA=RESHAPE((/6.71899d6,1.12635d8,2.78694d9,0.d0,
-     2        6.71899d6,1.12635d8,2.78694d9,0.d0, 
+         CMMA=RESHAPE((/6.71899d6,1.12635d8,2.78694d9,0.d0, !Singlet Li-6
+     2                  6.71899d6,1.12635d8,2.78694d9,0.d0, !Triplet Li-6
      3        3.57829d5,0.335338d0,1.000045d7,3.7020d8,
      4        3.57557d5,0.335338d0,1.00054d7,3.69953d8/),SHAPE(CMMA))
       ENDIF
       IF ((IMN1.eq.IMN2).and.(IMN1.eq.7)) THEN
-         CMMA=RESHAPE((/6.71846d6,1.12629d8,2.78683d9,0.d0,
-     2        6.71846d6,1.12629d8,2.78683d9,0.d0,
+         CMMA=RESHAPE((/6.71846d6,1.12629d8,2.78683d9,0.d0, !Singlet Li-7
+     2                  6.71846d6,1.12629d8,2.78683d9,0.d0, !Triplet Li-7
      3        3.57829d5,0.335338d0,1.000045d7,3.7020d8,
      4        3.57557d5,0.335338d0,1.00054d7,3.69953d8/),SHAPE(CMMA))
       ENDIF
-
+ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       open(unit = 66, file = "LithiumPotentialParameters.dat")
       LNPT= 1
       IAN1= 3

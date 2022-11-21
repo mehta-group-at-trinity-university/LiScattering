@@ -639,7 +639,7 @@ program main
   double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw,wavek,mqdtG,KK,TanEta
   integer iE, iRmid,NRmid,Ndum,NXM,NXF,multnsr, multnlr,ith,NQD,NBGridFine,NAll,NHalf
   double precision RX, Rmid, RF, Ktilde,t1,t2,hratio,Btemp,Sval(2),DM(3),DMP(3),DMPP(3),KKEIFT
-  double precision SingletQD, TripletQD, x,Bhuge,Ebar1,Ebar3,trace1, trace3,ascatEIFT,KtildeEIFT
+  double precision SingletQD, TripletQD, x,Bhuge,Ebar1,Ebar3,trace1, trace3,ascatEIFT,KtildeEIFT,Ax,bex,gamx
   double precision, external :: VLRNew, rint, abar
   character(len=20), external :: str
   CHARACTER(LEN=20) scale, act, dum, actksr
@@ -848,12 +848,13 @@ program main
   !stepsize = 2d0*pi*0.1d0*(2d0*mu*(Emax - Vmin))**(-0.5d0)
   !write(6,'(A,f12.5)') "The suggested maximum step size is ", stepsize
 
-  call VdWLength(LRD%Cvals,betavdw,mu)
+  !call VdWLength(LRD%Cvals,betavdw,mu)
+  betavdw = (2d0 * mu * LRD%Cvals(1))**(0.25d0)  ! NOTE that this is really twice the usual van der Waals length and the energy is one quarter.
   EvdW = 1d0/(2d0*mu*betavdw**2)
 
   write(6,'(A,4d16.8)') "The Cvalues are = ", LRD%Cvals
-  write(6,'(A,d16.8)') "The van der Waals length is rvdw = ", betavdw
-  write(6,'(A,d16.8)') "The van der Waals energy is EvdW = ", EvdW
+  write(6,'(A,d16.8)') "The natural length is beta = ", betavdw
+  write(6,'(A,d16.8)') "The natural energy is Ebeta = ", EvdW
   write(60,*) betavdw, EvdW
   RX = RX*betavdw
   RF = RF*betavdw
@@ -1216,26 +1217,46 @@ program main
           " ( |", hf2symTempGlobal(i)%state1," > +", hf2symTempGlobal(i)%phase,"|", hf2symTempGlobal(i)%state2," > )"
   enddo
 
+
   if(writepot) then
      write(6,'(A)') "See LRPotsData files for long-range potentials with zeeman offsets."
      write(6,'(A)') "See PotsConvergence files for convergence to long-range potential."
-     do iR=1, NHalf, 200
+     do iR=1, 200000, 20
+        ! Cs test case----------------------------------
+!        Ax = 0.5d0 * (VHalfTriplet(iR)-VHalfSinglet(iR))
+!        bex = 1.069946
+!        gamx = 7d0/bex-1d0
+        !-----------------------------------------------
         write(10,*) RHalf(iR), abs((VHalfSinglet(iR) - VLRNew(mu,lwave,RHalf(iR),LRD))/VHalfSinglet(iR)), &
              abs((VHalfTriplet(iR) - VLRNew(mu,lwave,RHalf(iR),LRD))/VHalfTriplet(iR))
-        !write(10,*) RHalf(iR),abs(RHalf(iR)**6d0 * VHalfSinglet(iR)),abs(RHalf(iR)**6d0 * VHalfTriplet(iR)), &
-        !     abs(RHalf(iR)**6d0 * VLRNew(mu,lwave,RHalf(iR),LRD))
+!        write(10,*) RHalf(iR), abs((VHalfSinglet(iR) - (VLRNew(mu,lwave,RHalf(iR),LRD) &
+!             - Ax*RHalf(iR)**gamx*exp(-bex*RHalf(iR)))) / VHalfSinglet(iR)), &
+!             abs((VHalfTriplet(iR) - (VLRNew(mu,lwave,RHalf(iR),LRD) &
+!             + Ax*RHalf(iR)**gamx*exp(-bex*RHalf(iR)))) / VHalfTriplet(iR))
+        
+!        write(10,*) RHalf(iR), &
+!             abs(RHalf(iR)**6d0 * (VHalfSinglet(iR) &
+!             - (VLRNew(mu,lwave,RHalf(iR),LRD) - Ax * RHalf(iR)**gamx * exp(-bex*RHalf(iR))))), &
+!             abs(RHalf(iR)**6d0 * (VHalfTriplet(iR) &
+!             - (VLRNew(mu,lwave,RHalf(iR),LRD) + Ax * RHalf(iR)**gamx * exp(-bex*RHalf(iR))))) 
      enddo
 
      do iR = 1, NHalf/10, 200
-        !call dampF(RHalf(iR),0.434d0,3,(/6,8,10/),-2,1,1,DM,DMP,DMPP)
-        write(11,*) RHalf(iR), VHalfSinglet(iR),VHalfTriplet(iR)!, DM, DMP
-        !(VLRNew(mu,lwave,RHalf(iR),LRD) + Eth(i), i=1,size2)
+!        call dampF(RHalf(iR),0.434d0,3,(/6,8,10/),-2,1,1,DM,DMP,DMPP)
+!!$        write(12,*) RHalf(iR),RHalf(iR)**6 * VHalfSinglet(iR), RHalf(iR)**6 * VHalfTriplet(iR), &
+!!$             RHalf(iR)**6 * (VLRNew(mu,lwave,RHalf(iR),LRD) - Ax * RHalf(iR)**gamx * exp(-bex*RHalf(iR))), &
+!!$             RHalf(iR)**6 * (VLRNew(mu,lwave,RHalf(iR),LRD) + Ax * RHalf(iR)**gamx * exp(-bex*RHalf(iR)))
+        write(12,*) 1d0/RHalf(iR)**2,RHalf(iR)**6 * VHalfSinglet(iR), RHalf(iR)**6 * VHalfTriplet(iR), &
+             RHalf(iR)**6 * (VLRNew(mu,lwave,RHalf(iR),LRD) ), &
+             RHalf(iR)**6 * (VLRNew(mu,lwave,RHalf(iR),LRD) )
+
+        write(11,*) RHalf(iR), (VLRNew(mu,lwave,RHalf(iR),LRD) + Eth(i), i=1, size2)
      enddo
 
   endif        
-
+!  stop
   write(51,*)
-  !stop
+
   write(6,'(A,f10.5,A)') " Emin = ",Egrid(1)/nKPerHartree,"nK"
   do iB = 1, NBgrid
      yi = ystart
@@ -2804,8 +2825,9 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
 !!$             0.43141949844339d11,-0.97616955325128d11,-0.77417530685917d11,0.17314133615879d12, &
 !!$             0.96118849114926d11,-0.21425463041449d12,-0.78513081754125d11, 0.17539493131251d12, &
 !!$             0.37939637008662d11,-0.85271868691526d11,-0.82123523240949d10,0.18626451751424d11/)
-!!$        nu0 = 0d0 !0.13148609d0  ! Set the BO corrections to zero since they would modify the C6
-!!$        nu1 = 0d0 !2.08523853d0
+
+        nu0 = 0d0 !0.13148609d0  ! Set the BO corrections to zero since they would modify the C6
+        nu1 = 0d0 !2.08523853d0
 
         !THE FOLLOWING FOR NO BORN OPPENHEIMER CORRECTION
         RSR = 2.870d0
@@ -2925,10 +2947,10 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         Scorr = Sval(1) * HartreePerInvcm/(BohrPerAngstrom**2)!3.68d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
         write(6,'(A,d16.8,A)') "Li6 Singlet Correction Scorr = ", Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         do i=1,NPP
-           VV(i) = VV(i)*(1d0 - 0.5d0*(tanh( (XO(i) - RLR)/drswitch) + 1d0)) &
-                + 0.5d0*(tanh((XO(i)-RLR)/drswitch) + 1d0)* &
-                (-C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - &
-                C26/(XO(i)**26.0d0)) 
+!!$           VV(i) = VV(i)*(1d0 - 0.5d0*(tanh( (XO(i) - RLR)/drswitch) + 1d0)) &
+!!$                + 0.5d0*(tanh((XO(i)-RLR)/drswitch) + 1d0)* &
+!!$                (-C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - &
+!!$                C26/(XO(i)**26.0d0)) 
            
            if(XO(i).lt.re) then
               VV(i) = VV(i) + Scorr*(XO(i) - re)**2
@@ -2944,16 +2966,8 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         C10 = 2.78683d9
         RLR = 39d0*BohrPerAngstrom
         drswitch = 0.5d0*BohrPerAngstrom 
-
-        !average values from Tang et al
-!!$        C6 = 6.718721d6
-!!$        C8 = 1.1263189d8 
-!!$        C10 = 2.7868873d9
         C26 = 0d0
-!!$        !Average values from singlet/triplet channels of POTGENLI
-!!$        C6 = 0.5d0*(6.71527d6+6.7185d6)
-!!$        C8 = 0.5d0*(1.12588d8+1.12629d8)
-!!$        C10 = 0.5d0*(2.78604d9+2.78683d9)        
+
         call POTGENLI2(1,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)!,.FALSE.)
 
 
@@ -2961,10 +2975,10 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         Scorr = Sval(1) * HartreePerInvcm/(BohrPerAngstrom**2)!1.47d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  !Singlet Correction
         write(6,'(A,d16.8,A)') "Li7 Singlet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         do i=1,NPP
-           VV(i) = VV(i)*(1d0 - 0.5d0*(tanh( (XO(i) - RLR)/drswitch) + 1d0)) &
-                + 0.5d0*(tanh((XO(i)-RLR)/drswitch) + 1d0)* &
-                (-C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - &
-                C26/(XO(i)**26.0d0)) 
+!!$           VV(i) = VV(i)*(1d0 - 0.5d0*(tanh( (XO(i) - RLR)/drswitch) + 1d0)) &
+!!$                + 0.5d0*(tanh((XO(i)-RLR)/drswitch) + 1d0)* &
+!!$                (-C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - &
+!!$                C26/(XO(i)**26.0d0)) 
 
            if(XO(i).lt.re) then
               VV(i) = VV(i) + Scorr*(XO(i) - re)**2
@@ -2973,7 +2987,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
 
      case (8) !Cesium singlet
         !****************************************************************************************************
-        ! Coxon and Hajigeurgiou MLR3 recommended parameters J. Chem. Phys 132 094105
+        ! Coxon and Hajigeurgiou MLR3 recommended parameters J. Chem. Phys 132 094105.  This does not seem to reproduce the resonances at all
 !!$        N = 18
 !!$        allocate(A(N))
 !!$        p = 5d0
@@ -3013,10 +3027,10 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
              1.5781d2, 1.175d2, -7.5d1, -3.67d1, 1.3d1/)
         !****************************************************************************************************
         ! REPLACE THE BALDWIN PARAMETERS (ABOVE) WITH THOSE FROM M2012 BERNINGER ET AL
-!!$        C6 = 3.32078d7
-!!$        C8 = 1.3621d9
-!!$        C10 = 0d0
-
+        !C6 = 3.320782243d7
+        !C8 = 1.36210061d9
+        !C10 = 0d0
+        !****************************************************************************************************
         Scorr = Sval(1) * HartreePerInvcm/(BohrPerAngstrom**2)
         write(6,'(A,d16.8,A)') "Cs133 singlet Correction Scorr = ",Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
      case default
@@ -3076,8 +3090,8 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         N = 21
         allocate(A(N))
 
-!!$        nu0 = 0d0! 0.23803737d0  ! Set the BO corrections to zero since they effectively modify the asymptotic C6
-!!$        nu1 = 0.0d0
+        nu0 = 0d0! 0.23803737d0  ! Set the BO corrections to zero since they effectively modify the asymptotic C6
+        nu1 = 0.0d0
 
         RSR = 4.750d0
         NS = 6d0
@@ -3178,10 +3192,10 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         Scorr = Sval(2) * HartreePerInvcm/(BohrPerAngstrom**2) !1.5546d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  !Triplet Correction
         write(6,'(A,d16.8,A)') "Li6 Triplet Correction Scorr = ", Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         do i=1,NPP
-           VV(i) = VV(i)*(1d0 - 0.5d0*(tanh( (XO(i) - RLR)/drswitch) + 1d0)) &
-                + 0.5d0*(tanh((XO(i)-RLR)/drswitch) + 1d0)* &
-                (-C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - &
-                C26/(XO(i)**26.0d0)) 
+!!$           VV(i) = VV(i)*(1d0 - 0.5d0*(tanh( (XO(i) - RLR)/drswitch) + 1d0)) &
+!!$                + 0.5d0*(tanh((XO(i)-RLR)/drswitch) + 1d0)* &
+!!$                (-C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - &
+!!$                C26/(XO(i)**26.0d0)) 
 
            if(XO(i).lt.re) then
               VV(i) = VV(i) + Scorr*(XO(i) - re)**2
@@ -3213,10 +3227,10 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         Scorr =  Sval(2) * HartreePerInvcm/(BohrPerAngstrom**2)!1.835d-6 * HartreePerInvcm/(BohrPerAngstrom**2) !Triplet Correction
         write(6,'(A,d16.8,A)') "Li7 Triplet Correction Scorr = ", Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         do i=1,NPP
-           VV(i) = VV(i)*(1d0 - 0.5d0*(tanh( (XO(i) - RLR)/drswitch) + 1d0)) &
-                + 0.5d0*(tanh((XO(i)-RLR)/drswitch) + 1d0)* &
-                (-C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - &
-                C26/(XO(i)**26.0d0)) 
+!!$           VV(i) = VV(i)*(1d0 - 0.5d0*(tanh( (XO(i) - RLR)/drswitch) + 1d0)) &
+!!$                + 0.5d0*(tanh((XO(i)-RLR)/drswitch) + 1d0)* &
+!!$                (-C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - &
+!!$                C26/(XO(i)**26.0d0)) 
            
            if(XO(i).lt.re) then
               VV(i) = VV(i) + Scorr*(XO(i) - re)**2
@@ -3259,9 +3273,9 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         !****************************************************************************************************
         !        Aex=0d0
         !BERNINGER ET AL CN PARAMETERS
-!!$        C6 = 3.32078d7
-!!$        C8 = 1.3621d9
-!!$        C10 = 0d0
+        !C6 = 3.320782243d7
+        !C8 = 1.36210061d9
+        !C10 = 0d0
         
 
         Scorr = Sval(2) * HartreePerInvcm/(BohrPerAngstrom**2)
@@ -3279,20 +3293,21 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
      if (ISTATE.EQ.8) then  ! Cesium only
         !****************************************************************************************************
         !BALDWIN
-!!$        s = -1d0
-!!$        bds = 3.30d0
-!!$        cds = 0.423d0
+        s = -1d0
+        bds = 3.30d0
+        cds = 0.423d0
         rhoAB = 0.434d0
         LRD%rhoAB=rhoAB
         LRD%DAMP=.false.
-        RLR = 39d0*BohrPerAngstrom
+        RLR = 39d0 * BohrPerAngstrom!39d0*BohrPerAngstrom
         drswitch = 0.5d0*BohrPerAngstrom 
-        call dampF(re,rhoAB,3,(/6,8,10/),-2,1,1,DM,DMP,DMPP)
-!!$        DDS6re = (1 - Exp(-(rhoAB*re)*((bds/6d0) + (cds*rhoAB*re)/Sqrt(6d0))))**(6d0+s)
-!!$        DDS8re = (1 - Exp(-(rhoAB*re)*((bds/8d0) + (cds*rhoAB*re)/Sqrt(8d0))))**(8d0+s)
-!!$        DDS10re = (1 - Exp(-(rhoAB*re)*((bds/10d0) + (cds*rhoAB*re)/Sqrt(10d0))))**(10d0+s)
-!!$        uLRre = DDS6re*(C6/(re**6.0d0)) + DDS8re*(C8/(re**8.0d0)) + DDS10re*(C10/(re**10.0d0))
-        uLRre = DM(1)*(C6/(re**6.0d0)) + DM(2)*(C8/(re**8.0d0)) + DM(3)*(C10/(re**10.0d0))
+!        call dampF(re,rhoAB,3,(/6,8,10/),-2,1,1,DM,DMP,DMPP)
+        DDS6re = (1 - Exp(-(rhoAB*re)*((bds/6d0) + (cds*rhoAB*re)/Sqrt(6d0))))**(6d0+s)
+        DDS8re = (1 - Exp(-(rhoAB*re)*((bds/8d0) + (cds*rhoAB*re)/Sqrt(8d0))))**(8d0+s)
+        DDS10re = (1 - Exp(-(rhoAB*re)*((bds/10d0) + (cds*rhoAB*re)/Sqrt(10d0))))**(10d0+s)
+        uLRre = DDS6re*(C6/(re**6.0d0)) + DDS8re*(C8/(re**8.0d0)) + DDS10re*(C10/(re**10.0d0))
+!        uLRre = (C6/(re**6.0d0)) + (C8/(re**8.0d0)) + (C10/(re**10.0d0))
+!        uLRre = DM(1)*(C6/(re**6.0d0)) + DM(2)*(C8/(re**8.0d0)) + DM(3)*(C10/(re**10.0d0))
                 !BALDWIN
         !****************************************************************************************************
 
@@ -3300,13 +3315,13 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
            !****************************************************************************************************
            !BALDWIN
            ! Use Le Roy routine for the damping functions instead of ours (Both agree and work fine.)
-           call dampF(XO(i),rhoAB,3,(/6,8,10/),-2,1,1,DM,DMP,DMPP)
-!!$           DDS6 = (1 - Exp(-(rhoAB*XO(i))*(bds/6d0 + (cds*rhoAB*XO(i))/Sqrt(6d0))))**(6d0+s)
-!!$           DDS8 = (1 - Exp(-(rhoAB*XO(i))*(bds/8d0 + (cds*rhoAB*XO(i))/Sqrt(8d0))))**(8d0+s)
-!!$           DDS10 = (1 - Exp(-(rhoAB*XO(i))*(bds/10d0 + (cds*rhoAB*XO(i))/Sqrt(10d0))))**(10d0+s)
-!!$           uLR = DDS6*(C6/(XO(i)**6.0d0)) + DDS8*(C8/(XO(i)**8.0d0)) + DDS10*(C10/(XO(i)**10.0d0))
-           
-           uLR = DM(1)*(C6/(XO(i)**6.0d0)) + DM(2)*(C8/(XO(i)**8.0d0)) + DM(3)*(C10/(XO(i)**10.0d0))
+ !          call dampF(XO(i),rhoAB,3,(/6,8,10/),-2,1,1,DM,DMP,DMPP)
+           DDS6 = (1 - Exp(-(rhoAB*XO(i))*(bds/6d0 + (cds*rhoAB*XO(i))/Sqrt(6d0))))**(6d0+s)
+           DDS8 = (1 - Exp(-(rhoAB*XO(i))*(bds/8d0 + (cds*rhoAB*XO(i))/Sqrt(8d0))))**(8d0+s)
+           DDS10 = (1 - Exp(-(rhoAB*XO(i))*(bds/10d0 + (cds*rhoAB*XO(i))/Sqrt(10d0))))**(10d0+s)
+           uLR = DDS6*(C6/(XO(i)**6.0d0)) + DDS8*(C8/(XO(i)**8.0d0)) + DDS10*(C10/(XO(i)**10.0d0))
+!           uLR = (C6/(XO(i)**6.0d0)) + (C8/(XO(i)**8.0d0)) + (C10/(XO(i)**10.0d0))           
+!           uLR = DM(1)*(C6/(XO(i)**6.0d0)) + DM(2)*(C8/(XO(i)**8.0d0)) + DM(3)*(C10/(XO(i)**10.0d0))
            ypref = (XO(i)**p - ref**p)/(XO(i)**p + ref**p)
            ypeq = (XO(i)**p - re**p)/(XO(i)**p + re**p)
            yqref = (XO(i)**q - ref**q)/(XO(i)**q + ref**q)
@@ -3320,14 +3335,14 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
 
            phiMLR = phiMLR + ypref*phiinf
            ! MLR potential
-!           VV(i) = (De*(1-(uLR/uLRre)*Exp(-phiMLR*ypeq))**2 - De)
+           VV(i) = (De*(1d0-(uLR/uLRre)*Exp(-phiMLR*ypeq))**2 - De)
 
            ! USE THIS MODIFIED MLR BALDWIN POTENTIAL THAT FORCES V->VLR AT LONG RANGE!!!
            ! NOTE THAT THE SVAL PARAMETERS IN THE INPUT FILE ARE TUNED SO THAT THIS POTENTIAL GIVES THE BERNINGER ET AL SCATTERING LENGTHS
-           VV(i) = (De*(1-(uLR/uLRre)*Exp(-phiMLR*ypeq))**2 - De)*(1d0 - 0.5d0*(tanh( (XO(i) - RLR)/drswitch) + 1d0)) &
-                + 0.5d0*(tanh((XO(i)-RLR)/drswitch) + 1d0)* &
-                (-C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - &
-                C26/(XO(i)**26.0d0)) 
+!!$           VV(i) = (De*(1d0-(uLR/uLRre)*Exp(-phiMLR*ypeq))**2 - De)*(1d0 - 0.5d0*(tanh( (XO(i) - RLR)/drswitch) + 1d0)) &
+!!$                + 0.5d0*(tanh((XO(i)-RLR)/drswitch) + 1d0)* &
+!!$                (-C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - &
+!!$                C26/(XO(i)**26.0d0)) 
            !BALDWIN
            !****************************************************************************************************
            !****************************************************************************************************
@@ -3386,8 +3401,8 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
            if(XO(i) .LE. RM) then
               VV(i) = VV(i) + Scorr*(XO(i) - RM)**2
            endif
-           ! Comment out to remove BO Corrections since they change the long-range potential  (NPM 8-2-21)
-           !VV(i) = VV(i) + (nu0 + nu1*((XO(i) - RM)/(XO(i) + B*RM)))*(1 - MU/MUREF)*((2*RM)/(XO(i)+RM))**6 
+           ! Comment out to remove BO Corrections (or set nu0,nu1=0) since they change the long-range potential  (NPM 8-2-21)
+           VV(i) = VV(i) + (nu0 + nu1*((XO(i) - RM)/(XO(i) + B*RM)))*(1 - MU/MUREF)*((2*RM)/(XO(i)+RM))**6 
         enddo
 
      endif
@@ -4061,6 +4076,16 @@ subroutine CalcEDFTKSR(i1,i2,s1,s2,hf2sym,energy,Eth,AsymC,size2,Ksr,InterpQDSin
   enddo
 
 end subroutine CalcEDFTKSR
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+subroutine KQQCotGamRoots(KQQ,CotGammaMat,EnergyRoots,NQ,NB)
+  ! This routine should calclate the energy roots of det|KQQ-cot(gamma)|which give the energy of the shallow bound
+  ! states in MQDT.  The 
+  integer NQ
+  double precision KQQ(NQ,NQ),CotGammaMat(NQ,NQ),EnegyRoots,NB
+
+end subroutine KQQCotGamRoots
+
+
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 double precision function UniversalGamma(Energy,EvdW)
   implicit none
