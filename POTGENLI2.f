@@ -107,7 +107,7 @@ c ** Specify up to 10 'adiabatic' BOB parameters for up to 4 states
      1    1.066d0,2.98d0,-0.32d0,2.3d0,-7.5d0,3.3d0,
      2     1.367d0,2.7d0,-1.3d0,-1.8d0, 2*0.d0/
 c ** ZERO OUT THE BOB CORRECTIONS (NPM-22)      
-C      DATA U1A/24*0.d0/
+      DATA U1A/24*0.d0/
 ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
 c     NPM: CHANGE THE Cn Coefficients TO (1) BE THE SAME FOR THE SINGLET/TRIPLET STATES AND

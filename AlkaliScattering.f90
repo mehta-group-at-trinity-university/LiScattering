@@ -2931,11 +2931,10 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         RLR = 39d0*BohrPerAngstrom
         drswitch = 0.5d0*BohrPerAngstrom 
 
-        !Averages of thFore two isotopes from Tang et al.
+        !Averages of the two isotopes from Tang et al.
 !!$        C6 = 6.718721d6
 !!$        C8 = 1.1263189d8 
 !!$        C10 = 2.7868873d9
-
 
         C26 = 0d0
         call POTGENLI2(1,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
@@ -2969,7 +2968,6 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         C26 = 0d0
 
         call POTGENLI2(1,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)!,.FALSE.)
-
 
         re=2.672993d0
         Scorr = Sval(1) * HartreePerInvcm/(BohrPerAngstrom**2)!1.47d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  !Singlet Correction
