@@ -901,7 +901,7 @@ program main
   call SetupPotential(ISTATE,ESTATE,mu,muref,Nsr+1,VLIM,Rsr(0:Nsr)*BohrPerAngstrom,VsrTriplet(0:Nsr),LRD,Sval)
   
   if(writepot) then
-     write(6,'(A)') "See fort.10 and fort.30 for the singlet/triplet potentials"
+     write(6,'(A)') "See PotsConvergence*.dat for the singlet/triplet potentials"
      do iR=0, Nsr/10
         write(10,*) Rsr(iR), abs((VsrSinglet(iR) - VLRNew(mu,lwave,Rsr(iR),LRD))/VsrSinglet(iR)), &
              abs((VsrTriplet(iR) - VLRNew(mu,lwave,Rsr(iR),LRD))/VsrTriplet(iR))
@@ -2921,7 +2921,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
              -0.131052566070353687d13, -0.385189954553600769d11, 0.135760501276292969d13, &
              -0.108790546442390417d13, 0.282033835345282288d12/)
 
-     case (6) !Lithium-6 singlet
+     case (6) !Lithium-6 singlet.  These are the same for the singlet/triplet of Li-6
         IMN1 = 6
         IMN2 = IMN1
         !Li-6 values from Tang et al
@@ -2935,7 +2935,6 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
 !!$        C6 = 6.718721d6
 !!$        C8 = 1.1263189d8 
 !!$        C10 = 2.7868873d9
-
         C26 = 0d0
         call POTGENLI2(1,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
 !!$        C6 = 0.5d0*(6.71527d6+6.7185d6)
@@ -2943,7 +2942,7 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
 !!$        C10 = 0.5d0*(2.78604d9+2.78683d9)
 
         re = 2.6729932d0
-        Scorr = Sval(1) * HartreePerInvcm/(BohrPerAngstrom**2)!3.68d-6 * HartreePerInvcm/(BohrPerAngstrom**2)  ! SingletCorrection
+        Scorr = Sval(1) * HartreePerInvcm/(BohrPerAngstrom**2) ! SingletCorrection
         write(6,'(A,d16.8,A)') "Li6 Singlet Correction Scorr = ", Scorr/(HartreePerInvcm/(BohrPerAngstrom**2))," Hartree/bohr^2"
         do i=1,NPP
 !!$           VV(i) = VV(i)*(1d0 - 0.5d0*(tanh( (XO(i) - RLR)/drswitch) + 1d0)) &
@@ -3167,10 +3166,11 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
      case (6) !Lithium-6 triplet
         IMN1 = 6
         IMN2 = IMN1
-        !Li-6 values from Tang et al
+        !Li-6 values from Tang et al.  These are the same for the singlet/triplet of Li-6
         C6 = 6.71899d6
         C8 = 1.12635d8
         C10 = 2.78694d9
+
         RLR = 39d0*BohrPerAngstrom
         drswitch = 0.5d0*BohrPerAngstrom 
 
