@@ -101,13 +101,15 @@ c ** now specify 20 exponent parameters \beta_i for the 4 states
      c   1.23978D0,2.9415D0,2.4661D0,1.9912D0,1.6947D1,2.0506D1,
      d  -2.826D1,-5.565D1,9.68D0,4.61D1,2.D0,-1.43D1, 3*0.d0,
      e   -1.6373863D0,2.9197D-1,-5.5544D-1,-2.794D-1,-1.5993D0,
-     f   -6.73D-1,-1.23D0,-1.29D0,5.D-1,2.6D+0, 10*0.d0/
+     f     -6.73D-1,-1.23D0,-1.29D0,5.D-1,2.6D+0, 10*0.d0/
+      
 c ** Specify up to 10 'adiabatic' BOB parameters for up to 4 states
-      DATA U1A/0.194d0,-0.01d0,0.39d0, 3*0.d0, 0.059d0, 5*0.d0,
-     1    1.066d0,2.98d0,-0.32d0,2.3d0,-7.5d0,3.3d0,
-     2     1.367d0,2.7d0,-1.3d0,-1.8d0, 2*0.d0/
-c ** ZERO OUT THE BOB CORRECTIONS (NPM-22)      
+c$$$      DATA U1A/0.194d0,-0.01d0,0.39d0, 3*0.d0, 0.059d0, 5*0.d0,
+c$$$     1    1.066d0,2.98d0,-0.32d0,2.3d0,-7.5d0,3.3d0,
+c$$$     2     1.367d0,2.7d0,-1.3d0,-1.8d0, 2*0.d0/
+c ** ZERO OUT THE BOB CORRECTIONS by commenting out the above and adding the next line (NPM-22)      
       DATA U1A/24*0.d0/
+
 ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
 c     NPM: CHANGE THE Cn Coefficients TO (1) BE THE SAME FOR THE SINGLET/TRIPLET STATES AND
@@ -196,11 +198,11 @@ c ** If appropriate, read parameters & prepare to add mass-dep. BOB corrn
           CALL MASSES(IAN2,MN2R,NAME2,GEL,GNS,RMASS2,ABUND)
 c   For simplicity, first zero out all correction function coefficients
           DO  I=0,NCMAX
-              U1(I)= 0.d0
-              U2(I)= 0.d0
-              T1(I)= 0.d0
-              T2(I)= 0.d0
-              ENDDO
+             U1(I)= 0.d0
+             U2(I)= 0.d0
+             T1(I)= 0.d0
+             T2(I)= 0.d0
+          ENDDO
           FC1= 0.d0
           FC2= 0.d0
           FG1= 0.d0

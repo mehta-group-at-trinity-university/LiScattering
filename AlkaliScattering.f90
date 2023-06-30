@@ -151,7 +151,7 @@ module hyperfine
   double precision, parameter :: muB = 1.3996244936142    !Bohr magneton in units (MHz/Gauss)
   double precision, parameter :: gs = 2.00231930436256d0 ! electron g factor
   double precision, parameter :: muN = 0.000762267d0 !Nuclear magneton in units (MHz/Gauss)
-
+  
 
   type hf1atom
      integer f, m
@@ -1100,8 +1100,9 @@ program main
         !        CalcProjOp = .false.
         !if(iB.eq.1)
         CalcProjOp = .true.
-        call CalcEDFTKSR(nspin1,nspin1,espin1,espin1,hf2symTempGlobal,energy,Eth,&
-                     AsymChannels,size2,Ksr,InterpQDSinglet,InterpQDTriplet,CalcProjOp,KsrEIFT)
+        call CalcEDFTKSR(nspin1,nspin1,espin1,espin1,hf2symTempGlobal,&
+        energy,Eth, AsymChannels,size2,Ksr,InterpQDSinglet,InterpQDTriplet, &
+        CalcProjOp,KsrEIFT)
 
      endif
      KsrEIFT(:,:) = tan(pi*Interpolated(0d0,InterpQDTriplet)) * Tdressed(:,:) &
@@ -1219,7 +1220,7 @@ program main
 
 
   if(writepot) then
-     write(6,'(A)') "See LRPotsData files for long-range potentials with zeeman offsets."
+!     write(6,'(A)') "See LRPotsData files for long-range potentials with zeeman offsets."
      write(6,'(A)') "See PotsConvergence files for convergence to long-range potential."
      do iR=1, 200000, 20
         ! Cs test case----------------------------------
@@ -1240,18 +1241,18 @@ program main
 !             abs(RHalf(iR)**6d0 * (VHalfTriplet(iR) &
 !             - (VLRNew(mu,lwave,RHalf(iR),LRD) + Ax * RHalf(iR)**gamx * exp(-bex*RHalf(iR))))) 
      enddo
-
-     do iR = 1, NHalf/10, 200
-!        call dampF(RHalf(iR),0.434d0,3,(/6,8,10/),-2,1,1,DM,DMP,DMPP)
+!!$
+!!$     do iR = 1, NHalf/10, 200
+!!$!        call dampF(RHalf(iR),0.434d0,3,(/6,8,10/),-2,1,1,DM,DMP,DMPP)
 !!$        write(12,*) RHalf(iR),RHalf(iR)**6 * VHalfSinglet(iR), RHalf(iR)**6 * VHalfTriplet(iR), &
 !!$             RHalf(iR)**6 * (VLRNew(mu,lwave,RHalf(iR),LRD) - Ax * RHalf(iR)**gamx * exp(-bex*RHalf(iR))), &
 !!$             RHalf(iR)**6 * (VLRNew(mu,lwave,RHalf(iR),LRD) + Ax * RHalf(iR)**gamx * exp(-bex*RHalf(iR)))
-        write(12,*) 1d0/RHalf(iR)**2,RHalf(iR)**6 * VHalfSinglet(iR), RHalf(iR)**6 * VHalfTriplet(iR), &
-             RHalf(iR)**6 * (VLRNew(mu,lwave,RHalf(iR),LRD) ), &
-             RHalf(iR)**6 * (VLRNew(mu,lwave,RHalf(iR),LRD) )
-
-        write(11,*) RHalf(iR), (VLRNew(mu,lwave,RHalf(iR),LRD) + Eth(i), i=1, size2)
-     enddo
+!!$        write(12,*) 1d0/RHalf(iR)**2,RHalf(iR)**6 * VHalfSinglet(iR), RHalf(iR)**6 * VHalfTriplet(iR), &
+!!$             RHalf(iR)**6 * (VLRNew(mu,lwave,RHalf(iR),LRD) ), &
+!!$             RHalf(iR)**6 * (VLRNew(mu,lwave,RHalf(iR),LRD) )
+!!$
+!!$        write(11,*) RHalf(iR), (VLRNew(mu,lwave,RHalf(iR),LRD) + Eth(i), i=1, size2)
+!!$     enddo
 
   endif        
 !  stop
@@ -2912,13 +2913,20 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         gamma = 4.59105d0
         beta = 2.36594d0
         A = (/-6022.04193d0, -0.200727603516760356d1, 0.302710123527149044d5, 0.952678499004718833d4, &
-             -0.263132712461278206d5,-0.414199125447689439d5, 0.100454724828577862d6, &
-             0.950433282843468915d5, -0.502202855817934591d7, -0.112315449566019326d7, &
-             0.105565865633448541d9,-0.626929930064849034d8, -0.134149332172454119d10,&
-             0.182316049840707183d10, 0.101425117010240822d11, -0.220493424364290123d11, &
-             -0.406817871927934494d11, 0.144231985783280396d12, 0.379491474653734665d11, &
-             -0.514523137448139771d12, 0.342211848747264038d12, 0.839583017514805054d12, &
-             -0.131052566070353687d13, -0.385189954553600769d11, 0.135760501276292969d13, &
+             -0.263132712461278206d5,-0.414199125447689439d5, &
+             0.100454724828577862d6, &
+             0.950433282843468915d5, -0.502202855817934591d7, &
+             -0.112315449566019326d7, &
+             0.105565865633448541d9,-0.626929930064849034d8, &
+             -0.134149332172454119d10, &
+             0.182316049840707183d10, 0.101425117010240822d11, &
+             -0.220493424364290123d11, &
+             -0.406817871927934494d11, 0.144231985783280396d12, &
+             0.379491474653734665d11, &
+             -0.514523137448139771d12, 0.342211848747264038d12, &
+             0.839583017514805054d12, &
+             -0.131052566070353687d13, -0.385189954553600769d11, &
+             0.135760501276292969d13, &
              -0.108790546442390417d13, 0.282033835345282288d12/)
 
      case (6) !Lithium-6 singlet.  These are the same for the singlet/triplet of Li-6
@@ -3013,7 +3021,9 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         !Aex=0d0
         !BALDWIN PARAMETERS
         C6 = 3.3164d7
+        !C6 = 3.32d7
         C8 = 1.38d9
+        !C8 = 1.37d9
         C10 = 6.01d10
         C26 = 0d0
         ref = 6.2d0
@@ -3261,8 +3271,10 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         re = 6.226182057299d0
         De = 279.2222367314d0        
         !BALDWIN CN PARAMETERS
-        C6 = 3.3164d7
+        C6 = 3.3164d7 ! This comes to 6881.38 Hartree/bohr^2
+        !C6 = 3.32d7 
         C8 = 1.38d9
+        !C8 = 1.37d9 !NPM check effect of changing C8
         C10 = 6.01d10
         C26 = 0d0
         ref = 8.7005d0
@@ -3297,15 +3309,15 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
         rhoAB = 0.434d0
         LRD%rhoAB=rhoAB
         LRD%DAMP=.false.
-        RLR = 39d0 * BohrPerAngstrom!39d0*BohrPerAngstrom
+        RLR = 38d0 * BohrPerAngstrom!39d0*BohrPerAngstrom
         drswitch = 0.5d0*BohrPerAngstrom 
-!        call dampF(re,rhoAB,3,(/6,8,10/),-2,1,1,DM,DMP,DMPP)
-        DDS6re = (1 - Exp(-(rhoAB*re)*((bds/6d0) + (cds*rhoAB*re)/Sqrt(6d0))))**(6d0+s)
-        DDS8re = (1 - Exp(-(rhoAB*re)*((bds/8d0) + (cds*rhoAB*re)/Sqrt(8d0))))**(8d0+s)
-        DDS10re = (1 - Exp(-(rhoAB*re)*((bds/10d0) + (cds*rhoAB*re)/Sqrt(10d0))))**(10d0+s)
-        uLRre = DDS6re*(C6/(re**6.0d0)) + DDS8re*(C8/(re**8.0d0)) + DDS10re*(C10/(re**10.0d0))
+        call dampF(re,rhoAB,3,(/6,8,10/),-2,1,1,DM,DMP,DMPP)
+        !DDS6re = (1 - Exp(-(rhoAB*re)*((bds/6d0) + (cds*rhoAB*re)/Sqrt(6d0))))**(6d0+s)
+        !DDS8re = (1 - Exp(-(rhoAB*re)*((bds/8d0) + (cds*rhoAB*re)/Sqrt(8d0))))**(8d0+s)
+        !DDS10re = (1 - Exp(-(rhoAB*re)*((bds/10d0) + (cds*rhoAB*re)/Sqrt(10d0))))**(10d0+s)
+        !uLRre = DDS6re*(C6/(re**6.0d0)) + DDS8re*(C8/(re**8.0d0)) + DDS10re*(C10/(re**10.0d0))
 !        uLRre = (C6/(re**6.0d0)) + (C8/(re**8.0d0)) + (C10/(re**10.0d0))
-!        uLRre = DM(1)*(C6/(re**6.0d0)) + DM(2)*(C8/(re**8.0d0)) + DM(3)*(C10/(re**10.0d0))
+        uLRre = DM(1)*(C6/(re**6.0d0)) + DM(2)*(C8/(re**8.0d0)) + DM(3)*(C10/(re**10.0d0))
                 !BALDWIN
         !****************************************************************************************************
 
@@ -3313,13 +3325,13 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
            !****************************************************************************************************
            !BALDWIN
            ! Use Le Roy routine for the damping functions instead of ours (Both agree and work fine.)
- !          call dampF(XO(i),rhoAB,3,(/6,8,10/),-2,1,1,DM,DMP,DMPP)
-           DDS6 = (1 - Exp(-(rhoAB*XO(i))*(bds/6d0 + (cds*rhoAB*XO(i))/Sqrt(6d0))))**(6d0+s)
-           DDS8 = (1 - Exp(-(rhoAB*XO(i))*(bds/8d0 + (cds*rhoAB*XO(i))/Sqrt(8d0))))**(8d0+s)
-           DDS10 = (1 - Exp(-(rhoAB*XO(i))*(bds/10d0 + (cds*rhoAB*XO(i))/Sqrt(10d0))))**(10d0+s)
-           uLR = DDS6*(C6/(XO(i)**6.0d0)) + DDS8*(C8/(XO(i)**8.0d0)) + DDS10*(C10/(XO(i)**10.0d0))
+           call dampF(XO(i),rhoAB,3,(/6,8,10/),-2,1,1,DM,DMP,DMPP)
+ !          DDS6 = (1 - Exp(-(rhoAB*XO(i))*(bds/6d0 + (cds*rhoAB*XO(i))/Sqrt(6d0))))**(6d0+s)
+ !          DDS8 = (1 - Exp(-(rhoAB*XO(i))*(bds/8d0 + (cds*rhoAB*XO(i))/Sqrt(8d0))))**(8d0+s)
+  !         DDS10 = (1 - Exp(-(rhoAB*XO(i))*(bds/10d0 + (cds*rhoAB*XO(i))/Sqrt(10d0))))**(10d0+s)
+   !        uLR = DDS6*(C6/(XO(i)**6.0d0)) + DDS8*(C8/(XO(i)**8.0d0)) + DDS10*(C10/(XO(i)**10.0d0))
 !           uLR = (C6/(XO(i)**6.0d0)) + (C8/(XO(i)**8.0d0)) + (C10/(XO(i)**10.0d0))           
-!           uLR = DM(1)*(C6/(XO(i)**6.0d0)) + DM(2)*(C8/(XO(i)**8.0d0)) + DM(3)*(C10/(XO(i)**10.0d0))
+           uLR = DM(1)*(C6/(XO(i)**6.0d0)) + DM(2)*(C8/(XO(i)**8.0d0)) + DM(3)*(C10/(XO(i)**10.0d0))
            ypref = (XO(i)**p - ref**p)/(XO(i)**p + ref**p)
            ypeq = (XO(i)**p - re**p)/(XO(i)**p + re**p)
            yqref = (XO(i)**q - ref**q)/(XO(i)**q + ref**q)
@@ -3337,10 +3349,10 @@ SUBROUTINE SetupPotential(ISTATE, ESTATE, MU, MUREF, NPP, VLIM, XO, VV, LRD,Sval
 
            ! USE THIS MODIFIED MLR BALDWIN POTENTIAL THAT FORCES V->VLR AT LONG RANGE!!!
            ! NOTE THAT THE SVAL PARAMETERS IN THE INPUT FILE ARE TUNED SO THAT THIS POTENTIAL GIVES THE BERNINGER ET AL SCATTERING LENGTHS
-!!$           VV(i) = (De*(1d0-(uLR/uLRre)*Exp(-phiMLR*ypeq))**2 - De)*(1d0 - 0.5d0*(tanh( (XO(i) - RLR)/drswitch) + 1d0)) &
-!!$                + 0.5d0*(tanh((XO(i)-RLR)/drswitch) + 1d0)* &
-!!$                (-C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - &
-!!$                C26/(XO(i)**26.0d0)) 
+           VV(i) = (De*(1d0-(uLR/uLRre)*Exp(-phiMLR*ypeq))**2 - De)*(1d0 - 0.5d0*(tanh( (XO(i) - RLR)/drswitch) + 1d0)) &
+                + 0.5d0*(tanh((XO(i)-RLR)/drswitch) + 1d0)* &
+                (-C6/(XO(i)**6.0d0) - C8/(XO(i)**8.0d0) - C10/(XO(i)**10.0d0) - &
+                C26/(XO(i)**26.0d0)) 
            !BALDWIN
            !****************************************************************************************************
            !****************************************************************************************************
@@ -4053,7 +4065,7 @@ subroutine CalcEDFTKSR(i1,i2,s1,s2,hf2sym,energy,Eth,AsymC,size2,Ksr,InterpQDSin
                  lambda=0d0
                  call MakeLambdaProj(s1,s2,S,MS,i1,i2,I,MI, hf2sym, size2, lambda) !Calculate <{alpha,beta}|lambda><lambda|{alphap, betap}>
                  temp1 = MATMUL(TRANSPOSE(AsymC),lambda) !Rotate to the field-dressed states.
-                 temp2 = MATMUL(temp1,AsymC) !Rotate to the field-dressed states.
+                 temp2 = MATMUL(temp1,AsymC) !Rotate to the field-dressed states. <i|lambda><lambda|j>
                  lambda = temp2
               endif
               Ebar = 0d0

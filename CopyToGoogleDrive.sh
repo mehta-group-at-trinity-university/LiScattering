@@ -9,6 +9,18 @@ cp AlkaliScattering.f90 $paperdir
 cp AlkaliScattering.x $paperdir/Li-6/LD/
 cp *.mod $paperdir/Li-6/LD/
 
+rm $paperdir/ForTimonHilkerLi-6/LD/AlkaliScattering*.x
+rm $paperdir/ForTimonHilkerLi-6/LD/*.mod
+cp AlkaliScattering.f90 $paperdir
+cp AlkaliScattering.x $paperdir/ForTimonHilkerLi-6/LD/
+cp *.mod $paperdir/ForTimonHilkerLi-6/LD/
+
+rm $paperdir/ForTimonHilkerLi-6/MQDT/AlkaliScattering*.x
+rm $paperdir/ForTimonHilkerLi-6/MQDT/*.mod
+cp AlkaliScattering.f90 $paperdir
+cp AlkaliScattering.x $paperdir/ForTimonHilkerLi-6/MQDT/
+cp *.mod $paperdir/ForTimonHilkerLi-6/MQDT/
+
 rm $paperdir/Li-6/MQDT/AlkaliScattering.x
 rm $paperdir/Li-6/MQDT/*.mod
 cp AlkaliScattering.x $paperdir/Li-6/MQDT/
