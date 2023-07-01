@@ -687,7 +687,7 @@ program main
   Emax = Emax/HartreePermK
   If((MQDTMODE.eq.1).and.(CALCTYPE.eq.2)) then
      write(6,*) "Using full B-field range for calculation of Ksr and QDs."
-     Bmin = 0.1d0
+     Bmin = -100d0!0.1d0
      Bmax = Bhuge
   endif
   !make the magnetic field grid and energy grid
