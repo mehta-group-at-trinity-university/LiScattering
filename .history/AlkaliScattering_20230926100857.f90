@@ -934,7 +934,7 @@ program main
   call CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,LRD,phiL,scale) ! calculate the phase standardization for lwave = 0
   call CalcNewGammaphaseFunction(RX,RF,NXF,size2,lwave,mu,betavdw,LRD,phiL,Eth,&
        InterpGammaphase,scale,MQDTMODE,cotgamfile)
-  
+       stop
   call CalcMQDTParameters(RX,RF,NXF,size2,lwave,mu,betavdw,LRD,phiL,Eth,&
        InterpA,InterpG,InterpTanEta,scale,MQDTMODE,AGEtafile)
 
@@ -1266,29 +1266,7 @@ program main
      call cpu_time(t1)
      call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
      HHZ2 = HHZ2*MHzPerHartree
-
-     !--------------------------------NEW ADDED 12/7/23------------------------------------!
-     !Use this section to print out the adiabatic potential curves as a function of R and
-     !study their spin-singlet/triplet admixtures
-     !-------------------------------------------------------------------------------------!
-     do iR=1, NAll/10, 20
-        VHZ(:,:) = VHalfSinglet(iR)*SPmat + VHalfTriplet(iR)*TPmat + HHZ2
-        call MyDSYEV(VHZ(:,:),size2,Eth,AsymChannels) ! Not this is not actually the asymchannels, it's the adiabatic potentials.
-        !Rotate the singlet operator
-        call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,SPmat,size2,0d0,TEMP,size2)
-        call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Sdressed,size2)
-
-        !Rotate the triplet projection operator
-        call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,TPmat,size2,0d0,TEMP,size2)
-        call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Tdressed,size2)
-        
-        write(1000,*) RHalf(iR), Eth
-        write(1001,*) RHalf(iR), (Sdressed(i,i), i=1,size2)
-        write(1002,*) RHalf(iR), (Tdressed(i,i), i=1,size2)
-        
-     enddo
-
-     !-------------------------------------------------------------------------------------!
+     
      !Find the asymptotic channel states
      VHZ(:,:) =  HHZ2(:,:) 
      call MyDSYEV(VHZ(:,:),size2,Eth,AsymChannels)
@@ -1296,7 +1274,7 @@ program main
      do i=1,size2
         EThreshMat(i,i) = Eth(i)
      enddo
-
+     
      Write(20,*) Bgrid(iB), Eth
      !----- Rotate into the asymptotic eigenstates (Use the B-field dressed states) -------!
      !Rotate the singlet projection operator
