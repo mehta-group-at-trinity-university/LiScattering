@@ -27,7 +27,7 @@ c!
 !         write(6,*) "calling asymptotic form"
          call BesselAsymNew(order,x,j,y,jp,yp)
       endif
-!     call bessjy(x,order,j,y,jp,yp)
+
       prefact = mygamma(halfd-1.d0)*2**(halfd-2d0)/df
       hypj = prefact*j*x**(-halfd+1d0)
       hypy = prefact*y*x**(-halfd+1d0)

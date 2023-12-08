@@ -931,10 +931,9 @@ program main
 !   endif        
   
   if (MQDTMODE.eq.2) goto 12  ! CONTINUE HERE IF MQDTMODE is 1 or 3
-  call CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,LRD,phiL,scale) ! calculate the phase standardization for lwave = 0
+  call CalcPhaseStandard(RX,0.5d0*RF,NXF/2,lwave,mu,betavdw,LRD,phiL,scale) ! calculate the phase standardization for lwave = 0
   call CalcNewGammaphaseFunction(RX,RF,NXF,size2,lwave,mu,betavdw,LRD,phiL,Eth,&
        InterpGammaphase,scale,MQDTMODE,cotgamfile)
-  
   call CalcMQDTParameters(RX,RF,NXF,size2,lwave,mu,betavdw,LRD,phiL,Eth,&
        InterpA,InterpG,InterpTanEta,scale,MQDTMODE,AGEtafile)
 
@@ -1266,33 +1265,7 @@ program main
      call cpu_time(t1)
      call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
      HHZ2 = HHZ2*MHzPerHartree
-
-     !--------------------------------NEW ADDED 12/7/23------------------------------------!
-     !Use this section to print out the adiabatic potential curves as a function of R and
-     !study their spin-singlet/triplet admixtures
-     !-------------------------------------------------------------------------------------!
      
-     if(iB.eq.1) then
-        write(6,*) "Starting calculation of adiabatic potentials"
-     do iR=1, NAll/10, 20
-        VHZ(:,:) = VHalfSinglet(iR)*SPmat + VHalfTriplet(iR)*TPmat + HHZ2
-        call MyDSYEV(VHZ(:,:),size2,Eth,AsymChannels) ! Not this is not actually the asymchannels, it's the adiabatic potentials.
-        !Rotate the singlet operator
-        call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,SPmat,size2,0d0,TEMP,size2)
-        call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Sdressed,size2)
-
-        !Rotate the triplet projection operator
-        call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,TPmat,size2,0d0,TEMP,size2)
-        call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Tdressed,size2)
-        
-        write(1000,*) RHalf(iR), Eth
-        write(1001,*) RHalf(iR), (Sdressed(i,i), i=1,size2)
-        write(1002,*) RHalf(iR), (Tdressed(i,i), i=1,size2)
-        
-     enddo
-     endif
-!     stop
-     !-------------------------------------------------------------------------------------!
      !Find the asymptotic channel states
      VHZ(:,:) =  HHZ2(:,:) 
      call MyDSYEV(VHZ(:,:),size2,Eth,AsymChannels)
@@ -1300,7 +1273,7 @@ program main
      do i=1,size2
         EThreshMat(i,i) = Eth(i)
      enddo
-
+     
      Write(20,*) Bgrid(iB), Eth
      !----- Rotate into the asymptotic eigenstates (Use the B-field dressed states) -------!
      !Rotate the singlet projection operator
@@ -2302,11 +2275,7 @@ subroutine MQDTNewfunctions(R1, R2, NA, scale, LRD, mu, lwave, energy, &
 end subroutine MQDTNewfunctions
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! This subroutine calculates the phase standardization according to the Ruzic scheme.
-<<<<<<< HEAD
-subroutine CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,Cvals,phiL)
-=======
 subroutine CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,LRD,phiL,scale)
->>>>>>> Nirav
   use units
     use datastructures
   implicit none
@@ -2318,12 +2287,8 @@ subroutine CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,LRD,phiL,scale)
   double precision   f0, g0, f0p, g0p, tanphi, alpha0(2), alphaf(2)
   integer, intent(in) :: lwave
   integer i, NXF
-<<<<<<< HEAD
-  double precision, external :: ksqrLR, VLR, VLRPrime
-=======
   CHARACTER(LEN=*), INTENT(IN) :: scale
   double precision, external :: ksqrLR, VLRNew, VLRNewPrime
->>>>>>> Nirav
 
   !-------------------------------------------------------
   !uncomment this block to test the phase standardization
@@ -2367,12 +2332,8 @@ subroutine CalcKsr(ym, Ksr, size2, NXM, RX, RM, energy, Eth, lwave, mu, LRD, bet
   double precision ym(size2,size2), Eth(size2),phir,ldg0,ldf0
   double precision f0mat(size2,size2), g0mat(size2,size2), f0pmat(size2,size2),g0pmat(size2,size2), Ksr(size2,size2)
   double precision temp1(size2,size2), temp2(size2,size2)
-<<<<<<< HEAD
-  double precision, external :: ksqrLR, VLR, VLRPrime
-=======
   double precision, external :: ksqrLR, VLRNew, VLRNewPrime
   CHARACTER(LEN=*), INTENT(IN) :: scale
->>>>>>> Nirav
   
   ! Ksr = (Y g - g')^(-1) (Y f - f')
   temp1 = 0d0
@@ -2444,11 +2405,7 @@ subroutine SetupCotGamma(RX,RF,NXF,size,lwave,mu,betavdw,LRD,phiL,Egrid,NEgrid,E
   
 end subroutine SetupCotGamma
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-<<<<<<< HEAD
-subroutine CalcCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Eth,Emin,Emax,InterpCotGamma)
-=======
 subroutine CalcCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,LRD,phiL,Eth,Emin,Emax,InterpCotGamma,scale)
->>>>>>> Nirav
   !This calculates the tan(gamma) MQDT parameter.  See Ruzic's PRA for details
   ! While in principle this can be calculated once as a function of energy, interpolated and
   ! evaluated at the relative energy for each channel, here I'm doing it the "brute force" way
@@ -2465,12 +2422,8 @@ subroutine CalcCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,LRD,phiL,Eth,Emi
   double precision alpha0(2),alphaf(2),energy, tangamma, gam,phir,ldg0,ldf0
   double precision, allocatable :: xgrid(:), Rgrid(:)
   double precision, allocatable :: phaseint(:)
-<<<<<<< HEAD
-  double precision, external :: ksqrLR, VLR, VLRPrime
-=======
   double precision, external :: ksqrLR, VLRNew, VLRNewPrime
   CHARACTER(LEN=*), INTENT(IN) :: scale
->>>>>>> Nirav
   type(InterpolatingFunction) :: InterpCotGamma
 
   EvdW = 1d0/(2d0*mu*betavdw**2)
@@ -2488,24 +2441,17 @@ subroutine CalcCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,LRD,phiL,Eth,Emi
 
   write(6,*) "E1, E2 = ",E1, E2
   call AllocateInterpolatingFunction(NE,kx,InterpCotGamma)
-  call GridMaker(InterpCotGamma%x, nE, E1, E2, "sqrroot")
+  call GridMaker(InterpCotGamma%x, nE, E1, E2, "linear")
   write(6,'(A)') "Calculating the MQDT parameter cot(gamma) as a function of energy"
 
   do iE = 1, NE
 
      energy = InterpCotGamma%x(iE)
      kappa = sqrt(2*mu*abs(energy))
-<<<<<<< HEAD
-     alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
-     alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
-          /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
-     call MQDTfunctions(RX, RF, NXF,'quadratic', Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
-=======
      alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLRNew(mu,lwave,RX,LRD))/RX**2))**(-0.25d0)
      alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRNewPrime(mu, lwave, RX,LRD))) &
           /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLRNew(mu,lwave,RX,LRD))**1.25d0)
      call MQDTfunctions(RX, RF, NXF,scale, LRD, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
->>>>>>> Nirav
      
      x = kappa*RF
 !     write(6,*) "alphaf = ", alphaf

@@ -1,4 +1,3 @@
-      
 c***********************************************************************
       SUBROUTINE POTGENLI2(ISTATE,IMN1,IMN2,NPP,VLIM,XO,RM2,VV)
 c ***********************************************************************
@@ -52,7 +51,6 @@ c =======================================================================
      1  PAD,QAD,PNA,NU1,NU2,NT1,NT2,NCMAX,PPAR,QPAR,NCN,NSR,NLR,NVARB,
      2  NPP,LNPT,GNS,GEL, NCMM,IVSR,LVSR,IDSTT,KDER,MM1, MMLR(9)
       CHARACTER*2 NAME1,NAME2
-
       REAL*8  A0,A1,A2,A3,ALFA,Asw,Rsw,BETA,BINF,B1,B2,BT,CSAV,U1INF,
      1 U2INF,T1INF,T2INF,YPAD,YQAD,YQADSM,YPNA,YPNASM,ABUND,CNN,
      2 DSCM,DX,DX1,FCT,FC1,FC2,FG1,FG2,MASS1,MASS2,RMASS1,RMASS2,REQ,
@@ -103,11 +101,35 @@ c ** now specify 20 exponent parameters \beta_i for the 4 states
      c   1.23978D0,2.9415D0,2.4661D0,1.9912D0,1.6947D1,2.0506D1,
      d  -2.826D1,-5.565D1,9.68D0,4.61D1,2.D0,-1.43D1, 3*0.d0,
      e   -1.6373863D0,2.9197D-1,-5.5544D-1,-2.794D-1,-1.5993D0,
-     f   -6.73D-1,-1.23D0,-1.29D0,5.D-1,2.6D+0, 10*0.d0/
+     f     -6.73D-1,-1.23D0,-1.29D0,5.D-1,2.6D+0, 10*0.d0/
+      
 c ** Specify up to 10 'adiabatic' BOB parameters for up to 4 states
-      DATA U1A/0.194d0,-0.01d0,0.39d0, 3*0.d0, 0.059d0, 5*0.d0,
-     1    1.066d0,2.98d0,-0.32d0,2.3d0,-7.5d0,3.3d0,
-     2     1.367d0,2.7d0,-1.3d0,-1.8d0, 2*0.d0/
+c$$$      DATA U1A/0.194d0,-0.01d0,0.39d0, 3*0.d0, 0.059d0, 5*0.d0,
+c$$$     1    1.066d0,2.98d0,-0.32d0,2.3d0,-7.5d0,3.3d0,
+c$$$     2     1.367d0,2.7d0,-1.3d0,-1.8d0, 2*0.d0/
+c ** ZERO OUT THE BOB CORRECTIONS by commenting out the above and adding the next line (NPM-22)      
+      DATA U1A/24*0.d0/
+
+ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
+c     NPM: CHANGE THE Cn Coefficients TO (1) BE THE SAME FOR THE SINGLET/TRIPLET STATES AND
+C     (2) AGREE WITH VALUES FROM [TANG ET AL PRA 79 062712 (2009)]
+c     In atomic units, these values are for
+c     Li-6: C6=1394.16, C8=83460, C10=73745d2
+c     Li-7: C6=1394.05, C8=83456, C10=73742d2
+      IF((IMN1.eq.IMN2).and.(IMN1.eq.6)) THEN
+         CMMA=RESHAPE((/6.71899d6,1.12635d8,2.78694d9,0.d0, !Singlet Li-6
+     2                  6.71899d6,1.12635d8,2.78694d9,0.d0, !Triplet Li-6
+     3        3.57829d5,0.335338d0,1.000045d7,3.7020d8,
+     4        3.57557d5,0.335338d0,1.00054d7,3.69953d8/),SHAPE(CMMA))
+      ENDIF
+      IF ((IMN1.eq.IMN2).and.(IMN1.eq.7)) THEN
+         CMMA=RESHAPE((/6.71846d6,1.12629d8,2.78683d9,0.d0, !Singlet Li-7
+     2                  6.71846d6,1.12629d8,2.78683d9,0.d0, !Triplet Li-7
+     3        3.57829d5,0.335338d0,1.000045d7,3.7020d8,
+     4        3.57557d5,0.335338d0,1.00054d7,3.69953d8/),SHAPE(CMMA))
+      ENDIF
+ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       open(unit = 66, file = "LithiumPotentialParameters.dat")
       LNPT= 1
       IAN1= 3
@@ -176,11 +198,11 @@ c ** If appropriate, read parameters & prepare to add mass-dep. BOB corrn
           CALL MASSES(IAN2,MN2R,NAME2,GEL,GNS,RMASS2,ABUND)
 c   For simplicity, first zero out all correction function coefficients
           DO  I=0,NCMAX
-              U1(I)= 0.d0
-              U2(I)= 0.d0
-              T1(I)= 0.d0
-              T2(I)= 0.d0
-              ENDDO
+             U1(I)= 0.d0
+             U2(I)= 0.d0
+             T1(I)= 0.d0
+             T2(I)= 0.d0
+          ENDDO
           FC1= 0.d0
           FC2= 0.d0
           FG1= 0.d0
