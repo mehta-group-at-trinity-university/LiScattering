@@ -1271,6 +1271,9 @@ program main
      !Use this section to print out the adiabatic potential curves as a function of R and
      !study their spin-singlet/triplet admixtures
      !-------------------------------------------------------------------------------------!
+     
+     if(iB.eq.1) then
+        write(6,*) "Starting calculation of adiabatic potentials"
      do iR=1, NAll/10, 20
         VHZ(:,:) = VHalfSinglet(iR)*SPmat + VHalfTriplet(iR)*TPmat + HHZ2
         call MyDSYEV(VHZ(:,:),size2,Eth,AsymChannels) ! Not this is not actually the asymchannels, it's the adiabatic potentials.
@@ -1287,7 +1290,8 @@ program main
         write(1002,*) RHalf(iR), (Tdressed(i,i), i=1,size2)
         
      enddo
-
+     endif
+!     stop
      !-------------------------------------------------------------------------------------!
      !Find the asymptotic channel states
      VHZ(:,:) =  HHZ2(:,:) 
