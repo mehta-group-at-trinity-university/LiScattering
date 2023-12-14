@@ -1,6 +1,6 @@
 #!/bin/zsh
 
-export paperdir='//Users/niravmehta/Google Drive/My Drive/MQDT Paper/data/'
+export paperdir='/Users/niravmehta/Google Drive/My Drive/MQDT Paper/data/'
 echo 'copying files to '$paperdir
 
 rm $paperdir/Li-6/LD/AlkaliScattering.x
