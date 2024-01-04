@@ -1191,7 +1191,7 @@ program main
   call logderScatLengths1(lwave,mu,NHalf,RHalf,wHalf,VHalfSinglet,VHalfTriplet,as2,at2,rs2,rt2)  
   call logderScatLengths1(lwave,mu,NAll,RAll,wAll,VAllSinglet,VAllTriplet,as1,at1,rs1,rt2)
   
-!  asext = (h1*as2 - h2*as1)/(h1 - h2) ! B-S Extrapolation
+!  asext = (h1*as2 - h2*as1)/(h1 - h2) ! B-S Extrapolation (Bulirsch-Stoer)
 !  atext = (h1*at2 - h2*at1)/(h1 - h2) ! B-S Extrapolation
 
   asext = (hratio**4 * as1 - as2)/(hratio**4 - 1d0)  !Richardson extrapolation
@@ -1376,41 +1376,7 @@ subroutine SetLogderWeights(weights,Npts)
   weights(Npts)=1d0
 
 end subroutine SetLogderWeights
-!!$!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!$! This integrates F''(r) = U(r) F(r) where F and U are matrices
-!!$! U((r) = 2*mu (V(r) - E)
-!!$! Let Z(r) = ( 1 - h^2 U(r)/12 ) F(r)
-!!$! Let W(r) = h^2 U(r) + h^4 U(r)U(r)/ 12 = h^2 U(r) (1 + h^2 U(r)/12)
-!!$! It also follows that F(r) = (1 + W(r)/12) Z(r)
-!!$! The recursion relation is Z(r+h) = (W(r)+2)Z(r) - Z(r-h)
-!!$! So we will propogate Z(r) and then find F(r) from that.  F' and the log-derivative
-!!$subroutine NumerovBoundaryConditions(F0,F1,Z0,Z1,h,V0,V1,size)
-!!$  implicit none
-!!$  integer size,i,j
-!!$  double precision F0(size,size),F1(size,size),Z0(size,size),Z1(size,size)
-!!$
-!!$  F0(:,:) = 0d0
-!!$  F1(:,:) = 0d0
-!!$  Z0(:,:) = 0d0
-!!$  Z1(:,:) = 0d0
-!!$  do i = 1,size
-!!$   end subroutine NumerovBoundaryConditions
-!!$!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!!$subroutine NumerovMC(mu,Energy,identity,weights,NPP,yi,yf,XO,Pot,size)  
-!!$  implicit none
-!!$  integer i,j,step,NPP,size
-!!$  double precision h,Energy,mu
-!!$  double precision xx(NPP),weights(NPP),XO(NPP)
-!!$  double precision yi(size,size),yf(size,size)
-!!$  double precision Pot(size,size,NPP) !make sure Pot includes the threshold offsets
-!!$  double precision tempy(size,size),ycurrent(size,size),yprevious(size,size),identity(size,size)
-!!$  double precision vtemp1(size,size), vtemp2(size,size), un(size,size)
-!!$  double precision, parameter :: onesixth = 0.166666666666666666666d0
-!!$  double precision, parameter :: onethird = 0.333333333333333333333d0
-!!$  double precision, parameter :: OneTwelfth = 0.083333333333333333333d0
-!!$
-!!$end subroutine NumerovMC
-!!$
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine logderpropBNew(mu,Energy,identity,weights,NPP,yi,yf,XO,Sdressed,Tdressed,EthreshMat,Vsinglet,Vtriplet,size)
   implicit none
   integer i,j,step,NPP,size
@@ -1522,8 +1488,7 @@ subroutine logderpropA(mu,Energy,identity,weights,NPP,yi,yf,XO,Pot,size)
      else
         vtemp2 = identity + h*h*onesixth*vtemp1
         call sqrmatinv(vtemp2,size)
-        un = matmul(vtemp2,vtemp1)
-     !   wtemp = 4d0
+        un = matmul(vtemp2,vtemp1)     !   wtemp = 4d0
      endif
      tempy = identity + h*yprevious
      call sqrmatinv(tempy,size)
@@ -1538,6 +1503,7 @@ subroutine logderpropA(mu,Energy,identity,weights,NPP,yi,yf,XO,Pot,size)
 end subroutine logderpropA
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine logderpropANew(mu,Energy,identity,weights,NPP,yi,yf,XO,Pot,size)
+  ! I don't recall whether this subroutine was ever made to work.  I wrote it while debugging but then decided logderpropA and logderpropB were appropriate to use.
   implicit none
   integer i,j,step,NPP,size,IFAIL
   double precision h,Energy,mu,wtemp,C1,C2,C4,hinv
@@ -1549,41 +1515,6 @@ subroutine logderpropANew(mu,Energy,identity,weights,NPP,yi,yf,XO,Pot,size)
   double precision, parameter :: onesixth = 0.166666666666666666666d0
   double precision, parameter :: onethird = 0.333333333333333333333d0
 
-  !vtemp0 = 0d0
-  !vtemp1 = 0d0
-  !tempZ = 0d0
-  !zprevious = 0d0
-!!$
-!!$  h=XO(2)-XO(1)
-!!$
-!!$  C1 = onethird*h**2
-!!$  C2 = 2d0*C1
-!!$  vtemp0 = 2d0*mu*(identity*Energy-Pot(:,:,0))
-!!$  zprevious(:,:) = h*yi(:,:) - onethird*h**2*vtemp0 ! This part was missing from Johnson's 1973 paper  (May not make difference)
-!!$
-!!$  do step = 2, NPP, 2
-!!$
-!!$     tempZ(:,:) = identity(:,:) + zprevious(:,:) ! (1+h*Y0 - h^2/3 * V0)
-!!$     call sqrmatinv(tempZ,size) ! (1 + Z0)^(-1)
-!!$
-!!$     vtemp1 = 2d0*mu*(identity*Energy-Pot(:,:,step-1))  !V1
-!!$     vtemp1 = identity + 0.5d0*C1*vtemp1  ! (1 + h^2/6 * V1)
-!!$     call sqrmatinv(vtemp1,size) ! (1 + h**2/6 * V1)^(-1)
-!!$
-!!$     tempZ(:,:) = tempZ(:,:) - 8d0*vtemp1(:,:) + 6d0*identity(:,:)
-!!$
-!!$     call sqrmatinv(tempZ,size) ! [(1 + Z0)^(-1) - 8*(1 + h**2/6 * V1)^(-1) + 6*I]^(-1)
-!!$
-!!$     vtemp2 = 2d0*mu*(identity*Energy-Pot(:,:,step))
-!!$
-!!$     if(step.eq.NPP) C2=C1
-!!$     tempZ(:,:) = identity(:,:) + tempZ(:,:) - C1*weights(step)*vtemp2(:,:)
-!!$     
-!!$     zprevious = tempZ
-!!$  enddo
-!!$
-!!$  yf(:,:) = tempZ(:,:)/h
-!!$
 
   h=XO(2)-XO(1)
   C1 = h**2/3D0
@@ -1592,31 +1523,7 @@ subroutine logderpropANew(mu,Energy,identity,weights,NPP,yi,yf,XO,Pot,size)
   
   U(:,:) = -2d0*mu*(identity*Energy-Pot(:,:,0))
   zprevious(:,:) = H*yi(:,:) + C1*U(:,:) 
-!----------------------------------------------------------------------------------------------------
-!!$  
-!!$  DO step = 2, NPP, 2
-!!$     Z(:,:) = identity(:,:) + zprevious(:,:)  ! (1 + Z0)
-!!$     U(:,:) = -2d0*mu*(identity*Energy-Pot(:,:,step-1))  !W1
-!!$     U(:,:) = 0.125d0*identity(:,:) + C4*U(:,:) !1/8(1 - h^2/6 W1)
-!!$     
-!!$     !call sqrmatinv(U,size)  ![1/8(1 - h^2/6 W1)]^(-1)
-!!$     call SYMINV(U, size, size, IFAIL)
-!!$     !call sqrmatinv(Z,size) !Z = [1 + Z0]^(-1) 
-!!$     call SYMINV(Z, size, size, IFAIL)
-!!$     !C  FIRST HALF OF SECTOR:
-!!$     Z(:,:) = U(:,:) - Z(:,:) - 6d0*identity(:,:)  ! Z = {[1/8(1 - h^2/6 W1)]^(-1) - [1 + Z0 + (h^2)/3 W0]^(-1) - 6*I}
-!!$     !CALL sqrmatinv(Z,size)  !Z =  {[1/8(1 - h^2/6 W1)]^(-1) - [1 + Z0 + (h^2)/3 W0]^(-1) - 6*I}^(-1)
-!!$     call SYMINV(Z, size, size, IFAIL)
-!!$     !C  SECOND HALF OF SECTOR WITH W=2, OR W=1 FOR LAST POINT
-!!$
-!!$     IF (STEP.EQ.NPP) C2=C1
-!!$     U(:,:) = -2d0*mu*(identity*Energy-Pot(:,:,step))  !U = W2
-!!$     U(:,:) = C2*U(:,:) + identity(:,:) ! U = (2/3)*h^2 * W2 + I
-!!$     Z(:,:) = U(:,:) - Z(:,:) ! Z = (2/3)*h^2 * W2 + I - {[1/8(1 - h^2/6 W1)]^(-1) - [1 + Z0 + (h^2)/3 W0]^(-1) - 6*I}^(-1)
-!!$     zprevious = Z(:,:)
-!!$  enddo
 
-       !----------------------------------------------------------------------------------------------------
 !!$  THIS NEXT PART ATTEMPTS THE ALGORITHM WITH ONE INVERSE PER STEP
        
   DO step = 2, NPP, 2
@@ -4082,7 +3989,7 @@ double precision function UniversalGamma(Energy,EvdW)
        4.156391821939997d-14*Abs(Energy)**4.5 - 7.792047355366279d-17*Abs(Energy)**5 
   
 end function UniversalGamma
-
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine VST(ISTATE,ESTATE,mu,muref,R,V,Sval)
   !Calculates the singlet or triplet at one point (expensive, but useful sometimes)
   use datastructures
@@ -4094,7 +4001,7 @@ subroutine VST(ISTATE,ESTATE,mu,muref,R,V,Sval)
   call SetupPotential(ISTATE, ESTATE, MU, MUREF, 1, 0d0, RR, VV, LRD,Sval)
   V=VV(1)
 end subroutine VST
-
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 DOUBLE PRECISION FUNCTION POWER(X,A,N)
   !
   !  EVALUATE A POWER SERIES WITH COEFFICIENTS IN A
@@ -4112,7 +4019,7 @@ DOUBLE PRECISION FUNCTION POWER(X,A,N)
   
   RETURN
 END FUNCTION POWER
-!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 DOUBLE PRECISION FUNCTION DPOWER(X,A,N)
 !
 !  EVALUATE DERIVATIVE OF A POWER SERIES WITH COEFFICIENTS IN A
@@ -4130,7 +4037,7 @@ DOUBLE PRECISION FUNCTION DPOWER(X,A,N)
   
   RETURN
 END FUNCTION DPOWER
-
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!$subroutine VCesium(R,ESTATE,CvalsAU)
 !!$  use bspline
 !!$  implicit none
@@ -4168,24 +4075,41 @@ END FUNCTION DPOWER
 !!$  enddo
 !!$  
 !!$end subroutine VCesium
-subroutine PlotMQDTWfns(R1, Rmatch, R2, NA, scale, LRD, mu, lwave, energy, &
-     betavdw, phiL, phir, alpha0, alphaf,f0, g0, f0p, g0p, ldf0,ldg0,InterpKsr)
+
+
+subroutine OnDemandMQDT(R1, Rmatch, R2, NA, scale, LRD, mu, lwave, energy, Bfield &
+     betavdw, phiL, alpha0, alphaf,f0, g0, f0p, g0p, ldf0,ldg0,InterpKsr)
+  !------------------------------------------------------------------------------
+  ! (1) Must have MQDT functions A, G, eta, and cotgamma already pre-calcualted
+  !     for the species in question.
+  ! (2) The user specifies a single value of the magnetic field and energy
+  ! (3) The subroutine uses a log-derivative propagator to compute Ksr at those
+  !     particular values of B and E.
+  ! (4) The subroutine then prints the energy-dependent scattering length, the
+  !     cross section (assuming s-wave and one open channel  only for now)
+  ! (5) The subroutine also produces a plot of the (long-range, r > rm) radial wavefunctions.
+  !     The wavefunction at short range is not produced.
+  !-----------------------------------------------------------------------------
   use units
   use datastructures
   use InterpType
   implicit none
+  double precision, external :: VLRNew, VLRNewPrime
   type(LRData) :: LRD
-  integer NA, i, j, lwave
-  double precision y(2), mu, betavdw, energy, f0, g0, f0p, g0p, phiL,phir
+  integer NA, i, j, lwave, iR
+  double precision y(2), mu, betavdw, energy, Bfield, f0, g0, f0p, g0p, phiL,phir
   double precision alpha0(2), alphaf(2), ldf0, ldg0,dR
   double precision, allocatable :: phaseint(:)
   double precision, allocatable :: alpha(:,:),R(:)
   double precision R1, R2, Rmatch
   type(InterpolatingMatrix) :: InterpKsr
   CHARACTER(LEN=*), INTENT(IN) :: scale
-
+  ! We need to join together two radial grids: one from R1 to RMatch and another from RMatch to R2
   allocate(R(NA),alpha(NA,2),phaseint(NA))
   call GridMaker(R,NA,R1,Rmatch,scale)
+  alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLRNew(mu,lwave,RX,LRD))/RX**2))**(-0.25d0)
+  alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRNewPrime(mu, lwave, RX,LRD))) &
+       /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLRNew(mu,lwave,RX,LRD))**1.25d0)
 
   alpha(1,:) = alpha0
   
@@ -4199,6 +4123,8 @@ subroutine PlotMQDTWfns(R1, Rmatch, R2, NA, scale, LRD, mu, lwave, energy, &
   ldf0 = y(2) + exp(-2*y(1))/tan(phir+phiL)
   ldg0 = y(2) - exp(-2*y(1))*tan(phir+phiL)
 
+  call CalcKsr(ym, Ksr, size2, NXM, RX, Rsr(Nsr), energy, Eth, lwave, mu, LRD, betavdw, phiL,scale)
+  
   do iR = 1, NA
      f0 = Pi**(-0.5d0)*alphaf(1)*sin(phir+phiL)
      g0 = -Pi**(-0.5d0)*alphaf(1)*cos(phir+phiL)
@@ -4207,4 +4133,4 @@ subroutine PlotMQDTWfns(R1, Rmatch, R2, NA, scale, LRD, mu, lwave, energy, &
      write(2001, *) R(iR), f0, g0
   enddo
 
-end subroutine PlotMQDTWfns
+end subroutine OnDemandMQDT

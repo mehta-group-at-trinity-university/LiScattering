@@ -1,51 +1,18 @@
 # This is a parameter file for input into AlkaliScattering.x
 # ISTATE (for Rb-87)  SYM (+1 for boson)	  CALCTYPE (1 for logder, 2 for MQDT, 3 for FT) 	MQDTMODE
-  2	      	      1	           	 	  1	      	  	    	      	    		1
+  2	      	      1	           	 	  2	      	  	    	      	    		2
 # L (partial wave)    2*MFtot (twice total F projection) writepot	Sval(1)		Sval(2)
-  0 	     	      -8	      	     	     		 .false. 	0d0		0d0    
+  0 	     	      8	      	     	     		 .false. 	0d0		0d0    
 # Rmin		      Rmidmax  		 RX    		 RF (all in bohr except RX and RF which is in vdw units.  Converted to bohr in the code.)
-<<<<<<< HEAD
-<<<<<<< HEAD
-  0.02d0	      30.0d0  		 0.1d0		 10d0
-# NXM		      NXF 		 Nsr		 Nlr
-  100000  	      2000000		 1000000	 10000000
-# NEgrid	      Emin		Emax (enter energy range in mK)
-  10		      1d-6		50d0
-# NBgrid	      Bmin		Bmax (enter B-field range in gauss)
-  1000	     	       0d0		1000d0
-
-
-#COMMENT: 
-#Roberts et al., Phys. Rev. Lett. 81, 5109-5112 (1998):
-#Identify an s-wave Feshbach resonance in the excited state (2 -2) + (2 -2) at 155.2(4) G
-#with width 11.6(5) G. 
-#
-#Claussen et al., Phys. Rev. A 67, 060701 (2003):
-#Claussen et al. study the same resonance as Roberts et al. (1998) using atom-molecule
-#oscillations. They measure the position (155.041(18) G) and width (10.71(2) G of the resonance,
-#along with a zero(165.750(13) G) in the scattering length and the background scattering length
-#(-443(3) bohr). 
-#
-#Blackley et al., Phys. Rev. A 87, 033611 (2013):
-#List 17 experimentally confirmed Feshbach resonances in optically trapped Rb-85.
-#Seven of these are in the ground state (2 2) + (2 2) channel (see Table I and Fig. 1) and nine
-#are in the excited state (2 -2) + (2 -2) channel (see Table II and Fig. 2). They also identify a
-#narrow resonance in the (2 2) + (3 -3) spin mixture (see Fig. 6) at 817.45(5) G with width
-#0.031(1) G. 
-=======
-  2.0d0		      45d0  		 0.07d0		 20d0
-=======
-  1.d0		      40d0  		 0.07d0		 10d0
->>>>>>> Nirav
+  1.d0		      40d0  		 0.07d0		 20d0
 # NXM		      NXF 		 Nsr		 NAll
-  2000000  	      20000000		 2000000	 2000000
+  2000000  	      20000000		 2000000	 20000000
 # NEgrid	      Emin		Emax (enter energy range in mK)
   10		      1d-3		50d0
 # NBgrid	      Bmin		Bmax              	 Bhuge (largest possible field)  NBGridFine
-  100		      100.0d0		200.d0			 1200d0   		 	 100000
+  40		      0.1d0		1199.9d0			 1200d0   		 	 100000
 # Grid for calculating MQDT functions (must be 'linear', 'quadratic', 'cubic', or 'log')		      
    'log'
 
 
 # Rmidmax = 35d0 is best for the MQDT calculation
->>>>>>> Nirav
