@@ -4082,7 +4082,7 @@ double precision function UniversalGamma(Energy,EvdW)
        4.156391821939997d-14*Abs(Energy)**4.5 - 7.792047355366279d-17*Abs(Energy)**5 
   
 end function UniversalGamma
-
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine VST(ISTATE,ESTATE,mu,muref,R,V,Sval)
   !Calculates the singlet or triplet at one point (expensive, but useful sometimes)
   use datastructures
@@ -4094,7 +4094,7 @@ subroutine VST(ISTATE,ESTATE,mu,muref,R,V,Sval)
   call SetupPotential(ISTATE, ESTATE, MU, MUREF, 1, 0d0, RR, VV, LRD,Sval)
   V=VV(1)
 end subroutine VST
-
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 DOUBLE PRECISION FUNCTION POWER(X,A,N)
   !
   !  EVALUATE A POWER SERIES WITH COEFFICIENTS IN A
@@ -4112,7 +4112,7 @@ DOUBLE PRECISION FUNCTION POWER(X,A,N)
   
   RETURN
 END FUNCTION POWER
-!
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 DOUBLE PRECISION FUNCTION DPOWER(X,A,N)
 !
 !  EVALUATE DERIVATIVE OF A POWER SERIES WITH COEFFICIENTS IN A
@@ -4130,7 +4130,7 @@ DOUBLE PRECISION FUNCTION DPOWER(X,A,N)
   
   RETURN
 END FUNCTION DPOWER
-
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 !!$subroutine VCesium(R,ESTATE,CvalsAU)
 !!$  use bspline
 !!$  implicit none
@@ -4168,10 +4168,21 @@ END FUNCTION DPOWER
 !!$  enddo
 !!$  
 !!$end subroutine VCesium
-subroutine PlotMQDTWfns(R1, Rmatch, R2, NA, scale, LRD, mu, lwave, energy, &
-     betavdw, phiL, phir, alpha0, alphaf,f0, g0, f0p, g0p, ldf0,ldg0)
+
+! (1) Must have MQDT functions A, G, eta, and cotgamma already pre-calcualted
+!     for the species in question.
+! (2) The user specifies a single value of the magnetic field and energy
+! (3) The subroutine uses a log-derivative propagator to compute Ksr at those
+!     particular values of B and E.
+! (4) The subroutine then prints the energy-dependent scattering length, the
+!     cross section (assuming s-wave and one open channel  only for now)
+! (5) The subroutine also produces a plot of the (long-range, r > rm) radial wavefunctions.
+!     The wavefunction at short range is not produced.
+subroutine OnDemandMQDT(R1, Rmatch, R2, NA, scale, LRD, mu, lwave, energy, &
+     betavdw, phiL, phir, alpha0, alphaf,f0, g0, f0p, g0p, ldf0,ldg0,InterpKsr)
   use units
   use datastructures
+  use InterpType
   implicit none
   type(LRData) :: LRD
   integer NA, i, j, lwave
@@ -4194,12 +4205,16 @@ subroutine PlotMQDTWfns(R1, Rmatch, R2, NA, scale, LRD, mu, lwave, energy, &
   alphaf = alpha(NA,:)
   phir = phaseint(NA)
 
+  
   ldf0 = y(2) + exp(-2*y(1))/tan(phir+phiL)
   ldg0 = y(2) - exp(-2*y(1))*tan(phir+phiL)
-    
-  f0 = Pi**(-0.5d0)*alphaf(1)*sin(phir+phiL)
-  g0 = -Pi**(-0.5d0)*alphaf(1)*cos(phir+phiL)
-  f0p = ldf0*f0
-  g0p = ldg0*g0
 
-end subroutine PlotMQDTWfns
+  do iR = 1, NA
+     f0 = Pi**(-0.5d0)*alphaf(1)*sin(phir+phiL)
+     g0 = -Pi**(-0.5d0)*alphaf(1)*cos(phir+phiL)
+     f0p = ldf0*f0
+     g0p = ldg0*g0
+     write(2001, *) R(iR), f0, g0
+  enddo
+
+end subroutine OnDemandMQDT

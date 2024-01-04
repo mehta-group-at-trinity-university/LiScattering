@@ -2302,11 +2302,7 @@ subroutine MQDTNewfunctions(R1, R2, NA, scale, LRD, mu, lwave, energy, &
 end subroutine MQDTNewfunctions
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 ! This subroutine calculates the phase standardization according to the Ruzic scheme.
-<<<<<<< HEAD
-subroutine CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,Cvals,phiL)
-=======
 subroutine CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,LRD,phiL,scale)
->>>>>>> Nirav
   use units
     use datastructures
   implicit none
@@ -2318,12 +2314,8 @@ subroutine CalcPhaseStandard(RX,RF,NXF,lwave,mu,betavdw,LRD,phiL,scale)
   double precision   f0, g0, f0p, g0p, tanphi, alpha0(2), alphaf(2)
   integer, intent(in) :: lwave
   integer i, NXF
-<<<<<<< HEAD
-  double precision, external :: ksqrLR, VLR, VLRPrime
-=======
   CHARACTER(LEN=*), INTENT(IN) :: scale
   double precision, external :: ksqrLR, VLRNew, VLRNewPrime
->>>>>>> Nirav
 
   !-------------------------------------------------------
   !uncomment this block to test the phase standardization
@@ -2367,12 +2359,8 @@ subroutine CalcKsr(ym, Ksr, size2, NXM, RX, RM, energy, Eth, lwave, mu, LRD, bet
   double precision ym(size2,size2), Eth(size2),phir,ldg0,ldf0
   double precision f0mat(size2,size2), g0mat(size2,size2), f0pmat(size2,size2),g0pmat(size2,size2), Ksr(size2,size2)
   double precision temp1(size2,size2), temp2(size2,size2)
-<<<<<<< HEAD
-  double precision, external :: ksqrLR, VLR, VLRPrime
-=======
   double precision, external :: ksqrLR, VLRNew, VLRNewPrime
   CHARACTER(LEN=*), INTENT(IN) :: scale
->>>>>>> Nirav
   
   ! Ksr = (Y g - g')^(-1) (Y f - f')
   temp1 = 0d0
@@ -2444,11 +2432,7 @@ subroutine SetupCotGamma(RX,RF,NXF,size,lwave,mu,betavdw,LRD,phiL,Egrid,NEgrid,E
   
 end subroutine SetupCotGamma
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-<<<<<<< HEAD
-subroutine CalcCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,Cvals,phiL,Eth,Emin,Emax,InterpCotGamma)
-=======
 subroutine CalcCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,LRD,phiL,Eth,Emin,Emax,InterpCotGamma,scale)
->>>>>>> Nirav
   !This calculates the tan(gamma) MQDT parameter.  See Ruzic's PRA for details
   ! While in principle this can be calculated once as a function of energy, interpolated and
   ! evaluated at the relative energy for each channel, here I'm doing it the "brute force" way
@@ -2465,12 +2449,8 @@ subroutine CalcCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,LRD,phiL,Eth,Emi
   double precision alpha0(2),alphaf(2),energy, tangamma, gam,phir,ldg0,ldf0
   double precision, allocatable :: xgrid(:), Rgrid(:)
   double precision, allocatable :: phaseint(:)
-<<<<<<< HEAD
-  double precision, external :: ksqrLR, VLR, VLRPrime
-=======
   double precision, external :: ksqrLR, VLRNew, VLRNewPrime
   CHARACTER(LEN=*), INTENT(IN) :: scale
->>>>>>> Nirav
   type(InterpolatingFunction) :: InterpCotGamma
 
   EvdW = 1d0/(2d0*mu*betavdw**2)
@@ -2488,24 +2468,17 @@ subroutine CalcCotGammaFunction(RX,RF,NXF,size,lwave,mu,betavdw,LRD,phiL,Eth,Emi
 
   write(6,*) "E1, E2 = ",E1, E2
   call AllocateInterpolatingFunction(NE,kx,InterpCotGamma)
-  call GridMaker(InterpCotGamma%x, nE, E1, E2, "sqrroot")
+  call GridMaker(InterpCotGamma%x, nE, E1, E2, "linear")
   write(6,'(A)') "Calculating the MQDT parameter cot(gamma) as a function of energy"
 
   do iE = 1, NE
 
      energy = InterpCotGamma%x(iE)
      kappa = sqrt(2*mu*abs(energy))
-<<<<<<< HEAD
-     alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLR(mu,lwave,RX,Cvals))/RX**2))**(-0.25d0)
-     alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRPrime(mu, lwave, RX,Cvals))) &
-          /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLR(mu,lwave,RX,Cvals))**1.25d0)
-     call MQDTfunctions(RX, RF, NXF,'quadratic', Cvals, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
-=======
      alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLRNew(mu,lwave,RX,LRD))/RX**2))**(-0.25d0)
      alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRNewPrime(mu, lwave, RX,LRD))) &
           /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLRNew(mu,lwave,RX,LRD))**1.25d0)
      call MQDTfunctions(RX, RF, NXF,scale, LRD, mu, lwave, energy, betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
->>>>>>> Nirav
      
      x = kappa*RF
 !     write(6,*) "alphaf = ", alphaf
@@ -4195,3 +4168,43 @@ END FUNCTION DPOWER
 !!$  enddo
 !!$  
 !!$end subroutine VCesium
+subroutine PlotMQDTWfns(R1, Rmatch, R2, NA, scale, LRD, mu, lwave, energy, &
+     betavdw, phiL, phir, alpha0, alphaf,f0, g0, f0p, g0p, ldf0,ldg0,InterpKsr)
+  use units
+  use datastructures
+  use InterpType
+  implicit none
+  type(LRData) :: LRD
+  integer NA, i, j, lwave
+  double precision y(2), mu, betavdw, energy, f0, g0, f0p, g0p, phiL,phir
+  double precision alpha0(2), alphaf(2), ldf0, ldg0,dR
+  double precision, allocatable :: phaseint(:)
+  double precision, allocatable :: alpha(:,:),R(:)
+  double precision R1, R2, Rmatch
+  type(InterpolatingMatrix) :: InterpKsr
+  CHARACTER(LEN=*), INTENT(IN) :: scale
+
+  allocate(R(NA),alpha(NA,2),phaseint(NA))
+  call GridMaker(R,NA,R1,Rmatch,scale)
+
+  alpha(1,:) = alpha0
+  
+  call CalcNewMilne4stepRichardson(R,alpha,y,NA,energy,lwave,mu,LRD,phaseint)
+  
+!  write(6,*) "y = ", y
+  alphaf = alpha(NA,:)
+  phir = phaseint(NA)
+
+  
+  ldf0 = y(2) + exp(-2*y(1))/tan(phir+phiL)
+  ldg0 = y(2) - exp(-2*y(1))*tan(phir+phiL)
+
+  do iR = 1, NA
+     f0 = Pi**(-0.5d0)*alphaf(1)*sin(phir+phiL)
+     g0 = -Pi**(-0.5d0)*alphaf(1)*cos(phir+phiL)
+     f0p = ldf0*f0
+     g0p = ldg0*g0
+     write(2001, *) R(iR), f0, g0
+  enddo
+
+end subroutine PlotMQDTWfns
