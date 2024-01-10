@@ -658,7 +658,7 @@ program main
   ! CALCTYPE = 3 means do the MQDT frame transformation calculation (This still needs gamma(E))
   ! MQDTMODE = 1 means calculate gamma(E), Ksr(B), and the S/T quantum defects from scratch.  Write to a file and stop.
   ! MQDTMODE = 2 means read gamma(E), Ksr(B) and S/T QDs from file and proceed to the calcuation of physical K-matrix
-  ! MQDTMODE = 3 means read only the single channle parameter gamma(E) from file, but re-calculate Ksr(B) and the S/T QDs, then stop.
+  ! MQDTMODE = 3 means read only the single channel parameter gamma(E) from file, but re-calculate Ksr(B) and the S/T QDs, then stop.
   !
   ! MQDTMODE 1 and 3 must be run under CALCTYPE=2, otherwise the calculation will skip over the relevant code.
   ! After running MQDTMODE 3, you must re-run the code with MQDTMODE set to 2 in order to obtain the physical K-matrix on a fine B-field grid.
@@ -1049,15 +1049,14 @@ program main
   stop
 
   ! Use this next part if you want to read in Ksr and gamma(E) in the MQDT/FT calculation
-12 continue
+12 continue  !Continues here if MQDTMODE = 2
 
-  
   call CalcNewGammaphaseFunction(RX,RF,NXF,size2,lwave,mu,betavdw,LRD,phiL,Eth,&
-       InterpGammaphase,scale,MQDTMODE,cotgamfile)
+       InterpGammaphase,scale,MQDTMODE,cotgamfile) ! In this case gamma is read from a file since MQDTMODE = 2
   call CalcMQDTParameters(RX,RF,NXF,size2,lwave,mu,betavdw,LRD,phiL,Eth,&
-       InterpA,InterpG,InterpTanEta,scale,MQDTMODE,AGEtafile)
+       InterpA,InterpG,InterpTanEta,scale,MQDTMODE,AGEtafile) ! In this case the parameters are read from a file since MQDTMODE = 2
   call logderQD(lwave,mu,Eth,size2,NQD,NXM,Nsr,wsr,VsrSinglet,VsrTriplet,Rsr,&
-       InterpQDTriplet,InterpQDSinglet,phiL,betavdw,RX,LRD,scale,MQDTMODE,STQDfile)
+       InterpQDTriplet,InterpQDSinglet,phiL,betavdw,RX,LRD,scale,MQDTMODE,STQDfile) ! Read from file...
   call SetupInterpolatingFunction(InterpQDSinglet)
   call SetupInterpolatingFunction(InterpQDTriplet)
 
@@ -1088,23 +1087,23 @@ program main
      call MyDSYEV(HHZ2,size2,Eth,AsymChannels)
      energy = Eth(1) + Egrid(iE)
      if(CalcType.eq.2) then
-        Ksr = InterpolatedMatrix(Bgrid(iB),InterpKsr)
+        Ksr = InterpolatedMatrix(Bgrid(iB),InterpKsr)        
      else if (CALCTYPE.eq.3) then
         !----- Rotate into the asymptotic eigenstates (Use the B-field dressed states) -------!
         !Rotate the singlet projection operator
         TEMP = 0d0
         call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,SPmat,size2,0d0,TEMP,size2)
-        call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Sdressed,size2)
+        call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Sdressed,size2) !compute dressed projection operators
         
         !Rotate the triplet projection operator
         call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,TPmat,size2,0d0,TEMP,size2)
-        call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Tdressed,size2)
+        call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Tdressed,size2) !compute dressed projection operators
         !        CalcProjOp = .false.
         !if(iB.eq.1)
         CalcProjOp = .true.
         call CalcEDFTKSR(nspin1,nspin1,espin1,espin1,hf2symTempGlobal,&
         energy,Eth, AsymChannels,size2,Ksr,InterpQDSinglet,InterpQDTriplet, &
-        CalcProjOp,KsrEIFT)
+        CalcProjOp,KsrEIFT) ! This writes into Ksr and is really the EDFT-Ksr
 
      endif
      KsrEIFT(:,:) = tan(pi*Interpolated(0d0,InterpQDTriplet)) * Tdressed(:,:) &
@@ -1155,6 +1154,8 @@ program main
      else
         write(51,*) Bgrid(iB), ascat , 8d0*pi*ascat**2*(Bohrpercm**2)
      endif
+
+!     call plotwfn
   enddo
   
   stop
@@ -1503,7 +1504,9 @@ subroutine logderpropA(mu,Energy,identity,weights,NPP,yi,yf,XO,Pot,size)
 end subroutine logderpropA
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine logderpropANew(mu,Energy,identity,weights,NPP,yi,yf,XO,Pot,size)
-  ! I don't recall whether this subroutine was ever made to work.  I wrote it while debugging but then decided logderpropA and logderpropB were appropriate to use.
+  ! I don't recall whether this subroutine was ever made to work.
+  ! I wrote it while debugging but then decided logderpropA and
+  ! logderpropB were appropriate to use.
   implicit none
   integer i,j,step,NPP,size,IFAIL
   double precision h,Energy,mu,wtemp,C1,C2,C4,hinv
@@ -4077,60 +4080,94 @@ END FUNCTION DPOWER
 !!$end subroutine VCesium
 
 
-subroutine OnDemandMQDT(R1, Rmatch, R2, NA, scale, LRD, mu, lwave, energy, Bfield &
-     betavdw, phiL, alpha0, alphaf,f0, g0, f0p, g0p, ldf0,ldg0,InterpKsr)
-  !------------------------------------------------------------------------------
-  ! (1) Must have MQDT functions A, G, eta, and cotgamma already pre-calcualted
-  !     for the species in question.
-  ! (2) The user specifies a single value of the magnetic field and energy
-  ! (3) The subroutine uses a log-derivative propagator to compute Ksr at those
-  !     particular values of B and E.
-  ! (4) The subroutine then prints the energy-dependent scattering length, the
-  !     cross section (assuming s-wave and one open channel  only for now)
-  ! (5) The subroutine also produces a plot of the (long-range, r > rm) radial wavefunctions.
-  !     The wavefunction at short range is not produced.
-  !-----------------------------------------------------------------------------
-  use units
-  use datastructures
-  use InterpType
-  implicit none
-  double precision, external :: VLRNew, VLRNewPrime
-  type(LRData) :: LRD
-  integer NA, i, j, lwave, iR
-  double precision y(2), mu, betavdw, energy, Bfield, f0, g0, f0p, g0p, phiL,phir
-  double precision alpha0(2), alphaf(2), ldf0, ldg0,dR
-  double precision, allocatable :: phaseint(:)
-  double precision, allocatable :: alpha(:,:),R(:)
-  double precision R1, R2, Rmatch
-  type(InterpolatingMatrix) :: InterpKsr
-  CHARACTER(LEN=*), INTENT(IN) :: scale
-  ! We need to join together two radial grids: one from R1 to RMatch and another from RMatch to R2
-  allocate(R(NA),alpha(NA,2),phaseint(NA))
-  call GridMaker(R,NA,R1,Rmatch,scale)
-  alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLRNew(mu,lwave,RX,LRD))/RX**2))**(-0.25d0)
-  alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRNewPrime(mu, lwave, RX,LRD))) &
-       /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLRNew(mu,lwave,RX,LRD))**1.25d0)
-
-  alpha(1,:) = alpha0
-  
-  call CalcNewMilne4stepRichardson(R,alpha,y,NA,energy,lwave,mu,LRD,phaseint)
-  
-!  write(6,*) "y = ", y
-  alphaf = alpha(NA,:)
-  phir = phaseint(NA)
-
-  
-  ldf0 = y(2) + exp(-2*y(1))/tan(phir+phiL)
-  ldg0 = y(2) - exp(-2*y(1))*tan(phir+phiL)
-
-  call CalcKsr(ym, Ksr, size2, NXM, RX, Rsr(Nsr), energy, Eth, lwave, mu, LRD, betavdw, phiL,scale)
-  
-  do iR = 1, NA
-     f0 = Pi**(-0.5d0)*alphaf(1)*sin(phir+phiL)
-     g0 = -Pi**(-0.5d0)*alphaf(1)*cos(phir+phiL)
-     f0p = ldf0*f0
-     g0p = ldg0*g0
-     write(2001, *) R(iR), f0, g0
-  enddo
-
-end subroutine OnDemandMQDT
+!!$subroutine plotwfn(size2,Rmin, Rmid, R2, RX,  NXF, scale, LRD, mu, lwave, energy, Bfield, &
+!!$     betavdw, phiL, alpha0, alphaf,f0, g0, f0p, g0p, ldf0,ldg0)
+!!$  !------------------------------------------------------------------------------
+!!$  ! (1) Must have MQDT functions A, G, eta, and cotgamma already pre-calcualted
+!!$  !     for the species in question. To do so, run the code in CALCTYPE=2, MQDTMODE=1
+!!$  ! (2) The code uses ONLY the lowest values of energy and B-field
+!!$  !     (that should be the argument passed to this subroutine by the main code.)
+!!$  ! (3) The subroutine uses a log-derivative propagator to compute Ksr at those
+!!$  !     particular values of B and E.
+!!$  ! (4) The subroutine then prints the energy-dependent scattering length, the
+!!$  !     cross section (assuming s-wave and one open channel  only for now)
+!!$  ! (5) The subroutine also produces a plot of the (long-range, r > rm) radial wavefunctions.
+!!$  !     The wavefunction at short range is not produced.
+!!$  ! (6) The user should NOT change the values of RX, RXM, RF in the input file after running in
+!!$  !     CALCTYPE=2 MQDTMODE=1
+!!$  ! (7) To access this subroutine, the user should run the code with CALCTYPE=2, MQDTMODE=4
+!!$  !-----------------------------------------------------------------------------
+!!$  use units
+!!$  use datastructures
+!!$  !use InterpType
+!!$  implicit none
+!!$  double precision, external :: VLRNew, VLRNewPrime
+!!$  type(LRData) :: LRD
+!!$  integer NXF, Nmid, Nsr, i, j, lwave, iR, size2
+!!$  double precision y(2), mu, betavdw, energy, Bfield, f0, g0, f0p, g0p, phiL,phir
+!!$  double precision alpha0(2), alphaf(2), ldf0, ldg0,dR
+!!$  double precision f0mat(size2,size2), g0mat(size2,size2), f0pmat(size2,size2),g0pmat(size2,size2), Ksr(size2,size2)
+!!$  double precision temp1(size2,size2), temp2(size2,size2)
+!!$  double precision, allocatable :: phaseintXF(:)
+!!$  double precision, allocatable :: alphaXF(:,:),RXF(:)
+!!$  double precision Rmin, RF, RX, Rmid, Rmidnew
+!!$  !type(InterpolatingMatrix) :: InterpKsr
+!!$  CHARACTER(LEN=*), INTENT(IN) :: scale
+!!$
+!!$  allocate(RXF(NXF),alphaXF(NXF,2),phaseintXF(NXF))
+!!$  call GridMaker(RXF,NXF,RX,RF,scale)
+!!$  ! Find the value in RXF(:) that is closest to Rmid:
+!!$  do iR = 2,NFX-1
+!!$     if((abs(RXF(iR)-Rmid).lt.abs(RXF(iR-1)-Rmid)).and.(abs(RXF(iR)-Rmid).lt.abs(RXF(iR+1)-Rmid))) then
+!!$        Rmidnew=RXF(iR)
+!!$        Nmid = iR
+!!$        write(6,*) "Rmidnew=",Rmidnew
+!!$        exit
+!!$     endif
+!!$  enddo
+!!$  stop
+!!$  
+!!$  ! WKB-like boundary conditions:
+!!$  alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLRNew(mu,lwave,RX,LRD))/RX**2))**(-0.25d0)
+!!$  alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRNewPrime(mu, lwave, RX,LRD))) &
+!!$       /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLRNew(mu,lwave,RX,LRD))**1.25d0)
+!!$  ! initialize:
+!!$  alphaXF(1,:) = alpha0
+!!$  
+!!$  call CalcNewMilne4stepRichardson(RXF,alphaXF,y,NXF,energy,lwave,mu,LRD,phaseintXF)
+!!$  
+!!$!  write(6,*) "y = ", y
+!!$  alphaf = alphaXF(Nmid,:)
+!!$  phir = phaseintXF(Nmid)
+!!$
+!!$  ldf0 = y(2) + exp(-2*y(1))/tan(phir+phiL)
+!!$  ldg0 = y(2) - exp(-2*y(1))*tan(phir+phiL)
+!!$  ! Compute the exact log-derivative matrix at Rmid
+!!$  call logderpropB(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,Sdressed,Tdressed,EthreshMat,VsrSinglet,VsrTriplet,size2,writepot)
+!!$  
+!!$  
+!!$  do i = 1, size2
+!!$     !     call MQDTfunctions(RX, RM, NXM,'quadratic', LRD, mu, lwave, energy-Eth(i), betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
+!!$     !write(501,'(A)',ADVANCE='No') "MQDTNewfuntions from CalcKsr"
+!!$     call MQDTNewfunctions(RX, RM, NXM, scale, LRD, mu, lwave, energy-Eth(i), &
+!!$          betavdw,phiL,phir, alpha0, alphaf,f0, g0, f0p, g0p,ldf0,ldg0)
+!!$     f0mat(i,i) = f0
+!!$     f0pmat(i,i) = f0p
+!!$     g0mat(i,i) = g0
+!!$     g0pmat(i,i) = g0p
+!!$  enddo
+!!$  temp1 = MATMUL(ym,g0mat) - g0pmat
+!!$  temp2 = MATMUL(ym,f0mat) - f0pmat
+!!$  call sqrmatinv(temp1,size2)
+!!$  Ksr = MATMUL(temp1,temp2)
+!!$
+!!$  
+!!$  do iR = 1, NXF
+!!$     f0 = Pi**(-0.5d0)*alphaXF(1)*sin(phaseintXF(iR)+phiL)
+!!$     g0 = -Pi**(-0.5d0)*alphaXF(1)*cos(phaseintXF(iR)+phiL)
+!!$!     f0p = ldf0*f0
+!!$!     g0p = ldg0*g0
+!!$     write(2001, *) R(iR), f0, g0
+!!$  enddo
+!!$
+!!$end subroutine plotwfn
