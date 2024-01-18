@@ -685,7 +685,7 @@ program main
   If((MQDTMODE.eq.1).and.(CALCTYPE.eq.2)) then
      write(6,*) "Using full B-field range for calculation of Ksr and QDs."
      !Bmin = -100d0
-     Bmin = -Bhuge!0.1d0
+     Bmin = -Bhuge!0.1d0! Changed this to include negative fields.
      Bmax = Bhuge
   endif
   !make the magnetic field grid and energy grid
