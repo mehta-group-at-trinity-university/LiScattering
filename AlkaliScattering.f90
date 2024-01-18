@@ -201,9 +201,6 @@ contains
        enddo
     endif
 
-
-
-    
     !    stop
     !    write(6,*) "size = ", size
   end subroutine MakeHF1Basis
@@ -294,12 +291,12 @@ contains
     allocate(tempstates(size),symstates(size))
     count = 0
     do n1 = 1, size
-       !construct a temporary state with the q-#s of atom 1 and 2 interchanged
+       ! construct a temporary state with the q-#s of atom 1 and 2 interchanged
        tempstates(n1)%a1 = hf2TempGlobal(n1)%a2
        tempstates(n1)%a2 = hf2TempGlobal(n1)%a1
        !write(6,'(4I3,A,4I3)') hf2TempGlobal(n1),"  ||", tempstates(n1)
        ! keep a tally of unique states
-       !consider below the case of bosonic atoms with l=0 only.  Check if sum of two states is unique
+       ! consider below the case of bosonic atoms with l=0 only.  Check if sum of two states is unique
        keepflag = 1
        if((sym.lt.0).and.hf2eq(tempstates(n1),hf2TempGlobal(n1))) keepflag = 0
        do n2 = 1, n1-1
@@ -655,8 +652,8 @@ program main
   ! NOTE FOR INPUT FILE AND FLOW CONTROL:
   ! CALCTYPE = 1 means do the full coupled channels (FCC) calculation using the logder method
   ! CALCTYPE = 2 means do some set of MQDT calculations as determined by the value of MQDTMODE
-  ! CALCTYPE = 3 means do the MQDT frame transformation calculation (This still needs gamma(E))
-  ! MQDTMODE = 1 means calculate gamma(E), Ksr(B), and the S/T quantum defects from scratch.  Write to a file and stop.
+  ! CALCTYPE = 3 means do the MQDT frame transformation calculations EDFT and EIFT (This still needs gamma(E))
+  ! MQDTMODE = 1 means calculate A(E), G(E), eta(E), gamma(E), Ksr(B), and the S/T quantum defects from scratch.  Write to a file and stop.
   ! MQDTMODE = 2 means read gamma(E), Ksr(B) and S/T QDs from file and proceed to the calcuation of physical K-matrix
   ! MQDTMODE = 3 means read only the single channel parameter gamma(E) from file, but re-calculate Ksr(B) and the S/T QDs, then stop.
   !
@@ -688,7 +685,7 @@ program main
   If((MQDTMODE.eq.1).and.(CALCTYPE.eq.2)) then
      write(6,*) "Using full B-field range for calculation of Ksr and QDs."
      !Bmin = -100d0
-     Bmin = 0.1d0
+     Bmin = -Bhuge!0.1d0
      Bmax = Bhuge
   endif
   !make the magnetic field grid and energy grid
@@ -701,6 +698,10 @@ program main
   call GridMaker(Egrid,NEgrid,Emin,Emax,'linear') ! measure the collision energy in Hartree
   !--------------------------------------------------!
   call AtomData(ISTATE, AHf1, nspin1, espin1, gi1, MU, MUREF, mass1)  !atom 1 data (and atom 2 for identical particles)
+  Ahf2=Ahf1
+  gi2=gi1
+  nspin2=nspin1
+  espin2=espin1
   !write(6,*) AHf1, nspin1, espin1, gi1, MU, MUREF, mass1
   ! initialize the angular momentum routines
   call setupam
@@ -848,7 +849,7 @@ program main
   write(6,'(A,f12.5)') "Vmin = ", Vmin
   !stepsize = 2d0*pi*0.1d0*(2d0*mu*(Emax - Vmin))**(-0.5d0)
   !write(6,'(A,f12.5)') "The suggested maximum step size is ", stepsize
-
+  !---------------------------------------------------------------------------------------------------
   !call VdWLength(LRD%Cvals,betavdw,mu)
   betavdw = (2d0 * mu * LRD%Cvals(1))**(0.25d0)  ! NOTE that this is really twice the usual van der Waals length and the energy is one quarter.
   EvdW = 1d0/(2d0*mu*betavdw**2)
@@ -859,6 +860,7 @@ program main
   write(60,*) betavdw, EvdW
   RX = RX*betavdw
   RF = RF*betavdw
+
   
   write(6,*) "Rmin = ", Rmin
   write(6,*) "RX = ", RX
@@ -889,7 +891,8 @@ program main
           " ( |", hf2symTempGlobal(i)%state1," > +", hf2symTempGlobal(i)%phase,"|", hf2symTempGlobal(i)%state2," > )"
   enddo
   write(6,*) "---------------------------------------------------------"
-  
+
+
   if(CALCTYPE.eq.1) goto 11
   
   ! prepare some arrays for the log-derivative propagator
@@ -900,6 +903,17 @@ program main
   call SetupPotential(ISTATE,ESTATE,mu,muref,Nsr+1,VLIM,Rsr(0:Nsr)*BohrPerAngstrom,VsrSinglet(0:Nsr),LRD,Sval)
   ESTATE = 3
   call SetupPotential(ISTATE,ESTATE,mu,muref,Nsr+1,VLIM,Rsr(0:Nsr)*BohrPerAngstrom,VsrTriplet(0:Nsr),LRD,Sval)
+
+  !-------------------------------------------------------------------------------------------------
+  ! Try the "on-demand" plotwavefunction subroutine now.
+!  if(MQDTMODE.ne.1) then
+!     call plotwfn(Ahf1,Ahf2,gi1,gi2,nspin1,espin1,nspin2,espin2,&
+!          ISTATE,size2, Rmin, Rmid, RX, RF, NXF, Nsr, scale, LRD, mu, muref, lwave, Egrid(1), Bgrid(1), &
+!          betavdw, phiL,Rsr,Wsr,SPmat,TPmat,VsrSinglet,VsrTriplet,Sval)
+!!     stop
+!  endif
+  !-------------------------------------------------------------------------------------------------
+
   
   if(writepot) then
      write(6,'(A)') "See PotsConvergence*.dat for the singlet/triplet potentials"
@@ -952,6 +966,7 @@ program main
 
   write(53,*)  "#   ", NBgrid
   do iB = 1, NBgrid
+
      yi = ystart
      call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
      HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
@@ -960,12 +975,12 @@ program main
      VHZ(:,:) =  HHZ2(:,:) 
      call MyDSYEV(VHZ,size2,Eth,AsymChannels)
      EVEC = AsymChannels
-     
+
      do i=1,size2
         EThreshMat(i,i) = Eth(i)
      enddo
      
-     write(20,*) Bgrid(iB), Eth  ! Write the collision thresholds to a file
+!     write(20,*) Bgrid(iB), Eth  ! Write the collision thresholds to a file
      !Fix the phase of the magnetic field dressing
      if (iB.gt.1) then
         TEMP = 0d0
@@ -976,7 +991,7 @@ program main
      endif
      EVECTEMP = EVEC
      AsymChannels = EVEC
-     
+!     write(6,*) "(1) iB = ", iB, Bgrid     
      !----- Rotate into the asymptotic eigenstates (Use the B-field dressed states) -------!
      !Rotate the singlet projection operator
      TEMP = 0d0
@@ -1000,12 +1015,14 @@ program main
            write(6,*) "More than one open channel -- must modify the algorithm.  Stopping"
            stop
         endif
+        write(6,*) "(2) iB = ", iB, Bgrid     
 !        write(6,*) "Setting up the cot(gamma) matrix..."
         call SetupCotGamma(RX,RF,NXF,size2,lwave,mu,betavdw,LRD,phiL,Egrid,NEgrid,Eth,iE,cotgamma,InterpGammaphase,scale)  
 !        write(6,*) "...Done."
+        
         if((CALCTYPE.eq.2).and.(iE.eq.1)) then
 
-           call logderpropB(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,Sdressed,Tdressed,EthreshMat,VsrSinglet,VsrTriplet,size2,writepot)
+           call logderpropB(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,Sdressed,Tdressed,EthreshMat,VsrSinglet,VsrTriplet,size2)
            call CalcKsr(ym, Ksr, size2, NXM, RX, Rsr(Nsr), energy, Eth, lwave, mu, LRD, betavdw, phiL,scale)
            write(53,'(100d20.10)') Bgrid(iB), ((Ksr(i,j), j=1,i), i=1,size2)
            
@@ -1079,6 +1096,7 @@ program main
   call SetupInterpolatingMatrix(InterpKsr)
   iE=1
   wavek = sqrt(2*mu*Egrid(iE))
+
   do iB = 1, NBgridfine
      call cpu_time(t1)
      call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
@@ -1086,6 +1104,8 @@ program main
      !Find the asymptotic channel states
      call MyDSYEV(HHZ2,size2,Eth,AsymChannels)
      energy = Eth(1) + Egrid(iE)
+
+     
      if(CalcType.eq.2) then
         Ksr = InterpolatedMatrix(Bgrid(iB),InterpKsr)        
      else if (CALCTYPE.eq.3) then
@@ -1099,13 +1119,19 @@ program main
         call dgemm('T','N',size2,size2,size2,1d0,AsymChannels,size2,TPmat,size2,0d0,TEMP,size2)
         call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,AsymChannels,size2,0d0,Tdressed,size2) !compute dressed projection operators
         !        CalcProjOp = .false.
-        !if(iB.eq.1)
+        !---------------------------------------------------------------------------------------------------
+        ! I think that at this point one could do an "on-demand" calculation for the
+        ! wavefunctions at a particular value of field and energy
+        
+        !--------------------------------------------------------------------------------------------------
+
         CalcProjOp = .true.
         call CalcEDFTKSR(nspin1,nspin1,espin1,espin1,hf2symTempGlobal,&
         energy,Eth, AsymChannels,size2,Ksr,InterpQDSinglet,InterpQDTriplet, &
         CalcProjOp,KsrEIFT) ! This writes into Ksr and is really the EDFT-Ksr
 
      endif
+     
      KsrEIFT(:,:) = tan(pi*Interpolated(0d0,InterpQDTriplet)) * Tdressed(:,:) &
           + tan(pi*Interpolated(0d0,InterpQDSinglet)) * Sdressed(:,:)
      
@@ -1155,7 +1181,7 @@ program main
         write(51,*) Bgrid(iB), ascat , 8d0*pi*ascat**2*(Bohrpercm**2)
      endif
 
-!     call plotwfn
+
   enddo
   
   stop
@@ -1322,9 +1348,9 @@ program main
         enddo
 
 !        call logderpropB(mu,Energy,identity,wHalf,NHalf,yi,yfHalf,RHalf,Sdressed,Tdressed,&
-!             EthreshMat,VHalfSinglet,VHalfTriplet,size2,writepot)
+!             EthreshMat,VHalfSinglet,VHalfTriplet,size2)
         call logderpropB(mu,Energy,identity,wAll,NAll,yi,yfAll,RAll,Sdressed,Tdressed,&
-             EthreshMat,VAllSinglet,VAllTriplet,size2,writepot)
+             EthreshMat,VAllSinglet,VAllTriplet,size2)
         call CalcK(yfAll,RF,SD,mu,3d0,1d0,Energy,Eth,size2,NumOpen)
         !yf = (h1*yfHalf - h2*yfAll)/(h1 - h2)
         !yf =  (hratio**4 * yfAll - yfHalf)/(hratio**4 - 1d0)  !Richardson extrapolation
@@ -1424,7 +1450,7 @@ end subroutine logderpropBNew
 
 !!$
 !!$
-subroutine logderpropB(mu,Energy,identity,weights,NPP,yi,yf,XO,Sdressed,Tdressed,EthreshMat,Vsinglet,Vtriplet,size,writepot)
+subroutine logderpropB(mu,Energy,identity,weights,NPP,yi,yf,XO,Sdressed,Tdressed,EthreshMat,Vsinglet,Vtriplet,size)
   implicit none
   integer i,j,step,NPP,size
   double precision h,Energy,mu
@@ -1438,7 +1464,7 @@ subroutine logderpropB(mu,Energy,identity,weights,NPP,yi,yf,XO,Sdressed,Tdressed
   double precision vtemp1(size,size), vtemp2(size,size), un(size,size)
   double precision, parameter :: onesixth = 0.166666666666666666666d0
   double precision, parameter :: onethird = 0.333333333333333333333d0
-  logical writepot
+
   h=XO(2)-XO(1)
   pottemp = Vsinglet(0)*Sdressed + Vtriplet(0)*Tdressed + EthreshMat
   vtemp1 = 2d0*mu*(identity*Energy-pottemp)
@@ -1464,6 +1490,9 @@ subroutine logderpropB(mu,Energy,identity,weights,NPP,yi,yf,XO,Sdressed,Tdressed
 end subroutine logderpropB
 
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! The main difference between logderpropA and logderpropB is that logderpropA requires the Pot
+! array to be pre-populated, while logderpropB computes the potential matrix at each point for
+! the singlet/triplet alkali scattering problem
 subroutine logderpropA(mu,Energy,identity,weights,NPP,yi,yf,XO,Pot,size)
 !subroutine logderprop(mu,Energy,identity,weights,NPP,yi,yf,XO,Sdressed,Tdressed,EthreshMat,size)
   implicit none
@@ -2303,10 +2332,6 @@ subroutine CalcKsr(ym, Ksr, size2, NXM, RX, RM, energy, Eth, lwave, mu, LRD, bet
 end subroutine CalcKsr
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 subroutine SetupCotGamma(RX,RF,NXF,size,lwave,mu,betavdw,LRD,phiL,Egrid,NEgrid,Eth,iE,cotgamma,InterpGammaphase,scale)
-  !This calculates the tan(gamma) MQDT parameter.  See Ruzic's PRA for details
-  ! While in principle this can be calculated once as a function of energy, interpolated and
-  ! evaluated at the relative energy for each channel, here I'm doing it the "brute force" way
-  ! I simply re-calculate tan(gamma) and setup the cot(gamma) matrix for each channel at each needed energy
   use InterpType
   use datastructures
   implicit none
@@ -2330,11 +2355,14 @@ subroutine SetupCotGamma(RX,RF,NXF,size,lwave,mu,betavdw,LRD,phiL,Egrid,NEgrid,E
 
 
   cotgamma = 0d0
+!  write(6,*) "size = ", size
+!  write(6,*) "domain = ",InterpGammaphase%x
   !Let Erelth = energy measured relative to the ith threshold
   do ith = 2, size
      ! For gamma, the energy needed is Erelth
      energy = Egrid(iE) + Eth(1)
      Erelth = energy - Eth(ith)
+!     write(6,*) size, ith, "Erelth = ", Erelth
      !-----------------------------------------
      ! This part uses the interpolated function
      cotgamma(ith-1,ith-1) = 1d0/tan(Interpolated(Erelth, InterpGammaphase))
@@ -2604,7 +2632,7 @@ subroutine smoothgamma(gammaphase,NE)
 
 end subroutine smoothgamma
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-!Subroutine to setup the effect adiabatic potential energy function for any
+!Subroutine to setup the Born-Oppenheimer potential energy function for any
 !one of the electronic states for the alkali homonuclear molecules:
 ! for ground state singlet:
 !   87-Rb2 [ISTATE = 1; ESTATE = 1]   from [Strauss et al.,] 
@@ -4079,95 +4107,180 @@ END FUNCTION DPOWER
 !!$  
 !!$end subroutine VCesium
 
+  !------------------------------------------------------------------------------
+  ! (1) Must have MQDT functions A, G, eta, and cotgamma already pre-calcualted
+  !     for the species in question. To do so, run the code in CALCTYPE=2, MQDTMODE=1
+  ! (2) The code uses ONLY the lowest values of relativeE and B-field
+  !     (that should be the argument passed to this subroutine by the main code.)
+  ! (3) The subroutine uses a log-derivative propagator to compute Ksr at those
+  !     particular values of B and E.
+  ! (4) The subroutine then prints the energy-dependent scattering length, the
+  !     cross section (assuming s-wave and one open channel  only for now)
+  ! (5) The subroutine also produces a plot of the (long-range, r > rm) radial wavefunctions.
+  !     The wavefunction at short range is not produced.
+  ! (6) The user should NOT change the values of RX, RXM, RF in the input file after running in
+  !     CALCTYPE=2 MQDTMODE=1
+  ! (7) To access this subroutine, the user should run the code with CALCTYPE=2, MQDTMODE=4
+  !-----------------------------------------------------------------------------
+subroutine plotwfn(Ahf1,Ahf2,gi1,gi2,nspin1,espin1,nspin2,espin2,&
+     ISTATE,size2, Rmin, Rmid, RX, RF, NXF, Nsr, scale, LRD, mu, muref, lwave, relativeE, Bfield, &
+     betavdw,phiL,Rsr,Wsr,SPmat,TPmat,VsrSinglet,VsrTriplet,Sval)
+  use units
+  use datastructures
+  use hyperfine
+  !use InterpType
+  implicit none
+  double precision, external :: VLRNew, VLRNewPrime
+  type(LRData) :: LRD
+  integer nspin1, nspin2, espin1, espin2 !nspin is the nuclear spin and espin is the electronic spin
+  double precision gi1,gi2,Ahf1,Ahf2,muref
+  integer ISTATE,NXF, Nmid, Nsr, i, j, lwave, iR, size2
+  double precision, dimension(0:Nsr) :: Rsr, Wsr, VsrSinglet, VsrTriplet
+  double precision y(2), mu, betavdw, energy, relativeE, Bfield, f0, g0, f0p, g0p,Sval(2)
+  double precision phiL,phir,EthreshMat(size2,size2),Eth(size2),SPmat(size2,size2),TPmat(size2,size2)
+  double precision alpha0(2), alphaf(2), ldf0, ldg0,dR,Sdressed(size2,size2),Tdressed(size2,size2),VHZ(size2,size2)
+  double precision f0mat(NXF,size2,size2), g0mat(NXF,size2,size2), f0pmat(size2,size2),g0pmat(size2,size2), Ksr(size2,size2)
+  double precision temp1(size2,size2), temp2(size2,size2),Evecs(size2,size2),TEMP(size2,size2),identity(size2,size2)
+  double precision ystart(size2,size2),ym(size2,size2),yi(size2,size2),HHZ2(size2,size2),AdiabaticPsi(size2,size2)
+  double precision EvecsTEMP(size2,size2)
+  double precision, allocatable :: phaseintXF(:)
+  double precision, allocatable :: alphaXF(:,:),RXF(:),VSXF(:),VTXF(:)
+  double precision Rmin, RF, RX, Rmid, Rmidnew,Rtemp(NXF)
+  !type(InterpolatingMatrix) :: InterpKsr
+  CHARACTER(LEN=*), INTENT(IN) :: scale
 
-!!$subroutine plotwfn(size2,Rmin, Rmid, R2, RX,  NXF, scale, LRD, mu, lwave, energy, Bfield, &
-!!$     betavdw, phiL, alpha0, alphaf,f0, g0, f0p, g0p, ldf0,ldg0)
-!!$  !------------------------------------------------------------------------------
-!!$  ! (1) Must have MQDT functions A, G, eta, and cotgamma already pre-calcualted
-!!$  !     for the species in question. To do so, run the code in CALCTYPE=2, MQDTMODE=1
-!!$  ! (2) The code uses ONLY the lowest values of energy and B-field
-!!$  !     (that should be the argument passed to this subroutine by the main code.)
-!!$  ! (3) The subroutine uses a log-derivative propagator to compute Ksr at those
-!!$  !     particular values of B and E.
-!!$  ! (4) The subroutine then prints the energy-dependent scattering length, the
-!!$  !     cross section (assuming s-wave and one open channel  only for now)
-!!$  ! (5) The subroutine also produces a plot of the (long-range, r > rm) radial wavefunctions.
-!!$  !     The wavefunction at short range is not produced.
-!!$  ! (6) The user should NOT change the values of RX, RXM, RF in the input file after running in
-!!$  !     CALCTYPE=2 MQDTMODE=1
-!!$  ! (7) To access this subroutine, the user should run the code with CALCTYPE=2, MQDTMODE=4
-!!$  !-----------------------------------------------------------------------------
-!!$  use units
-!!$  use datastructures
-!!$  !use InterpType
-!!$  implicit none
-!!$  double precision, external :: VLRNew, VLRNewPrime
-!!$  type(LRData) :: LRD
-!!$  integer NXF, Nmid, Nsr, i, j, lwave, iR, size2
-!!$  double precision y(2), mu, betavdw, energy, Bfield, f0, g0, f0p, g0p, phiL,phir
-!!$  double precision alpha0(2), alphaf(2), ldf0, ldg0,dR
-!!$  double precision f0mat(size2,size2), g0mat(size2,size2), f0pmat(size2,size2),g0pmat(size2,size2), Ksr(size2,size2)
-!!$  double precision temp1(size2,size2), temp2(size2,size2)
-!!$  double precision, allocatable :: phaseintXF(:)
-!!$  double precision, allocatable :: alphaXF(:,:),RXF(:)
-!!$  double precision Rmin, RF, RX, Rmid, Rmidnew
-!!$  !type(InterpolatingMatrix) :: InterpKsr
-!!$  CHARACTER(LEN=*), INTENT(IN) :: scale
-!!$
-!!$  allocate(RXF(NXF),alphaXF(NXF,2),phaseintXF(NXF))
-!!$  call GridMaker(RXF,NXF,RX,RF,scale)
-!!$  ! Find the value in RXF(:) that is closest to Rmid:
-!!$  do iR = 2,NFX-1
-!!$     if((abs(RXF(iR)-Rmid).lt.abs(RXF(iR-1)-Rmid)).and.(abs(RXF(iR)-Rmid).lt.abs(RXF(iR+1)-Rmid))) then
-!!$        Rmidnew=RXF(iR)
-!!$        Nmid = iR
-!!$        write(6,*) "Rmidnew=",Rmidnew
-!!$        exit
-!!$     endif
-!!$  enddo
-!!$  stop
-!!$  
-!!$  ! WKB-like boundary conditions:
-!!$  alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLRNew(mu,lwave,RX,LRD))/RX**2))**(-0.25d0)
-!!$  alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRNewPrime(mu, lwave, RX,LRD))) &
-!!$       /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLRNew(mu,lwave,RX,LRD))**1.25d0)
-!!$  ! initialize:
-!!$  alphaXF(1,:) = alpha0
-!!$  
-!!$  call CalcNewMilne4stepRichardson(RXF,alphaXF,y,NXF,energy,lwave,mu,LRD,phaseintXF)
-!!$  
-!!$!  write(6,*) "y = ", y
-!!$  alphaf = alphaXF(Nmid,:)
-!!$  phir = phaseintXF(Nmid)
-!!$
-!!$  ldf0 = y(2) + exp(-2*y(1))/tan(phir+phiL)
-!!$  ldg0 = y(2) - exp(-2*y(1))*tan(phir+phiL)
-!!$  ! Compute the exact log-derivative matrix at Rmid
-!!$  call logderpropB(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,Sdressed,Tdressed,EthreshMat,VsrSinglet,VsrTriplet,size2,writepot)
-!!$  
-!!$  
-!!$  do i = 1, size2
-!!$     !     call MQDTfunctions(RX, RM, NXM,'quadratic', LRD, mu, lwave, energy-Eth(i), betavdw, phiL, alpha0, alphaf, f0, g0, f0p, g0p)
-!!$     !write(501,'(A)',ADVANCE='No') "MQDTNewfuntions from CalcKsr"
-!!$     call MQDTNewfunctions(RX, RM, NXM, scale, LRD, mu, lwave, energy-Eth(i), &
-!!$          betavdw,phiL,phir, alpha0, alphaf,f0, g0, f0p, g0p,ldf0,ldg0)
-!!$     f0mat(i,i) = f0
-!!$     f0pmat(i,i) = f0p
-!!$     g0mat(i,i) = g0
-!!$     g0pmat(i,i) = g0p
-!!$  enddo
-!!$  temp1 = MATMUL(ym,g0mat) - g0pmat
-!!$  temp2 = MATMUL(ym,f0mat) - f0pmat
-!!$  call sqrmatinv(temp1,size2)
-!!$  Ksr = MATMUL(temp1,temp2)
-!!$
-!!$  
-!!$  do iR = 1, NXF
-!!$     f0 = Pi**(-0.5d0)*alphaXF(1)*sin(phaseintXF(iR)+phiL)
-!!$     g0 = -Pi**(-0.5d0)*alphaXF(1)*cos(phaseintXF(iR)+phiL)
-!!$!     f0p = ldf0*f0
-!!$!     g0p = ldg0*g0
-!!$     write(2001, *) R(iR), f0, g0
-!!$  enddo
-!!$
-!!$end subroutine plotwfn
+  allocate(RXF(NXF),alphaXF(NXF,2),phaseintXF(NXF),VSXF(NXF),VTXF(NXF))
+
+  call GridMaker(RXF,NXF,RX,RF,scale)
+  ! Find the value in RXF(:) that is closest to Rmid:
+  write(6,*) "In plotwfn..."
+  write(6,*) "Rmid = ",Rmid
+
+  do iR = 1, NXF
+     Rtemp(iR)=abs(RXF(iR)-Rmid)
+  !   write(6,*) iR, Rtemp(iR)
+  enddo
+
+  Nmid = MINLOC(Rtemp,1)
+!  write(6,*)  Nmid,RXF(Nmid)
+  identity=0d0
+  ystart=0d0
+  do i = 1,size2
+     identity(i,i)=1d0
+     ystart(i,i)=1d20
+  enddo
+
+  ! Compute the hyperfine-Zeeman eigenstates for the two-atom system
+  call MakeHHZ2(Bfield,AHf1,AHf2,gs,gi1,gi2,nspin1,espin1,nspin2,espin2,hf2symTempGlobal,size2,HHZ2)
+  HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
+  call MyDSYEV(HHZ2,size2,Eth,Evecs)
+  Ethreshmat = 0d0
+  do i = 1, size2
+     Ethreshmat(i,i) = Eth(i)
+  enddo
+  write(6,*) "B = ", Bfield, "...Eigenvalues of HHZ2 = ", Eth
+  ! Compute the dressed projection operators
+  TEMP = 0d0
+  
+  call dgemm('T','N',size2,size2,size2,1d0,Evecs,size2,SPmat,size2,0d0,TEMP,size2)
+  call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,Evecs,size2,0d0,Sdressed,size2) !compute dressed projection operators
+  
+  !Rotate the triplet projection operator
+  call dgemm('T','N',size2,size2,size2,1d0,Evecs,size2,TPmat,size2,0d0,TEMP,size2)
+  call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,Evecs,size2,0d0,Tdressed,size2) !compute dressed projection operators
+  write(6,*) "The dressed singlet projection operator:"
+  call printmatrix(Sdressed,size2,size2,6)
+  write(6,*) "The dressed triplet projection operator:"
+  call printmatrix(Tdressed,size2,size2,6)
+  do i = 1, size2
+     write(6,*) "i = ", i
+     ! WKB-like boundary conditions imposed at RX:
+     energy = Eth(1) + relativeE - Eth(i)
+     alpha0(1) = (-((lwave + lwave**2 - 2*energy*mu*RX**2 + 2*mu*RX**2*VLRNew(mu,lwave,RX,LRD))/RX**2))**(-0.25d0)
+     alpha0(2) = -(mu*((lwave*(1 + lwave))/(mu*RX**3) - VLRNewPrime(mu, lwave, RX,LRD))) &
+          /(4.d0*2**0.25d0*(energy*mu - (lwave*(1 + lwave))/(2.d0*RX**2) - mu*VLRNew(mu,lwave,RX,LRD))**1.25d0)
+     ! initialize:
+     alphaXF(1,:) = alpha0
+  
+     call CalcNewMilne4stepRichardson(RXF,alphaXF,y,NXF,energy,lwave,mu,LRD,phaseintXF)
+     
+     y(1) = log(alphaXF(Nmid,1))
+     y(2) = alphaXF(Nmid,2)/alphaXF(Nmid,1)
+     
+     !  write(6,*) "y = ", y
+     alphaf = alphaXF(Nmid,:)
+     phir = phaseintXF(Nmid)
+     
+     ldf0 = y(2) + exp(-2*y(1))/tan(phir+phiL)
+     ldg0 = y(2) - exp(-2*y(1))*tan(phir+phiL)
+     f0 = Pi**(-0.5d0)*alphaXF(Nmid,1)*sin(phaseintXF(Nmid)+phiL)
+     g0 = -Pi**(-0.5d0)*alphaXF(Nmid,1)*cos(phaseintXF(Nmid)+phiL)
+     f0p = ldf0*f0
+     g0p = ldg0*g0
+!     f0mat(i,i) = f0
+     f0mat(:,i,i) = Pi**(-0.5d0)*alphaXF(:,1)*sin(phaseintXF(:)+phiL)
+     f0pmat(i,i) = f0p
+     !     g0mat(i,i) = g0
+     g0mat(:,i,i) = -Pi**(-0.5d0)*alphaXF(:,1)*cos(phaseintXF(:)+phiL)
+     g0pmat(i,i) = g0p
+     write(6,*) f0,g0,f0p,g0p, f0mat(Nmid+1,i,i),g0mat(Nmid+1,i,i)
+  enddo
+
+  ! Compute the exact log-derivative matrix at Rmid
+  
+  yi=ystart
+  call logderpropB(mu,Energy,identity,wSR,Nsr,yi,ym,Rsr,Sdressed,Tdressed,EthreshMat,VsrSinglet,VsrTriplet,size2)
+  write(6,*) "The log-derivative matrix:"
+  call printmatrix(ym,size2,size2,6)
+  ! Match to find Ksr:
+  temp1 = MATMUL(ym,g0mat(Nmid,:,:)) - g0pmat
+  temp2 = MATMUL(ym,f0mat(Nmid,:,:)) - f0pmat
+  
+  call sqrmatinv(temp1,size2)
+  Ksr = MATMUL(temp1,temp2)
+
+  write(6,*) "Ksr:"
+  call printmatrix(Ksr,size2,size2,6)
+
+  call SetupPotential(ISTATE,1,mu,muref,NXF,0d0,RXF*BohrPerAngstrom,VSXF,LRD,Sval)
+  call SetupPotential(ISTATE,3,mu,muref,NXF,0d0,RXF*BohrPerAngstrom,VTXF,LRD,Sval)
+  
+  do iR = Nmid, Nmid + 3*Nmid, 100
+
+     TEMP = f0mat(iR,:,:) - MATMUL(g0mat(iR,:,:),Ksr)
+     write(2001, *) RXF(iR), (TEMP(i,i), i=1,1) ! Just plot the lowest component since it's the only open channel
+
+     VHZ(:,:) = VSXF(iR)*SPmat + VTXF(iR)*TPmat + HHZ2
+     call MyDSYEV(VHZ(:,:),size2,Eth,Evecs) ! Not this is not actually the asymchannels, it's the adiabatic potentials.
+     !Fix the phase of the magnetic field dressing
+     if (iR.gt.Nmid) then
+        temp2 = 0d0
+        temp2 = MATMUL(TRANSPOSE(Evecs),EvecsTEMP)
+        do i = 1, size2
+           if(temp2(i,i).lt.0d0) Evecs(:,i) = Evecs(:,i)*(-1d0)
+        enddo
+     endif
+     EvecsTEMP = Evecs
+     !Rotate the singlet operator
+     call dgemm('T','N',size2,size2,size2,1d0,Evecs,size2,SPmat,size2,0d0,TEMP,size2)
+     call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,Evecs,size2,0d0,Sdressed,size2)
+     
+     !Rotate the triplet projection operator
+     call dgemm('T','N',size2,size2,size2,1d0,Evecs,size2,TPmat,size2,0d0,TEMP,size2)
+     call dgemm('N','N',size2,size2,size2,1d0,TEMP,size2,Evecs,size2,0d0,Tdressed,size2)
+     
+     !Rotate the long-range wavefunction
+     call dgemm('T','N',size2,size2,size2,1d0,Evecs,size2,TEMP,size2,0d0,temp1,size2)
+     call dgemm('N','N',size2,size2,size2,1d0,temp1,size2,Evecs,size2,0d0,AdiabaticPsi,size2)
+     temp2=AdiabaticPsi     
+     
+     write(1000,*) RXF(iR), Eth
+     write(1001,*) RXF(iR), (Sdressed(i,i), i=1,size2)
+     write(1002,*) RXF(iR), (Tdressed(i,i), i=1,size2)
+!     write(1003, *) RXF(iR), (AdiabaticPsi(i,i), i=1,1) ! Just plot the lowest component since it's the only open channel
+
+     
+  enddo
+
+  
+end subroutine plotwfn
