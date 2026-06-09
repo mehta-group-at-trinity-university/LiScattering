@@ -1,0 +1,16 @@
+# This is a parameter file for input into AlkaliScattering.x
+# ISTATE (for Li-6)  SYM (-1 for fermion)  CALCTYPE (1 for logder, 2 for MQDT, 3 for FT) 	MQDTMODE
+ 6	      	      -1     	 	   2	   	   	     	       	     		1
+# L (partial wave)    2*MFtot (twice total F projection) writepot       Sval(1)                 Sval(2)
+  1                   0                                  .true.         0.265d-6                1.25465d-6
+# Rmin		      Rmidmax  		 RX    		 RF (all in bohr except RX and RF which is in vdw units.  Converted to bohr in the code.)
+  1.0d0		      40d0  		 0.07d0		  20d0
+# NXM		      NXF 		 Nsr		 NAll
+  1000000  	      10000000		 1000000	 10000000   
+# NEgrid	      Emin		Emax (enter energy range in mK)
+  10		      1d-3		50d0
+# NBgrid	      Bmin		Bmax (enter B-field range in gauss)	 Bhuge (largest possible field)  NBGridFine
+  40		      542.8d0		543.6d0 	    	    	     	1200d0   		 	 10000
+# Grid for calculating MQDT functions (must be 'linear', 'quadratic', 'cubic', or 'log')		      
+  'log'
+
