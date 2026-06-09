@@ -574,7 +574,7 @@ program main
   NBgrid = 200
   NEgrid = 20
   Bmin = 0d0
-  Bmax = 1000d0
+  Bmax = 1500d0
   !make the magnetic field grid and energy grid
   allocate(Bgrid(NBgrid),Egrid(NEgrid))
   call GridMaker(Bgrid,NBgrid,Bmin,Bmax,'linear')
@@ -652,7 +652,7 @@ program main
 
   !____________________________________________________________________
   
-  NPP = 50000
+  NPP = 100000
   VLIM = 0d0
 
   allocate(XO(NPP),R(NPP),weights(NPP),VSinglet(NPP),VTriplet(NPP),RM2(NPP))
@@ -731,7 +731,8 @@ program main
      HHZ2(:,:) = HHZ2(:,:)*MHzPerHartree
      !Find the asymptotic channel states
      VHZ(:,:,NPP) = VSinglet(NPP)*SPmat(:,:) + VTriplet(NPP)*TPmat(:,:) + HHZ2(:,:)
-     call MyDSYEV(VHZ(:,:,NPP),size2,EVAL,AsymChannels)
+     !call MyDSYEV(VHZ(:,:,NPP),size2,EVAL,AsymChannels)
+     call MyDSYEV(HHZ2,size2,EVAL,AsymChannels)
      Eth(:)=EVAL(:)
      
 
