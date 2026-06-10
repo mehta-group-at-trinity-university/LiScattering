@@ -631,7 +631,7 @@ program main
   double precision, allocatable :: KsrEIFT(:,:),Ktemp1EIFT(:,:),Ktemp2EIFT(:,:)
   double precision, allocatable :: KQPEIFT(:,:),KPQEIFT(:,:)
   double precision VLIM,Rmin,dR,phiL,stepsize,Vmin,ascat,h1,h2,hdiff,as1,as2,at1,at2,asext,atext,rs1,rs2,rt1,rt2
-  double precision rsext,rtext,mqdtA
+  double precision rsext,rtext,mqdtA,tanQDs0,tanQDt0
   double precision gi1,gi2,Ahf1,Ahf2,MU,MUREF,mass1,mass2,EvdW
   double precision Bmin, Bmax, Emin, Emax, CGhf,Energy,h, betavdw,wavek,mqdtG,KK,TanEta
   integer iE, iRmid,NRmid,Ndum,NXM,NXF,multnsr, multnlr,ith,NQD,NBGridFine,NAll,NHalf
@@ -813,6 +813,7 @@ program main
   endif
   cotgamfile = 49
   STQDfile = 54
+  AGEtafile = 55   ! was never assigned a unit number; uninitialized -> bad unit in OPEN
   open(unit = 10, file = "PotsConvergence-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))//".dat")
   open(unit = 11, file = "LRPotsData-"//trim(str(ISTATE))//"-"//trim(str(CALCTYPE))//"-"//trim(str(NINT(Bhuge)))//"G.dat")
   if(CALCTYPE.ne.1) then
@@ -1097,6 +1098,15 @@ program main
   iE=1
   wavek = sqrt(2*mu*Egrid(iE))
 
+  ! These quantities do not depend on the B field (iE is fixed at 1 throughout
+  ! the loop below), so evaluate the interpolations once here rather than once
+  ! per B-field point.  Used by both CALCTYPE=2 and CALCTYPE=3 in the loop.
+  mqdtG   = interpolated(Egrid(iE),InterpG)
+  mqdtA   = interpolated(Egrid(iE),InterpA)
+  TanEta  = interpolated(Egrid(iE),InterpTanEta)
+  tanQDs0 = tan(pi*Interpolated(0d0,InterpQDSinglet))
+  tanQDt0 = tan(pi*Interpolated(0d0,InterpQDTriplet))
+
   do iB = 1, NBgridfine
      call cpu_time(t1)
      call MakeHHZ2(Bgrid(iB),AHf1,AHf1,gs,gi1,gi1,nspin1,espin1,nspin1,espin1,hf2symTempGlobal,size2,HHZ2)
@@ -1128,12 +1138,15 @@ program main
         CalcProjOp = .true.
         call CalcEDFTKSR(nspin1,nspin1,espin1,espin1,hf2symTempGlobal,&
         energy,Eth, AsymChannels,size2,Ksr,InterpQDSinglet,InterpQDTriplet, &
-        CalcProjOp,KsrEIFT) ! This writes into Ksr and is really the EDFT-Ksr
+        CalcProjOp) ! This writes into Ksr and is really the EDFT-Ksr
 
      endif
-     
-     KsrEIFT(:,:) = tan(pi*Interpolated(0d0,InterpQDTriplet)) * Tdressed(:,:) &
-          + tan(pi*Interpolated(0d0,InterpQDSinglet)) * Sdressed(:,:)
+
+     ! The EIFT Ksr is the zero-energy frame transformation: summing the
+     ! field-free projectors over the spin channels telescopes to the full
+     ! singlet/triplet projectors, so this equals the per-channel accumulation
+     ! that CalcEDFTKSR used to do for KsrEIFT.
+     KsrEIFT(:,:) = tanQDt0 * Tdressed(:,:) + tanQDs0 * Sdressed(:,:)
      
      call SetupCotGamma(RX,RF,NXF,size2,lwave,mu,betavdw,LRD,phiL,Egrid,NEgrid,Eth,iE,cotgamma,InterpGammaphase,scale)  
      !write(504,*) Bgrid(iB), ((Ksr(i,j), j=1,i), i=1,size2)
@@ -1158,10 +1171,8 @@ program main
 !!$     ascatEIFT = (1d0-KtildeEIFT) * (abar(lwave)*betavdw)
 
      Ktilde = Ksr(1,1) - Ktemp2(1,1)
-     mqdtG = interpolated(Egrid(iE),InterpG)
-     mqdtA = interpolated(Egrid(iE),InterpA)
-     TanEta = interpolated(Egrid(iE),InterpTanEta)
-!     TanEta = tan(-abar(lwave)*sqrt(Egrid(iE)/EvdW) - Pi/15d0 * (Egrid(iE)/EvdW)**2) 
+     ! mqdtG, mqdtA, TanEta are now precomputed once before the B-field loop.
+!     TanEta = tan(-abar(lwave)*sqrt(Egrid(iE)/EvdW) - Pi/15d0 * (Egrid(iE)/EvdW)**2)
 
      KK = sqrt(mqdtA) * (1d0/Ktilde + mqdtG)**(-1d0) * sqrt(mqdtA)
      
@@ -3947,50 +3958,73 @@ subroutine plotQDs(InterpQDSinglet,InterpQDTriplet)
   enddo
 end subroutine plotQDs
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-subroutine CalcEDFTKSR(i1,i2,s1,s2,hf2sym,energy,Eth,AsymC,size2,Ksr,InterpQDSinglet,InterpQDTriplet,CalcProjOp,KsrEIFT)
+subroutine CalcEDFTKSR(i1,i2,s1,s2,hf2sym,energy,Eth,AsymC,size2,Ksr,InterpQDSinglet,InterpQDTriplet,CalcProjOp)
   use units
   use hyperfine
   use InterpType
-  
+
   implicit none
   logical CalcProjOp
-  integer size2,j
+  integer size2,j,k
   type(symhf2atom) hf2sym(size2)
-  double precision energy, Eth(size2),AsymC(size2,size2),Ebar,lambda(size2,size2),KsrEIFT(size2,size2)
+  double precision energy, Eth(size2),AsymC(size2,size2),Ebar
   double precision Ksr(size2,size2),temp1(size2,size2), temp2(size2,size2)
   type(InterpolatingFunction) ::  InterpQDSinglet,InterpQDTriplet
   integer i1,i2,s1,s2,S,MS,I,MI
-  Ksr = 0d0
-  KsrEIFT = 0d0
-  temp1=0d0
-  temp2=0d0
-  
-  do S=iabs(s1-s2),s1+s2,2
-     do I = iabs(i1-i2), i1+i2, 2
-        do mS = -S, S, 2
-           do mI = -I, I, 2
-              if(CalcProjOp) then
-                 lambda=0d0
-                 call MakeLambdaProj(s1,s2,S,MS,i1,i2,I,MI, hf2sym, size2, lambda) !Calculate <{alpha,beta}|lambda><lambda|{alphap, betap}>
-                 temp1 = MATMUL(TRANSPOSE(AsymC),lambda) !Rotate to the field-dressed states.
-                 temp2 = MATMUL(temp1,AsymC) !Rotate to the field-dressed states. <i|lambda><lambda|j>
-                 lambda = temp2
-              endif
-              Ebar = 0d0
-              do j=1,size2
-                 Ebar = Ebar + (energy - Eth(j))*temp2(j,j)
+  ! The field-free lambda projectors depend only on the angular-momentum quantum
+  ! numbers (and the fixed two-atom symmetrized basis), not on the B field.  They
+  ! are built once on the first call and cached; every later call just rotates
+  ! them into the field-dressed basis (which is the only B-dependent step).
+  ! This single caller always passes the same i1,i2,s1,s2,hf2sym,size2.
+  double precision, allocatable, save :: lambdaCache(:,:,:)
+  integer, allocatable, save :: Scache(:)
+  integer, save :: nLambda
+  logical, save :: firstcall = .true.
+
+  if(firstcall) then
+     nLambda = 0
+     do S=iabs(s1-s2),s1+s2,2
+        do I = iabs(i1-i2), i1+i2, 2
+           do mS = -S, S, 2
+              do mI = -I, I, 2
+                 nLambda = nLambda + 1
               enddo
-              
-              if(S.eq.0) then
-                 Ksr(:,:) = Ksr(:,:) + tan(pi*Interpolated(Ebar,InterpQDsinglet))*temp2(:,:)
-                 KsrEIFT(:,:) = KsrEIFT(:,:) + tan(pi*Interpolated(0d0,InterpQDsinglet))*temp2(:,:)
-              else if(S.eq.2) then
-                 Ksr(:,:) = Ksr(:,:) + tan(pi*Interpolated(Ebar,InterpQDTriplet))*temp2(:,:)
-                 KsrEIFT(:,:) = KsrEIFT(:,:) + tan(pi*Interpolated(0d0,InterpQDTriplet))*temp2(:,:)
-              endif
            enddo
         enddo
      enddo
+     allocate(lambdaCache(size2,size2,nLambda),Scache(nLambda))
+     k = 0
+     do S=iabs(s1-s2),s1+s2,2
+        do I = iabs(i1-i2), i1+i2, 2
+           do mS = -S, S, 2
+              do mI = -I, I, 2
+                 k = k + 1
+                 Scache(k) = S
+                 ! <{alpha,beta}|lambda><lambda|{alphap, betap}>
+                 call MakeLambdaProj(s1,s2,S,MS,i1,i2,I,MI, hf2sym, size2, lambdaCache(:,:,k))
+              enddo
+           enddo
+        enddo
+     enddo
+     firstcall = .false.
+  endif
+
+  Ksr = 0d0
+
+  do k = 1, nLambda
+     ! Rotate the cached field-free projector into the field-dressed states.
+     temp1 = MATMUL(TRANSPOSE(AsymC),lambdaCache(:,:,k))
+     temp2 = MATMUL(temp1,AsymC) ! <i|lambda><lambda|j>
+     Ebar = 0d0
+     do j=1,size2
+        Ebar = Ebar + (energy - Eth(j))*temp2(j,j)
+     enddo
+
+     if(Scache(k).eq.0) then
+        Ksr(:,:) = Ksr(:,:) + tan(pi*Interpolated(Ebar,InterpQDsinglet))*temp2(:,:)
+     else if(Scache(k).eq.2) then
+        Ksr(:,:) = Ksr(:,:) + tan(pi*Interpolated(Ebar,InterpQDTriplet))*temp2(:,:)
+     endif
   enddo
 
 end subroutine CalcEDFTKSR
