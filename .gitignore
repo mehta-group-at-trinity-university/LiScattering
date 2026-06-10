@@ -1,6 +1,20 @@
-fort.*
-*.dat
+# Build artifacts
 *.o
 *.x
 *.mod
+
+# Run outputs and scratch data
+fort.*
+*.dat
+*.tar
 data/
+
+# ...but DO track the input data files the code reads to run
+!Legendre.dat
+!LithiumPotentialParameters.dat
+
+# Editor artifacts (emacs autosaves, lock files, backups, buffers)
+\#*\#
+.\#*
+*~
+*Minibuf*
