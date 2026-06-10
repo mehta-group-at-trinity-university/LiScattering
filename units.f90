@@ -6,7 +6,7 @@ module units
   ! The values were taken mostly from the NIST CODATA tables circa 2020.
   ! Energy conversion example:  1 nKPerHartree = 3.1668d-15 implies
   ! 1 nK/Hartree = 3.1668d-15, so 1 = 3.1668d-15 Hartree/nK is a unitless "1" by which to multiply when converting from nK to Hartree
-  real*8, parameter :: Pi = 3.14159265358979323846264338328
+  real*8, parameter :: Pi = 3.14159265358979323846264338328d0
   real*8, parameter :: KPerInvcm = 1.4387862961655296d0
   real*8, parameter :: mKPerInvcm = 1.4387862961655296d3
   real*8, parameter :: InvcmPerHartree = 4.5563352529120d-6
